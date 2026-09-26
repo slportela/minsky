@@ -14,6 +14,8 @@ The issues most likely to affect the customer-service workflow:
 | [Survey scales are truncated](#survey-scales-are-truncated) | NPS has no promoters; CSAT never reaches 5. Satisfaction baselines are biased |
 | [Customers and agents do not join to branches](#customers-and-agents-do-not-join-to-branches) | No branch context for a customer or an agent |
 | [Values in Spanish, dictionary in English](#values-in-spanish-dictionary-in-english) | Filters written against the dictionary return nothing unless silver is used |
+| [Mexico operates in USD; no MXN](#mexico-operates-in-usd-no-mxn-in-products-or-transactions) | `amount_usd` is null for every USD transaction: naive USD totals undercount Mexico |
+| [`contact_reason` duplicates `reason_category`](#contact_reason-duplicates-reason_category) | Only 6 coarse contact reasons; finer intents must come from transcripts |
 | [Spanish only](#spanish-only) | The brief requires Portuguese; there is no Portuguese data to ground or evaluate it |
 
 ## Volume
@@ -114,6 +116,24 @@ The dictionary lists English values; several columns hold Spanish ones:
 | `call_center_interactions.channel` | Web | 3,395 | Web (not mapped: ambiguous with "Web Chat") |
 
 **Handling:** kept, translated where unambiguous, and flagged per row as `undocumented_value:<column>` in `_dq_issues`; dbt `accepted_values` tests warn.
+
+### Mexico operates in USD; no MXN in products or transactions
+
+The documentation says transactions carry local currency (MXN/COP/ARS) plus a USD conversion. In the data:
+
+- **No product and no transaction is in MXN.** All 200,398 products of Mexican customers are in USD, and 2,126,409 of the 2,146,309 transactions in Mexico are in USD (the rest are COP/ARS).
+- MXN does appear in `complaints.currency` (5,487 claimed amounts) and in `daily_exchange_rates`.
+- `transactions.amount_usd` is **null in 100 % of USD transactions** (no conversion needed, but not filled with `amount`) and in ~5 % of ARS/COP transactions. Where present, `amount_usd / amount` matches the day's exchange rate (ARS 0.002857 vs 0.002859; COP 0.000250).
+
+Summing `amount_usd` therefore undercounts Mexico by two orders of magnitude: US$28.9 M instead of US$3,307 M for approved transactions.
+
+**Handling:** none in silver; use `coalesce(amount_usd, case when currency = 'USD' then amount end)` for USD totals, as in `notebooks/query_silver.ipynb`.
+
+### `contact_reason` duplicates `reason_category`
+
+`call_center_interactions.contact_reason` ("main contact reason", documented as VARCHAR(100)) has the same 6 values as `reason_category`, in Spanish, with an exact one-to-one correspondence in all 686,296 rows. There is no finer-grained contact reason.
+
+**Handling:** none; use `reason_category`. Finer intents must come from `call_transcripts` (`detected_intents`, `main_topics`) or from text.
 
 ### Inconsistent country spelling
 
