@@ -1,59 +1,80 @@
 # minsky
 
-Factored AI & Data Hackathon 2026: an **AI-first banking customer-service system** on the LATAM Bank dataset (synthetic; Mexico, Colombia, Argentina; 2023-06-17 to 2026-06-17). Submission deadline 2026-10-05.
+Factored AI & Data Hackathon 2026: an **AI-first banking customer-service system** for **transaction-dispute intake** on the LATAM Bank dataset (synthetic; Mexico, Colombia, Argentina; 2023-06-17 to 2026-06-17). Submission deadline 2026-10-05.
 
 ## Read in this order
 
 ```
-  1. docs/challenge.md   what we must build and how it is scored (one page)
+  1. docs/challenge.md       what we must build and how it is scored (one page)
           │
-  2. AGENTS.md           how we work: rules, commands, conventions (agents and humans)
+  2. docs/solution.md        what we build for disputes: flow, AI vs. code, components
+          │                         (checked against docs/requirements.md: every requirement → status)
+  3. docs/architecture.md    target production architecture (proposed) · docs/poc_to_prod.md: POC → prod
           │
-  3. docs/evals.md       how we prove it works
+  4. AGENTS.md               how we work: rules, commands, conventions (agents and humans)
           │
-  4. docs/adr/           decisions and why;   docs/known_issues.md: data surprises
+  5. docs/evals.md           how we prove it works
+          │
+  6. infra/README.md         how the POC runs: local and the AWS demo (not the production design)
+          │
+  7. docs/adr/               decisions and why · docs/dispute_policy.md · docs/known_issues.md
 ```
 
 ## Repository map
 
 ```
 minsky/
-├── README.md              you are here
-├── AGENTS.md              rules for agents and humans (CLAUDE.md imports it)
-├── docs/
-│   ├── challenge.md       START HERE: the problem, scope, scoring, plan
-│   ├── evals.md           eval strategy: golden dataset, graders, online, self-improving loop
-│   ├── known_issues.md    data vs. documentation, with numbers and handling
-│   ├── adr/               architecture decision records
-│   └── references.md      sources behind the design
-├── evals/                 eval harness: case schema, set checks, metrics, cases/{dev,val,test}
-├── prompts/               versioned prompts (rules in prompts/README.md)
-├── tests/                 unit tests and eval-harness tests
+├── README.md · AGENTS.md          entry point · rules for agents and humans (CLAUDE.md imports AGENTS.md)
+├── compose.yaml                   the whole stack on one machine (compose.local.yaml adds laptop settings)
+├── Makefile                       every command: make help
 │
-├── data_dictionary.py     ┐
-├── bank_data.py           │  data pipeline: organizer S3 → bronze → silver
-├── ingest_bronze.py       │  (the dictionary is the contract; transform/ is dbt-duckdb)
-├── quality.py             │
-├── transform/             ┘
-├── notebooks/             evidence behind known_issues.md
-├── kickoff_docs/          organizer documents (read-only)
-└── .claude/  .github/     shared Claude Code settings and skills; PR template
+├── backend/                       FastAPI service (Python, uv workspace member)
+│   └── src/minsky_api/
+│       ├── api/                   HTTP routers: thin, no decisions
+│       ├── agent/                 orchestrator: the dispute state machine (owns every decision)
+│       ├── policy/                pure policy rules D01-D09 (no I/O), unit-tested rule by rule
+│       ├── tools/                 mock core banking: session-scoped, permission-checked, audited
+│       ├── router/                learned intent/reason classifier (inference)
+│       ├── llm/                   Bedrock access: pinned models, prompts from prompts/, retries
+│       ├── identity/              test sessions + simulated OTP (Cognito in production)
+│       ├── guardrails/            input signals · output grounding and language checks
+│       ├── store/                 postgres: bank.* read models, cases.* writes
+│       └── observability/         OpenTelemetry → Langfuse
+├── frontend/                      Next.js: /chat (customers) · /console (agents)
+├── ml/                            router training and L1 evaluation (the learned component)
+├── pipeline/                      data: organizer S3 → bronze → silver (dbt-duckdb) → our S3
+│   ├── data_dictionary.py         the contract for silver
+│   ├── transform/                 dbt project (silver generated from the dictionary)
+│   └── notebooks/                 evidence behind docs/known_issues.md
+├── evals/                         eval harness: case schema, set checks, metrics, cases/{dev,val,test}
+├── prompts/                       versioned prompts
+├── tests/                         eval-harness tests (backend tests live in backend/tests)
+├── infra/
+│   ├── caddy/                     TLS + routing for local and demo
+│   └── tofu/                      OpenTofu: modules/ + envs/demo (POC; production: docs/architecture.md)
+├── docs/                          challenge · requirements · solution · architecture · poc_to_prod ·
+│                                  evals · dispute_policy · known_issues · adr/
+├── kickoff_docs/                  organizer documents (read-only)
+└── .claude/ · .github/            Claude Code settings and skills · PR template
 ```
 
 ## Status
 
 | Built | Next |
 |---|---|
-| Data pipeline to silver; data issues documented | Choose the workflow from the data (`docs/challenge.md`) |
-| Team rules, ADRs, local CI | Workflow policy, mock bank tools, orchestrator |
-| Eval strategy, case schema, set checks, metrics, 5 example cases | Eval runner, customer simulator, graders |
+| Data pipeline to silver; data issues documented | Evidence for disputes from the data; gold read models |
+| Dispute policy (code + tests + doc) | Tools, identity, orchestrator, LLM steps, guardrails |
+| Backend and frontend skeletons, compose stack, POC IaC | Chat and console UIs, Langfuse, POC deployment |
+| Target architecture and POC → production map (proposed) | Production IaC modules (plan only), if time allows |
+| Eval strategy, case schema, set checks, metrics, 5 example cases | Eval runner, customer simulator, graders, router ladder |
 
-## Setup
+## Quick start
 
 ```bash
-cp .env.example .env   # organizer (read-only) credentials + our bucket; never commit .env
-make setup             # uv sync + git hooks
+cp .env.example .env   # organizer (read-only) credentials, our bucket, AWS_PROFILE for Bedrock
+make setup             # uv sync + git hooks  (and: cd frontend && npm install)
 make ci                # lint, typecheck, tests, eval-case checks: must pass before any PR
+make up                # full stack → https://localhost
 make help              # all targets
 ```
 
@@ -67,8 +88,8 @@ make help              # all targets
 
 - `make pipeline` runs all four steps. Bronze, mirror and publish are incremental.
 - dbt reads local files: reading ~1k small files from S3 takes minutes per table.
-- Silver models and `_silver.yml` are generated from `data_dictionary.py` by `transform/generate_silver.py`. Don't edit them by hand.
+- Silver models and `_silver.yml` are generated from `pipeline/data_dictionary.py` by `pipeline/transform/generate_silver.py`. Don't edit them by hand.
 - Test policy:
   - **error** = what silver guarantees (primary keys, casts);
   - **warn** = source issues against the dictionary, also flagged per row in `_dq_issues`.
-- `make docs` serves dbt docs with lineage. `BRONZE_URI` / `BRONZE_AWS_PROFILE` in `.env` point at our bucket.
+- `make docs` serves dbt docs with lineage.

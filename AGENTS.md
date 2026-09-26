@@ -18,37 +18,44 @@ What is scored: a working system, proven by evals, that knows when **not** to ac
 6. **Our AWS account only** (ADR 0001): S3, Bedrock, AWS hosting, self-hosted Langfuse. No SaaS outside AWS, no direct calls to model vendors.
 7. **No secrets or restricted data in git.** `.env` is never read by agents or committed. The organizer credentials are read-only and used only to read the source.
 8. **Be honest in docs and reports.** Numbers carry denominators and intervals; simulated and offline results are labeled; limitations are written down, not hidden.
-9. **Don't edit generated files.** Silver models and `_silver.yml` come from `transform/generate_silver.py`; edit the generator or `data_dictionary.py`.
+9. **Don't edit generated files.** Silver models and `_silver.yml` come from `pipeline/transform/generate_silver.py`; edit the generator or `pipeline/data_dictionary.py`.
+10. **Check proposals against the brief.** Every design or scope change is checked against [`docs/requirements.md`](docs/requirements.md), and that page is updated.
+11. **Keep POC and production apart.** The EC2 + Compose demo is not the target; production is `docs/architecture.md`. Don't write code that only works in the POC (see `docs/poc_to_prod.md`, "Rules to keep the path open").
 
 ## Repository map
 
 | Path | What |
 |---|---|
-| `evals/` | Eval harness: case schema (`schema.py`), case-set checks (`checks.py`), metrics (`metrics.py`), cases (`cases/{dev,val,test}`), runs (ignored), reports |
-| `docs/challenge.md` | The challenge on one page: problem, scope, scoring, what we build, plan |
+| `docs/challenge.md` · `docs/solution.md` | The challenge on one page · what we build for disputes |
+| `docs/requirements.md` | Every requirement of the brief → our answer → status. **Check proposals against it** |
+| `docs/architecture.md` · `docs/poc_to_prod.md` | Target production architecture (proposed) · how the POC maps to it |
+| `docs/dispute_policy.md` | The synthetic policy (rules D01-D09); code in `backend/.../policy/` |
 | `docs/evals.md` | Eval strategy: the reference for anything eval-related |
-| `docs/adr/` | Architecture decision records |
-| `docs/known_issues.md` | Data issues with numbers and handling. **Update it when you find a new one** |
+| `docs/adr/` · `docs/known_issues.md` | Decisions · data issues (**update it when you find a new one**) |
+| `backend/` | FastAPI service; module map and rules in `backend/README.md` |
+| `frontend/` | Next.js: `/chat` and `/console`; rules in `frontend/README.md` |
+| `ml/` | Router training and L1 evaluation |
+| `pipeline/` | Data pipeline: organizer S3 → bronze → silver (dbt-duckdb); `data_dictionary.py` is the contract |
+| `evals/` | Eval harness: schema, set checks, metrics, `cases/{dev,val,test}` |
 | `prompts/` | Versioned prompts (see `prompts/README.md`) |
-| `tests/` | Unit tests (L0) and harness tests |
-| `data_dictionary.py` | Official data dictionary: the contract for silver |
-| `bank_data.py`, `ingest_bronze.py`, `quality.py`, `transform/` | Data pipeline: organizer S3 → bronze → silver (dbt-duckdb) |
-| `notebooks/validate_vs_dictionary.ipynb` | Evidence behind `docs/known_issues.md` (data vs. dictionary); nothing the system depends on |
+| `infra/` | Caddy, OpenTofu (`envs/demo`); local/demo/production comparison in `infra/README.md` |
+| `compose.yaml` | The whole stack on one machine |
 | `kickoff_docs/` | Organizer documents (read-only) |
-| `.claude/` | Shared Claude Code settings and skills |
 
 ## Commands
 
 ```bash
 make setup        # uv sync + git hooks
 make ci           # lint + typecheck + tests + eval-check: must pass before any PR
-make test         # pytest
+make test         # eval-harness + backend tests
 make eval-check   # validate eval cases (schema, leakage, coverage)
+make up / down    # full stack locally with compose (https://localhost)
+make demo-plan    # OpenTofu plan for the AWS demo (one EC2 + compose)
 make pipeline     # data: bronze → mirror → silver → publish
 make help         # everything else
 ```
 
-Python is managed with `uv` (never `pip install`). Add dependencies with `uv add` (or `uv add --dev`) so `uv.lock` stays in sync.
+Python is managed with `uv` (never `pip install`): add dependencies with `uv add` (backend: `uv add --package minsky-api`) so `uv.lock` stays in sync. The frontend uses `npm`; commit `package-lock.json`.
 
 ## Workflow
 
@@ -70,6 +77,7 @@ Python is managed with `uv` (never `pip install`). Add dependencies with `uv add
 ## Code conventions
 
 - Python ≥ 3.12, type hints on public functions, `ruff` for lint and format (line length 120).
+- TypeScript in strict mode; the UI renders backend results and never decides.
 - Pydantic models for every contract that crosses a boundary: tool inputs and outputs, handoff payloads, eval cases.
 - Match the surrounding code: short module docstring that says *why*, comments only where the code can't speak for itself.
 - No silent fallbacks: fail loudly, or return an explicit error the caller must handle.
@@ -98,7 +106,7 @@ Read failed transcripts before blaming the agent (`/error-analysis`); fix eval b
 
 Full list with numbers and handling: `docs/known_issues.md`. The most frequent traps:
 - CSVs have a UTF-8 BOM: read with `encoding="utf-8-sig"`.
-- Many categorical values are in Spanish, not the English in the dictionary (silver maps them; see `transform/seeds/enum_mappings.csv`).
+- Many categorical values are in Spanish, not the English in the dictionary (silver maps them; see `pipeline/transform/seeds/enum_mappings.csv`).
 - `customers.registration_branch_id` and `service_agents.assigned_branch_id` do not join to `branches`.
 - `complaints.origin_interaction_id` is always null.
 - `transaction_country` mixes `Mexico` and `México` (normalized in silver).

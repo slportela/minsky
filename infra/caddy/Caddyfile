@@ -1,0 +1,10 @@
+# DOMAIN=localhost gives a local self-signed certificate; on the demo host, a real domain gets Let's Encrypt.
+{$DOMAIN} {
+	encode gzip
+	handle /api/* {
+		reverse_proxy api:8000
+	}
+	handle {
+		reverse_proxy web:3000
+	}
+}

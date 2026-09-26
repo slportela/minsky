@@ -16,6 +16,9 @@ dependencies = [
     "pyyaml>=6.0",
 ]
 
+[tool.uv.workspace]
+members = ["backend"]
+
 [dependency-groups]
 dev = [
     "pre-commit>=4.0",
@@ -27,7 +30,7 @@ dev = [
 [tool.ruff]
 line-length = 120
 target-version = "py312"
-extend-exclude = ["notebooks", "transform/target", "transform/dbt_packages"]
+extend-exclude = ["pipeline/notebooks", "pipeline/transform/target", "pipeline/transform/dbt_packages"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP"]
@@ -38,5 +41,5 @@ pythonpath = ["."]
 addopts = "-q"
 
 [tool.pyright]
-include = ["evals", "tests"]
+include = ["evals", "tests", "backend/src", "backend/tests"]
 pythonVersion = "3.12"

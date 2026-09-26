@@ -10,9 +10,9 @@ Re-running with no source changes copies nothing. A changed file (same key, new 
 is copied again; enable bucket versioning on the bronze bucket to keep the old bytes.
 
 Usage:
-  uv run python ingest_bronze.py --dest data/bronze --dry-run            # local test
-  uv run python ingest_bronze.py --dest s3://my-bucket/bronze --profile my-aws-profile
-  uv run python ingest_bronze.py --dest data/bronze --tables branches customers
+  uv run python pipeline/ingest_bronze.py --dest data/bronze --dry-run            # local test
+  uv run python pipeline/ingest_bronze.py --dest s3://my-bucket/bronze --profile my-aws-profile
+  uv run python pipeline/ingest_bronze.py --dest data/bronze --tables branches customers
 """
 
 import argparse

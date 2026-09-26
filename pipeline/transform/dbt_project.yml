@@ -11,9 +11,9 @@ clean-targets: ["target", "dbt_packages"]
 
 vars:
   # Local mirror of s3://<bucket>/bronze (see `make mirror`), relative to this folder.
-  bronze_root: "../data/bronze"
+  bronze_root: "../../data/bronze"
   # Where silver Parquet is exported (published to S3 with `make publish`).
-  lake_root: "../data/lake"
+  lake_root: "../../data/lake"
 
 models:
   minsky:

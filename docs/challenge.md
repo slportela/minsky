@@ -1,6 +1,6 @@
 # The challenge, in one page
 
-Read this first. Details: the brief in `kickoff_docs/`, how we measure in [`evals.md`](evals.md), how we work in [`../AGENTS.md`](../AGENTS.md).
+Read this first. Details: the brief in `kickoff_docs/`, every requirement traced in [`requirements.md`](requirements.md), how we measure in [`evals.md`](evals.md), how we work in [`../AGENTS.md`](../AGENTS.md).
 
 ## The problem
 
@@ -19,7 +19,7 @@ We pick **one** workflow. The brief's examples (not tracks; more workflows earn 
 | **Transaction-dispute intake** | Transactions (status, fraud flags) + complaints (amounts, SLA, resolution, compensation) give a baseline | Needs a clear synthetic dispute policy |
 | Credit-product info & eligibility | Products, credit score, income | Extra rules: separate risk model and eligibility policy; the model must never approve credit |
 
-**Decision pending.** Choose it with evidence (step 1 below): contact reasons and complaint categories by volume, cost and pain. Transaction disputes is the current front-runner.
+**Decided: transaction-dispute intake** (ADR 0005). What we build: [`solution.md`](solution.md). The data analysis still has to confirm the choice with numbers (volume, cost, pain).
 
 Whatever we pick, the demo must show:
 - a normal case resolved automatically,
@@ -77,11 +77,11 @@ Judges look across AI engineering (backend, frontend, deployment), ML, data engi
 | Workstream | Output |
 |---|---|
 | **Data** | Pipeline to silver (exists) and gold read models for the workflow; data-quality report (`known_issues.md`) |
-| **Analysis** | Workflow choice with numbers; baseline of the current service; later, the business case |
+| **Analysis** | Evidence for disputes with numbers; baseline of the current service; later, the business case |
 | **Policy & tools** | Written policy for the workflow (synthetic, clearly labeled); mock bank tools with permission checks and an audit log; test identity sessions |
 | **AI system** | Orchestrator (code decides, LLM understands and phrases), learned router, handoff, guardrails, ES/PT |
 | **Evals** | Golden cases, user simulator, graders, baselines, reports ([`evals.md`](evals.md)) |
-| **Platform** | AWS deployment, Bedrock models, Langfuse, reproducible setup, runbook |
+| **Platform** | POC on AWS (EC2 + compose), target production architecture and its mapping, Bedrock, Langfuse, runbook |
 | **Story** | Slides, video, system card, limitations |
 
 ## Stack constraints
@@ -93,7 +93,7 @@ Judges look across AI engineering (backend, frontend, deployment), ML, data engi
 
 | Days | Focus |
 |---|---|
-| Sep 26-27 | Data evidence → **choose the workflow**; write its policy; gold tables; first 20-50 eval cases |
+| Sep 26-27 | Data evidence for disputes; policy review ([`dispute_policy.md`](dispute_policy.md)); gold tables; first 20-50 eval cases |
 | Sep 28-30 | Tools + permissions + orchestrator; router ladder (the learned component); eval runner and simulator |
 | Oct 1-2 | Full eval runs, error analysis, fixes; Portuguese and red-team suites; handoff console |
 | Oct 3 | AWS deployment, tracing, runbook |
@@ -101,7 +101,7 @@ Judges look across AI engineering (backend, frontend, deployment), ML, data engi
 
 ## Open decisions
 
-1. **Which workflow.** Decide with data.
+1. **Confirm the workflow with data.** Dispute intake is chosen (ADR 0005); the analysis must back it with numbers.
 2. **Eval harness.** τ²-bench or our own runner, decided by a half-day trial (ADR 0002).
 3. **Models on Bedrock.** Check which ones are available in our region: Claude is; Gemini and OpenAI's proprietary GPT models may not be. Then choose per step by eval results.
 4. **CI.** Local `make ci`, or GitHub Actions: GitHub is required for the submission anyway.

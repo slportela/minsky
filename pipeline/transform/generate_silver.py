@@ -8,7 +8,7 @@ Test policy:
   - warn:  source conformity to the dictionary (NOT NULL, accepted values, FKs). These are
            source issues: silver keeps the rows and flags them in `_dq_issues` instead of failing.
 
-Usage: uv run python transform/generate_silver.py
+Usage: uv run python pipeline/transform/generate_silver.py
 """
 
 import csv

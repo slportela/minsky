@@ -14,7 +14,7 @@ from botocore.exceptions import ResponseStreamingError
 from dotenv import load_dotenv
 from urllib3.exceptions import ProtocolError
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parents[1]  # repo root: .env and data/ live there
 load_dotenv(ROOT / ".env", override=True)
 
 BUCKET = os.environ["S3_BUCKET_NAME"]

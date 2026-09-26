@@ -11,7 +11,7 @@ repos:
         name: ruff format
         entry: uv run ruff format
         language: system
-        files: ^(evals|tests)/.*\.py$
+        files: ^(evals|tests|backend)/.*\.py$
       - id: eval-check
         name: eval cases
         entry: uv run python -m evals.checks evals/cases --prompts prompts
