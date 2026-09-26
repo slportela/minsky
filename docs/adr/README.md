@@ -23,8 +23,9 @@ What gets easier, what gets harder, what we must now do. How we would know it wa
 | ADR | Title | Status |
 |---|---|---|
 | [0001](0001-aws-only.md) | Everything runs in our AWS account; no SaaS outside it | accepted |
-| [0002](0002-eval-methodology.md) | Eval methodology: τ²-style simulation, end-state grading | accepted |
+| [0002](0002-eval-methodology.md) | Eval methodology: τ²-style simulation, end-state grading | proposed |
 | [0003](0003-agent-runtime.md) | Agent runtime: Messages API with our own orchestrator | proposed |
 | [0004](0004-laya.md) | Laya as a fine-tuned router candidate only | proposed |
 | [0005](0005-workflow-dispute-intake.md) | Workflow: transaction-dispute intake | accepted |
 | [0006](0006-stack-and-deployment.md) | Stack, POC deployment and target architecture | proposed |
+| [0007](0007-observability-and-tracking.md) | Observability and ML tracking: OpenTelemetry first, tools pluggable | proposed |

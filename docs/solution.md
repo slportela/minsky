@@ -108,9 +108,9 @@ The agent never has to read the raw transcript.
 └──────────┬───────────────────────┬─────────────────────────┬────────────────────────────────┘
            │                       │                         │
            ▼                       ▼                         ▼
-   PostgreSQL                 Amazon Bedrock            OpenTelemetry ─▶ Langfuse
+   PostgreSQL                 Amazon Bedrock            OpenTelemetry + trace tables
    bank.*  (read-only: gold   (Claude; other            (traces = audit record,
-            read models)       models via the same       eval runs, scores)
+            read models)       models via the same       viewer: console, Phoenix)
    cases.* (write: disputes,   interface)
             handoffs, sessions,
             audit log)
@@ -147,7 +147,7 @@ The cases in `evals/cases/` follow the flow above. Each step's branches become c
 ## Where it runs
 
 - **POC for the hackathon**: one EC2 host with Docker Compose ([`infra/README.md`](../infra/README.md)).
-- **Target production architecture**: ECS, Aurora, Cognito, WAF, private networking ([`architecture.md`](architecture.md)).
+- **Target production architecture**: ECS, RDS PostgreSQL, Cognito, WAF, private networking ([`architecture.md`](architecture.md)).
 - **How the POC maps to production**, piece by piece: [`poc_to_prod.md`](poc_to_prod.md).
 
 ## Known limitations to state up front

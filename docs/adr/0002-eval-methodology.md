@@ -1,6 +1,6 @@
 # 0002. Eval methodology: τ²-style simulation, end-state grading
 
-- Status: accepted
+- Status: proposed
 - Date: 2026-09-26
 
 ## Context

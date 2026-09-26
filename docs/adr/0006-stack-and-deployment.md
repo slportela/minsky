@@ -12,9 +12,9 @@ We need a backend, a UI for customers and agents, a database for read models and
 | Backend | FastAPI + Pydantic + SQLAlchemy (Python, `backend/`, a uv workspace member) |
 | Frontend | Next.js (React, TypeScript, App Router), one app with `/chat` and `/console` (`frontend/`) |
 | Database | PostgreSQL: `bank.*` read models loaded from the lake, `cases.*` writes |
-| POC runtime (hackathon only) | Docker Compose on one EC2: caddy, web, api, postgres (+ Langfuse) |
+| POC runtime (hackathon only) | Docker Compose on one EC2: caddy, web, api, postgres (+ optional Phoenix) |
 | IaC | OpenTofu: modules + `envs/demo` (applied); production modules later (plan only) |
-| Target production | ECS Fargate, Aurora PostgreSQL + RDS Proxy, CloudFront + WAF, Cognito, Bedrock via VPC endpoint (`docs/architecture.md`) |
+| Target production | ECS Fargate, RDS PostgreSQL Multi-AZ + RDS Proxy, CloudFront + WAF, Cognito, Bedrock via VPC endpoint (`docs/architecture.md`) |
 
 ## Consequences
 - The POC is **not** the production design. The same images run on a laptop, the demo host and ECS; `docs/poc_to_prod.md` states what production adds for each component.

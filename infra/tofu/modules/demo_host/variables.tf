@@ -4,9 +4,9 @@ variable "name" {
 }
 
 variable "instance_type" {
-  description = "Must fit the whole compose stack, Langfuse included"
+  description = "Must fit the whole compose stack"
   type        = string
-  default     = "t3.xlarge"
+  default     = "t3.large"
 }
 
 variable "disk_gb" {

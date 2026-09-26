@@ -41,8 +41,8 @@ Status: ✅ done · 🟡 partial · ⬜ planned · ⚠️ risk or gap
 | P5.1 | Evaluate on held-out cases | Locked test split | `evals.md` | 🟡 harness partial |
 | P5.2 | Cover incorrect or missing data, expired sessions, unauthorized access, prompt injection, tool failures, multilingual ambiguity | Red-team and failure suites; fault injection in cases | `evals/schema.py` | 🟡 schema supports it |
 | P5.3 | Report successes, unsafe outcomes, handoff behavior, latency and cost, with sample sizes and limitations | Metrics module; report template | `evals/metrics.py` | 🟡 |
-| P6.1 | Tracing, bounded retries, safe fallback, reproducible setup | OpenTelemetry → Langfuse; retries with jitter; degraded mode = handoff; `make up` | `architecture.md` | 🟡 design |
-| P6.2 | Explain capacity limits, monitoring, access controls, data retention, remaining deployment work | Covered in the architecture and mapping docs | `architecture.md`, `poc_to_prod.md` | 🟡 design |
+| P6.1 | Tracing, bounded retries, safe fallback, reproducible setup | OpenTelemetry + trace/audit tables (ADR 0007); retries with jitter; degraded mode = handoff; `make up` | `architecture.md` | 🟡 design |
+| P6.2 | Explain capacity limits, monitoring, access controls, data retention, remaining deployment work | Workload tiers derived from the dataset; Bedrock quotas as the binding limit; architecture and mapping docs | `architecture.md`, `poc_to_prod.md` | 🟡 design |
 | P6.3 | Explanations from sources, policy rules and execution records; not chain of thought | Rule ids + tool results + traces | `dispute_policy.md` | 🟡 |
 
 ## Boundaries (PS)
@@ -71,6 +71,7 @@ Status: ✅ done · 🟡 partial · ⬜ planned · ⚠️ risk or gap
 | E7 | Escalation quality: missed and unnecessary transfers | Metric definition | `evals.md` | 🟡 |
 | E8 | Unsafe outcomes with counts and denominators; zero observed ≠ zero risk | `Rate` + zero-event upper bound | `evals/metrics.py` | ✅ |
 | E9 | p50/p95 latency; cost per attempted case and per successful resolution; "not defined" when there are none | `percentile`, `cost_per` | `evals/metrics.py` | ✅ |
+| E12 | State the workload, sample size and cost assumptions (PS) | Workload tiers from dataset rates (assumptions, labeled) | `architecture.md` "Workload and capacity" | 🟡 |
 | E10 | Compare by language and customer segment; small samples; investigate disparities | Slices in tags | `evals/schema.py` | 🟡 |
 | E11 | Label offline, simulated and projected numbers separately; offline ≠ production improvement | Reporting rule | `evals.md` principle 8 | 🟡 |
 
@@ -82,4 +83,4 @@ Status: ✅ done · 🟡 partial · ⬜ planned · ⚠️ risk or gap
 | J2 | AI engineering: backend, frontend, deployment | FastAPI, Next.js, POC on AWS + target architecture | 🟡 skeletons |
 | J3 | Data analytics: data quality and insights | `known_issues.md` + workflow evidence + results by slice | 🟡 |
 | J4 | Data engineering: extraction and transformation | Bronze → silver pipeline with contracts | ✅ |
-| J5 | ML: model selection, optimization, implementation, **tracking** | Router ladder; experiment tracking still to choose (MLflow self-hosted, or Langfuse datasets) | ⚠️ tracking not chosen |
+| J5 | ML: model selection, optimization, implementation, **tracking** | Router ladder; every training run writes a committed report (git SHA, data snapshot, splits, params, metrics, model hash) (ADR 0007) | ⬜ |

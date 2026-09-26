@@ -15,7 +15,7 @@ What is scored: a working system, proven by evals, that knows when **not** to ac
 3. **Evals gate behavior changes.** Any change to prompts, models, tools, policy or orchestration needs an eval delta in the PR (`.github/pull_request_template.md`).
 4. **The test split is locked.** Never edit, generate into or tune on `evals/cases/test/`. Iterate on `dev`, select on `val`.
 5. **Labels come from the policy and the data**, never from a model's output (including yours).
-6. **Our AWS account only** (ADR 0001): S3, Bedrock, AWS hosting, self-hosted Langfuse. No SaaS outside AWS, no direct calls to model vendors.
+6. **Our AWS account only** (ADR 0001): S3, Bedrock, AWS hosting; any extra tool is self-hosted. No SaaS outside AWS, no direct calls to model vendors.
 7. **No secrets or restricted data in git.** `.env` is never read by agents or committed. The organizer credentials are read-only and used only to read the source.
 8. **Be honest in docs and reports.** Numbers carry denominators and intervals; simulated and offline results are labeled; limitations are written down, not hidden.
 9. **Don't edit generated files.** Silver models and `_silver.yml` come from `pipeline/transform/generate_silver.py`; edit the generator or `pipeline/data_dictionary.py`.
@@ -82,6 +82,7 @@ Python is managed with `uv` (never `pip install`): add dependencies with `uv add
 - Match the surrounding code: short module docstring that says *why*, comments only where the code can't speak for itself.
 - No silent fallbacks: fail loudly, or return an explicit error the caller must handle.
 - Tools are small, typed, deterministic functions that check permissions on every call and write an audit record.
+- Instrument with OpenTelemetry; never couple code to a specific tracing or tracking vendor (ADR 0007). New tools plug in through configuration.
 
 ## Testing and evals
 

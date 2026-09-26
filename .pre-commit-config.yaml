@@ -25,6 +25,6 @@ repos:
         files: (^|/)\.env$
       - id: gitleaks
         name: gitleaks (secret scan; skipped with a warning if the binary is missing)
-        entry: sh -c 'command -v gitleaks >/dev/null || { echo "gitleaks not installed: secret scan skipped"; exit 0; }; gitleaks git --pre-commit --staged --redact'
+        entry: sh -c 'command -v gitleaks >/dev/null || { echo "gitleaks not installed, secret scan skipped"; exit 0; }; gitleaks git --pre-commit --staged --redact'
         language: system
         pass_filenames: false

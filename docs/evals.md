@@ -205,7 +205,7 @@ The simulator is a model and can fail: it may leak the hidden goal, give up, inv
 
 Hackathon traffic is simulated or demo traffic, and is **labeled as simulated online** in every report. The setup is the one a real deployment would use:
 
-- **Tracing** with OpenTelemetry into **Langfuse**, self-hosted on AWS,: every turn, LLM call, tool call, policy decision and model or prompt version. The trace is the audit record.
+- **Tracing**: OpenTelemetry instrumentation plus our own trace and audit tables in Postgres (ADR 0007), viewable in the agent console and, during development, in Phoenix: every turn, LLM call, tool call, policy decision and model or prompt version. The trace is the audit record.
 - **Deterministic online checks on every trace**, the same code as the offline `safety`/`communicate`/`handoff` graders: grounding, language match, policy violations, unverified claims. A violation is an alert, not only a dashboard entry.
 - **Sampled judge**: the validated judge on a sample of traces (e.g. 10%), asynchronously.
 - **Feedback**: the human agent rates each handoff ("useful? what was missing?"), and the customer can mark a reply as wrong.

@@ -6,7 +6,7 @@ How the system runs **for the hackathon**. Two environments: local development a
 
 ```
  LOCAL (make up)                       POC DEMO (make demo-apply)             PRODUCTION (docs only)
- laptop · compose                      1 EC2 · compose · instance role        ECS · Aurora · Cognito · WAF · …
+ laptop · compose                      1 EC2 · compose · instance role        ECS · RDS · Cognito · WAF · …
  self-signed TLS · ~/.aws for Bedrock  Let's Encrypt · no SSH (SSM)           see docs/architecture.md
 ```
 

@@ -65,7 +65,7 @@ Judges look across AI engineering (backend, frontend, deployment), ML, data engi
                   └──────────┬───────────────────────┬───────────────────┘
                              │                       │
                    data pipeline (S3 →          traces + audit log
-                   bronze → silver → gold)      (Langfuse)
+                   bronze → silver → gold)      (postgres + OpenTelemetry)
                              ▲
                              │
         ┌────────────────────┴──────────────────────────────────────────┐
@@ -81,12 +81,12 @@ Judges look across AI engineering (backend, frontend, deployment), ML, data engi
 | **Policy & tools** | Written policy for the workflow (synthetic, clearly labeled); mock bank tools with permission checks and an audit log; test identity sessions |
 | **AI system** | Orchestrator (code decides, LLM understands and phrases), learned router, handoff, guardrails, ES/PT |
 | **Evals** | Golden cases, user simulator, graders, baselines, reports ([`evals.md`](evals.md)) |
-| **Platform** | POC on AWS (EC2 + compose), target production architecture and its mapping, Bedrock, Langfuse, runbook |
+| **Platform** | POC on AWS (EC2 + compose), target production architecture and its mapping, Bedrock, tracing, runbook |
 | **Story** | Slides, video, system card, limitations |
 
 ## Stack constraints
 
-- **Everything runs in our AWS account** (ADR 0001): S3 for data, Bedrock for models (Claude, and others available there), AWS for hosting, self-hosted Langfuse. No SaaS outside AWS.
+- **Everything runs in our AWS account** (ADR 0001): S3 for data, Bedrock for models (Claude, and others available there), AWS for hosting. Any extra tool is self-hosted. No SaaS outside AWS.
 - Organizer credentials are read-only and only used to read the source dataset.
 
 ## Plan

@@ -11,8 +11,8 @@
  web container ───────── same image ──────▶   ECS Fargate service "web" (≥2 tasks, autoscaling)
  api container ───────── same image ──────▶   ECS Fargate service "api" (≥2 tasks, autoscaling)
  (in-process jobs) ───────────────────────▶   SQS + DLQ + ECS "worker" service
- postgres container ──────────────────────▶   Aurora PostgreSQL (Multi-AZ) + RDS Proxy
- langfuse containers ─────────────────────▶   Langfuse on ECS + managed/self-managed stores
+ postgres container ──────────────────────▶   RDS PostgreSQL Multi-AZ + RDS Proxy
+ trace tables + OTel (+ Phoenix, optional) ▶   same tables + OTel → CloudWatch/X-Ray (+ LLM UI if needed)
  test sessions + OTP mock ────────────────▶   Cognito (customer pool, staff pool → bank IdP)
  .env on the host ────────────────────────▶   Secrets Manager + KMS; SSM Parameter Store
  instance role (one for everything) ──────▶   one IAM task role per service, least privilege
@@ -21,7 +21,7 @@
  make pipeline on a laptop ───────────────▶   EventBridge Scheduler → ECS task (ingest + dbt)
  container logs on disk ──────────────────▶   CloudWatch Logs + X-Ray + alarms, CloudTrail
  manual deploy over SSM ──────────────────▶   CI/CD: build → scan → eval gate → blue/green
- EBS snapshots ───────────────────────────▶   Aurora PITR + cross-region snapshot copies
+ EBS snapshots ───────────────────────────▶   RDS PITR + cross-region snapshot copies
 ```
 
 ## Component by component
@@ -32,8 +32,9 @@
 | Web | `web` container | ECS service, same image | ≥2 tasks across AZs; health checks; static assets cached at CloudFront | None |
 | API | `api` container | ECS service, same image | Stateless; ≥2 tasks; autoscaling on requests/CPU; graceful shutdown; per-service task role | None (config) |
 | Async jobs | In-process | SQS + DLQ, `worker` service | Idempotent consumers; DLQ alarms; visibility timeout > job time | Queue adapter: in-process → SQS |
-| **Database** | `postgres` container, volume on EBS | **Aurora PostgreSQL + RDS Proxy** | See the next section | `DATABASE_URL`; migrations as a deploy step |
-| Observability | Langfuse containers (+ its stores) | Langfuse on ECS; stores on RDS/ElastiCache/S3 plus ClickHouse (self-managed); CloudWatch + X-Ray | OpenTelemetry via an ADOT sidecar; PII redaction before export; SLO alarms | Exporter endpoint (config) |
+| **Database** | `postgres` container, volume on EBS | **RDS PostgreSQL Multi-AZ + RDS Proxy** | See the next section | `DATABASE_URL`; migrations as a deploy step |
+| Observability | Trace/audit tables in postgres + OpenTelemetry; optional Phoenix container | Same tables; OpenTelemetry via ADOT → CloudWatch + X-Ray; LLM UI (Phoenix/Langfuse) on ECS if needed | PII redaction before export; SLO alarms; trace retention policy | Exporter endpoint (config) |
+| ML tracking | Committed training reports (`ml/reports/`) | Same reports; MLflow on ECS (RDS + S3) if experiments grow | Every served model traced to its report (git SHA, data snapshot, metrics) | None, or the tracking URI |
 | Identity | Test sessions + simulated OTP | Cognito (customers: MFA/step-up; staff: federation to the bank IdP) | Short-lived tokens; step-up before sensitive actions; no identity from conversation text | Identity adapter: mock → Cognito |
 | Secrets | `.env` on the host | Secrets Manager (rotation) + KMS; SSM for config | Nothing secret in images, env files or logs | Read from the environment as today; injected by ECS |
 | Network | Default VPC, public instance, ports 80/443 | Dedicated VPC, 3 AZs; public (ALB, NAT), private (tasks), isolated (database) subnets | Security groups by role; no public IPs on tasks or database; VPC endpoints; flow logs | None |
@@ -42,9 +43,9 @@
 | Pipeline | `make pipeline` on a laptop | EventBridge Scheduler → ECS task; freshness checks + alarms | Idempotent runs (already: manifest + verified copy); failures alarm; retries bounded | None (same code, scheduled) |
 | Deploy | `git pull` + `docker compose up` over SSM | CI/CD: build → ECR scan → eval gate → blue/green (CodeDeploy) | Immutable image tags; automatic rollback on alarms; OpenTofu with remote state and locking | None |
 | Security posture | Instance role, IMDSv2, no SSH | + GuardDuty, Security Hub, Config, org CloudTrail, Inspector | Separate accounts per environment; SCPs | None |
-| Backups / DR | EBS snapshots | Aurora PITR + snapshot copies to a second region; IaC to rebuild | Proposed RPO ≤ 5 min, RTO ≤ 1 h; test restores | None |
+| Backups / DR | EBS snapshots | RDS PITR + snapshot copies to a second region; IaC to rebuild | Proposed RPO ≤ 5 min, RTO ≤ 1 h; test restores | None |
 
-## The database: postgres container → Aurora PostgreSQL
+## The database: postgres container → RDS PostgreSQL
 
 In the POC one `postgres` container holds two schemas:
 - `bank.*`: read models loaded from the lake;
@@ -54,17 +55,17 @@ In production:
 
 | Concern | Production practice |
 |---|---|
-| Engine | Aurora PostgreSQL, same major version as the POC image. RDS PostgreSQL Multi-AZ is the cheaper alternative at low scale (open question) |
-| Availability | Writer + at least one reader in another AZ; automatic failover |
+| Engine | RDS PostgreSQL, same major version as the POC image; Multi-AZ. Aurora PostgreSQL if we need faster failover, many readers or storage autoscaling (the design is the same) |
+| Availability | Multi-AZ with automatic failover to a standby in another AZ; a read replica for read models or analysts if load requires it |
 | Network | Isolated subnets, not publicly accessible; security group allows only the api/worker tasks and RDS Proxy |
-| Connections | **RDS Proxy** between ECS and Aurora: pools connections when tasks scale out, speeds up failover |
+| Connections | **RDS Proxy** between ECS and the database: pools connections when tasks scale out, shortens failover |
 | Credentials | IAM database authentication or Secrets Manager with automatic rotation; no static passwords |
 | Roles | `app_read` (SELECT on `bank.*`), `app_write` (`cases.*`), `migrator` (DDL, used only by the migration task), `analyst` (read replica only) |
 | Tenant isolation | **Row-Level Security** on customer-scoped tables, keyed by a session setting the API sets from the token: a second line behind the tool-layer checks |
 | Encryption | KMS customer-managed key at rest; TLS enforced (`rds.force_ssl`) |
 | Backups | Automated backups with point-in-time recovery (7-35 days); snapshots copied to a second region; restore tested |
 | Migrations | Alembic, run as a one-off ECS task before each deploy; backward-compatible changes only (expand → migrate → contract) |
-| Read models | Loaded by the pipeline task after each run; served from the reader endpoint; freshness recorded in a table and alarmed |
+| Read models | Loaded by the pipeline task after each run; served from the primary (or a read replica under load); freshness recorded in a table and alarmed |
 | Audit log | Append-only table (no UPDATE/DELETE grants) plus daily export to S3 Object Lock |
 | Monitoring | Performance Insights; `pgaudit`; slow-query logging; alarms on CPU, connections, free memory, replica lag, storage |
 | Operations | Deletion protection; maintenance window; minor-version auto-upgrade; parameter groups in IaC |

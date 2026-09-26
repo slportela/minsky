@@ -1,1 +1,1 @@
-"""OpenTelemetry setup: traces for every turn, model call, tool call and policy decision, exported to Langfuse."""
+"""OpenTelemetry setup and the trace/audit tables: every turn, model call, tool call and policy decision (ADR 0007)."""

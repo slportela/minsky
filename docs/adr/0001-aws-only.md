@@ -14,7 +14,7 @@ Two things outside our account are imposed by the organizers: the source dataset
 ## Decision
 - Data: organizer S3 (read-only) → bronze and lake in our own S3 bucket (`make pipeline`).
 - Models through Amazon Bedrock only. There are no direct calls to model vendors' APIs.
-- Observability: Langfuse self-hosted on AWS, fed through OpenTelemetry (so the backend can be swapped).
+- Observability: fed through OpenTelemetry, so the backend can be swapped (tool choice: ADR 0007).
 - Eval cases, graders, runs and reports live in the repository, in plain files.
 - CI runs locally (`make ci`, pre-commit). GitHub Actions is still open (see `docs/challenge.md`).
 

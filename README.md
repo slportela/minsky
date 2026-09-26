@@ -39,7 +39,7 @@ minsky/
 │       ├── identity/              test sessions + simulated OTP (Cognito in production)
 │       ├── guardrails/            input signals · output grounding and language checks
 │       ├── store/                 postgres: bank.* read models, cases.* writes
-│       └── observability/         OpenTelemetry → Langfuse
+│       └── observability/         OpenTelemetry + our trace/audit tables
 ├── frontend/                      Next.js: /chat (customers) · /console (agents)
 ├── ml/                            router training and L1 evaluation (the learned component)
 ├── pipeline/                      data: organizer S3 → bronze → silver (dbt-duckdb) → our S3
@@ -64,7 +64,7 @@ minsky/
 |---|---|
 | Data pipeline to silver; data issues documented | Evidence for disputes from the data; gold read models |
 | Dispute policy (code + tests + doc) | Tools, identity, orchestrator, LLM steps, guardrails |
-| Backend and frontend skeletons, compose stack, POC IaC | Chat and console UIs, Langfuse, POC deployment |
+| Backend and frontend skeletons, compose stack, POC IaC | Chat and console UIs, trace view, POC deployment |
 | Target architecture and POC → production map (proposed) | Production IaC modules (plan only), if time allows |
 | Eval strategy, case schema, set checks, metrics, 5 example cases | Eval runner, customer simulator, graders, router ladder |
 

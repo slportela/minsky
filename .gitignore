@@ -18,3 +18,5 @@ infra/tofu/**/.terraform/
 infra/tofu/**/*.tfstate*
 infra/tofu/**/*.tfvars
 !infra/tofu/**/*.tfvars.example
+ci-results.log
+frontend/tsconfig.tsbuildinfo

@@ -13,7 +13,11 @@ Training and offline evaluation of the **learned router**: intent and dispute re
      │
      ▼
  chosen model + confidence threshold (fitted on val) → artifact + model card → backend/router
+
+ every run writes ml/reports/<run>.json + .md: git SHA, data snapshot, splits, params, metrics, model hash
 ```
+
+Tracking (ADR 0007): reports are committed, so every number in the slides traces back to a run in the repo. The backend config names the model file it serves.
 
 Planned layout:
 - `ml/router/` holds the training scripts;
