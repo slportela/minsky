@@ -315,3 +315,108 @@ FOREIGN_KEYS = [
     ("satisfaction_surveys", "interaction_id", "call_center_interactions", "interaction_id"),
     ("complaints", "origin_interaction_id", "call_center_interactions", "interaction_id"),
 ]
+
+# Documented column types (DuckDB spelling of the PDF's SQL types; TEXT -> varchar).
+V = "varchar"
+TYPES = {
+    "customers": {
+        "customer_id": V, "document_number": V, "document_type": V, "first_name": V, "last_name": V,
+        "date_of_birth": "date", "gender": V, "email": V, "mobile_phone": V, "landline_phone": V,
+        "address": V, "city": V, "state": V, "country": V, "postal_code": V, "detected_accent": V,
+        "segment": V, "credit_score": "integer", "estimated_monthly_income": "decimal(12,2)",
+        "occupation": V, "marital_status": V, "education_level": V, "registration_date": "timestamp",
+        "registration_branch_id": V, "customer_status": V, "last_updated": "timestamp",
+        "accepts_marketing": "boolean",
+    },
+    "products": {
+        "product_id": V, "customer_id": V, "product_type": V, "product_number": V, "currency": V,
+        "current_balance": "decimal(15,2)", "credit_limit": "decimal(15,2)", "interest_rate": "decimal(5,2)",
+        "opening_date": "date", "expiration_date": "date", "opening_branch_id": V, "product_status": V,
+        "opening_channel": V, "has_linked_app": "boolean", "days_past_due": "integer",
+        "last_transaction_date": "timestamp", "last_updated": "timestamp",
+    },
+    "branches": {
+        "branch_id": V, "branch_code": V, "branch_name": V, "branch_type": V, "address": V, "city": V,
+        "state": V, "country": V, "postal_code": V, "geographic_zone": V, "phone": V, "email": V,
+        "opening_time": "time", "closing_time": "time", "has_atms": "boolean", "atm_count": "integer",
+        "has_teller_windows": "boolean", "teller_window_count": "integer", "latitude": "decimal(10,7)",
+        "longitude": "decimal(10,7)", "branch_opening_date": "date", "branch_status": V,
+    },
+    "service_agents": {
+        "agent_id": V, "employee_code": V, "first_name": V, "last_name": V, "email": V, "phone": V,
+        "native_accent": V, "country_of_origin": V, "assigned_branch_id": V, "agent_type": V,
+        "experience_level": V, "languages": V, "specialty": V, "hire_date": "date",
+        "avg_csat": "decimal(3,2)", "total_monthly_interactions": "integer", "agent_status": V,
+        "work_shift": V,
+    },
+    "marketing_campaigns": {
+        "campaign_id": V, "campaign_name": V, "description": V, "campaign_type": V,
+        "campaign_objective": V, "promoted_product": V, "target_segment": V, "target_country": V,
+        "start_date": "date", "end_date": "date", "budget": "decimal(12,2)", "campaign_status": V,
+        "expected_conversion_rate": "decimal(5,2)",
+    },
+    "transactions": {
+        "transaction_id": V, "transaction_date": "timestamp", "process_date": "date", "product_id": V,
+        "customer_id": V, "transaction_type": V, "transaction_category": V, "amount": "decimal(15,2)",
+        "currency": V, "amount_usd": "decimal(15,2)", "channel": V, "branch_id": V, "merchant_name": V,
+        "merchant_category": V, "transaction_country": V, "transaction_city": V,
+        "transaction_status": V, "response_code": V, "is_fraud": "boolean", "fraud_score": "decimal(5,2)",
+        "latitude": "decimal(10,7)", "longitude": "decimal(10,7)",
+    },
+    "call_center_interactions": {
+        "interaction_id": V, "interaction_date": "timestamp", "process_date": "date", "customer_id": V,
+        "agent_id": V, "interaction_type": V, "channel": V, "contact_reason": V, "reason_category": V,
+        "duration_seconds": "integer", "wait_time_seconds": "integer", "was_resolved": "boolean",
+        "requires_followup": "boolean", "detected_sentiment": V, "sentiment_score": "decimal(3,2)",
+        "customer_detected_accent": V, "agent_used_accent": V, "was_escalated": "boolean",
+        "mentioned_products": V, "has_transcript": "boolean", "has_recording": "boolean",
+    },
+    "call_transcripts": {
+        "transcript_id": V, "interaction_id": V, "process_date": "date", "customer_id": V, "agent_id": V,
+        "full_text": V, "customer_text": V, "agent_text": V, "detected_language": V, "detected_accent": V,
+        "accent_confidence": "decimal(3,2)", "detected_keywords": V, "mentioned_entities": V,
+        "detected_intents": V, "main_topics": V, "transcription_model": V, "audio_quality": V,
+        "duration_seconds": "integer",
+    },
+    "satisfaction_surveys": {
+        "survey_id": V, "survey_date": "timestamp", "process_date": "date", "interaction_id": V,
+        "customer_id": V, "agent_id": V, "survey_type": V, "send_channel": V, "main_score": "integer",
+        "nps_category": V, "question_1_text": V, "question_1_response": "integer", "question_2_text": V,
+        "question_2_response": "integer", "question_3_text": V, "question_3_response": "integer",
+        "open_comments": V, "comment_sentiment": V, "response_time_hours": "decimal(8,2)",
+        "campaign_response_rate": "decimal(5,2)",
+    },
+    "digital_events": {
+        "event_id": V, "event_date": "timestamp", "process_date": "date", "customer_id": V,
+        "session_id": V, "event_type": V, "event_category": V, "channel": V, "platform": V, "browser": V,
+        "app_version": V, "page_url": V, "page_title": V, "action": V, "element_id": V, "product_id": V,
+        "event_value": "decimal(15,2)", "duration_seconds": "integer", "ip_address": V, "ip_country": V,
+        "ip_city": V, "is_mobile": "boolean", "referrer": V, "utm_source": V, "utm_medium": V,
+        "utm_campaign": V,
+    },
+    "complaints": {
+        "complaint_id": V, "creation_date": "timestamp", "process_date": "date", "customer_id": V,
+        "case_type": V, "category": V, "subcategory": V, "reception_channel": V,
+        "affected_product_id": V, "related_branch_id": V, "origin_interaction_id": V, "description": V,
+        "claimed_amount": "decimal(15,2)", "currency": V, "priority": V, "status": V,
+        "assigned_agent_id": V, "assignment_date": "timestamp", "first_response_date": "timestamp",
+        "resolution_date": "timestamp", "closing_date": "timestamp", "sla_breached": "boolean",
+        "resolution_days": "integer", "resolution": V, "compensation_granted": "decimal(15,2)",
+        "resolution_satisfaction": "integer", "is_repeat_complainer": "boolean",
+    },
+    "campaign_sends": {
+        "send_id": V, "send_date": "timestamp", "process_date": "date", "campaign_id": V,
+        "customer_id": V, "send_channel": V, "template_used": V, "subject": V, "send_status": V,
+        "was_delivered": "boolean", "was_opened": "boolean", "open_date": "timestamp",
+        "was_clicked": "boolean", "click_date": "timestamp", "click_count": "integer",
+        "had_conversion": "boolean", "conversion_date": "timestamp", "conversion_value": "decimal(15,2)",
+        "open_device": V, "open_country": V, "failure_reason": V, "send_cost": "decimal(10,4)",
+    },
+    "daily_exchange_rates": {
+        "date": "date", "source_currency": V, "target_currency": V, "exchange_rate": "decimal(12,6)",
+        "buy_rate": "decimal(12,6)", "sell_rate": "decimal(12,6)", "source": V,
+    },
+}
+
+for _t, _spec in TABLES.items():
+    assert list(TYPES[_t]) == _spec["columns"], f"TYPES and columns differ for {_t}"

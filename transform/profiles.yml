@@ -1,0 +1,8 @@
+minsky:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      # Local warehouse with the silver tables; Parquet copies go to var('lake_root').
+      path: "{{ env_var('DUCKDB_PATH', '../data/warehouse.duckdb') }}"
+      threads: 4

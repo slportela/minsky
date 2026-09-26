@@ -1,0 +1,26 @@
+table_name,column_name,raw_value,canonical_value
+customers,document_type,Pasaporte,Passport
+customers,country,México,Mexico
+branches,country,México,Mexico
+transactions,transaction_country,México,Mexico
+campaign_sends,open_country,México,Mexico
+branches,geographic_zone,Urbana,Urban
+branches,geographic_zone,Suburbana,Suburban
+products,product_type,Cuenta Corriente,Checking Account
+products,product_type,Cuenta Ahorro,Savings Account
+products,product_type,Tarjeta Crédito,Credit Card
+products,product_type,Tarjeta Débito,Debit Card
+products,product_type,Préstamo Personal,Personal Loan
+products,product_type,Préstamo Hipotecario,Mortgage
+products,product_type,Inversión,Investment
+products,product_type,Seguro,Insurance
+call_center_interactions,reason_category,Transaccional,Transactional
+call_center_interactions,reason_category,Producto,Product
+call_center_interactions,reason_category,Técnico,Technical
+call_center_interactions,reason_category,Comercial,Commercial
+call_center_interactions,reason_category,Queja,Complaint
+call_center_interactions,reason_category,Retención,Retention
+call_center_interactions,detected_sentiment,Positivo,Positive
+call_center_interactions,detected_sentiment,Negativo,Negative
+call_center_interactions,detected_sentiment,Muy Negativo,Very Negative
+call_center_interactions,detected_sentiment,Muy Positivo,Very Positive

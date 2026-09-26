@@ -31,7 +31,8 @@ def inventory() -> pd.DataFrame:
     rows = []
     for page in s3.get_paginator("list_objects_v2").paginate(Bucket=BUCKET, Prefix=DATA):
         for o in page.get("Contents", []):
-            rows.append({"key": o["Key"], "size": o["Size"], "last_modified": o["LastModified"]})
+            rows.append({"key": o["Key"], "size": o["Size"], "last_modified": o["LastModified"],
+                         "etag": o["ETag"].strip('"')})
     inv = pd.DataFrame(rows)
     inv = inv[~inv["key"].str.endswith("/")].copy()
     inv["table"] = inv["key"].str[len(DATA):].str.split("/").str[0].str.removesuffix(".csv")
