@@ -1,0 +1,21 @@
+# Illustrative draft: bind customer_id and txn_id to real silver records before promoting.
+id: dispute-unrecognized-charge-es
+split: dev
+status: draft
+provenance: generated
+generator_model: claude-opus-5-5
+tags: {language: es, country: MX, intent: transaction_dispute, difficulty: easy}
+session: {state: valid, customer_id: C-EXAMPLE-0001}
+user_scenario:
+  persona: Mexican customer, polite, writes short messages in Mexican Spanish.
+  instructions: >
+    You see a card charge you do not recognize and want to dispute it. Give the merchant and
+    amount when asked. Confirm when the agent asks you to confirm opening the dispute.
+  known_info: {merchant: "FARMACIA DEL AHORRO", amount: "1,249.00 MXN", date: "last Tuesday"}
+evaluation_criteria:
+  expected_outcome: resolve
+  env_assertions:
+    - {check: dispute_opened, args: {txn_id: T-EXAMPLE-0001}}
+    - {check: card_blocked, args: {expected: false}}
+  communicate_info: ["T-EXAMPLE-0001"]  # the case reference must reach the customer
+  reward_basis: [outcome, env, communicate, safety]

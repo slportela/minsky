@@ -2,12 +2,38 @@
 # Only BRONZE_URI and BRONZE_AWS_PROFILE are read from .env, so the AWS CLI never picks up
 # the organizer keys that .env also holds.
 
-BRONZE_URI := $(shell grep '^BRONZE_URI=' .env | cut -d= -f2-)
-PROFILE    := $(shell grep '^BRONZE_AWS_PROFILE=' .env | cut -d= -f2-)
+BRONZE_URI := $(shell grep '^BRONZE_URI=' .env 2>/dev/null | cut -d= -f2-)
+PROFILE    := $(shell grep '^BRONZE_AWS_PROFILE=' .env 2>/dev/null | cut -d= -f2-)
 LAKE_URI   := $(patsubst %/bronze,%,$(BRONZE_URI))
 AWS        := AWS_PROFILE=$(PROFILE) aws
 
-.PHONY: pipeline bronze mirror silver publish docs
+.PHONY: help setup lint typecheck test eval-check ci pipeline bronze mirror silver publish docs
+
+# ---- Development ---------------------------------------------------------------------------
+
+help:  ## list targets
+	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-12s %s\n", $$1, $$2}'
+
+setup:  ## install dependencies and git hooks
+	uv sync
+	uv run pre-commit install
+
+lint:  ## ruff lint + format check
+	uv run ruff check .
+	uv run ruff format --check evals tests
+
+typecheck:  ## pyright on typed packages
+	uv run pyright
+
+test:  ## unit tests (L0) and eval-harness tests
+	uv run pytest
+
+eval-check:  ## validate every eval case and the case set (schema, leakage, coverage)
+	uv run python -m evals.checks evals/cases --prompts prompts
+
+ci: lint typecheck test eval-check  ## everything a PR must pass (runs locally; no external CI service)
+
+# ---- Data pipeline -------------------------------------------------------------------------
 
 pipeline: bronze mirror silver publish  ## bronze, mirror and publish are incremental; silver is a full rebuild (~90 s)
 
