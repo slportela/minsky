@@ -21,12 +21,12 @@ class TxnStatus(StrEnum):
 
 
 class Route(StrEnum):
-    OPEN_DISPUTE = "open_dispute"          # automatic intake
-    INFORM = "inform"                      # nothing to dispute; explain why
-    ABSTAIN = "abstain"                    # cannot decide yet; explain what is missing
-    REFUSE = "refuse"                      # not disputable under the policy; offer a human
-    ESCALATE_FRAUD = "escalate_fraud"      # fraud team; offer a card block first
-    ESCALATE_AGENT = "escalate_agent"      # dispute agent
+    OPEN_DISPUTE = "open_dispute"  # automatic intake
+    INFORM = "inform"  # nothing to dispute; explain why
+    ABSTAIN = "abstain"  # cannot decide yet; explain what is missing
+    REFUSE = "refuse"  # not disputable under the policy; offer a human
+    ESCALATE_FRAUD = "escalate_fraud"  # fraud team; offer a card block first
+    ESCALATE_AGENT = "escalate_agent"  # dispute agent
 
 
 @dataclass(frozen=True)
@@ -56,7 +56,10 @@ class Decision:
     offer_card_block: bool = False
 
 
-def decide(facts: DisputeFacts, today: date, config: PolicyConfig = PolicyConfig()) -> Decision:
+DEFAULT_CONFIG = PolicyConfig()
+
+
+def decide(facts: DisputeFacts, today: date, config: PolicyConfig = DEFAULT_CONFIG) -> Decision:
     if facts.status == TxnStatus.DECLINED:
         return Decision(Route.INFORM, "D01-declined-not-charged")
     if facts.status == TxnStatus.REVERSED:

@@ -38,8 +38,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-minsky}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-minsky}
       POSTGRES_DB: ${POSTGRES_DB:-minsky}
-    volumes: [pgdata:/var/lib/postgresql/data]
-    ports: ["127.0.0.1:5432:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data]  # not published: only services on the compose network reach it
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER}"]
       interval: 5s

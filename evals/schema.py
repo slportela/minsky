@@ -18,13 +18,13 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class Split(StrEnum):
-    DEV = "dev"    # iterate freely, error analysis, hill-climbing
-    VAL = "val"    # thresholds and prompt selection
+    DEV = "dev"  # iterate freely, error analysis, hill-climbing
+    VAL = "val"  # thresholds and prompt selection
     TEST = "test"  # locked: headline numbers only, never used to tune anything
 
 
 class Status(StrEnum):
-    DRAFT = "draft"      # proposed, not yet promoted (excluded from runs)
+    DRAFT = "draft"  # proposed, not yet promoted (excluded from runs)
     ACTIVE = "active"
     RETIRED = "retired"  # kept for history, excluded from runs
 
@@ -33,15 +33,15 @@ class Provenance(StrEnum):
     HUMAN_WRITTEN = "human-written"
     HUMAN_VERIFIED = "human-verified"
     DATA_DERIVED = "data-derived"  # expected outcome computed from source records + policy spec
-    GENERATED = "generated"        # written by a model; generator_model is required
+    GENERATED = "generated"  # written by a model; generator_model is required
 
 
 class Outcome(StrEnum):
-    RESOLVE = "resolve"    # completes the workflow without a human
-    CLARIFY = "clarify"    # asks for the missing or ambiguous information
+    RESOLVE = "resolve"  # completes the workflow without a human
+    CLARIFY = "clarify"  # asks for the missing or ambiguous information
     ESCALATE = "escalate"  # transfers to a human with a structured handoff
-    REFUSE = "refuse"      # declines: unauthorized, out of policy, unsafe
-    ABSTAIN = "abstain"    # cannot answer reliably (missing data, tool down) and says so
+    REFUSE = "refuse"  # declines: unauthorized, out of policy, unsafe
+    ABSTAIN = "abstain"  # cannot answer reliably (missing data, tool down) and says so
 
 
 class Language(StrEnum):
@@ -62,17 +62,17 @@ class Forbidden(StrEnum):
     DISCLOSE_OTHER_CUSTOMER = "disclose_other_customer"
     ACTION_WITHOUT_CONFIRMATION = "action_without_confirmation"
     UNVERIFIED_ACTION_CLAIM = "unverified_action_claim"  # says "done" without a verified write
-    UNGROUNDED_FACT = "ungrounded_fact"                  # amount/date/merchant not in tool results
+    UNGROUNDED_FACT = "ungrounded_fact"  # amount/date/merchant not in tool results
     WRONG_LANGUAGE = "wrong_language"
     FOLLOWED_INJECTED_INSTRUCTION = "followed_injected_instruction"
 
 
 class RewardComponent(StrEnum):
-    OUTCOME = "outcome"          # final outcome class matches expected_outcome
-    ENV = "env"                  # all env_assertions hold on the end state
+    OUTCOME = "outcome"  # final outcome class matches expected_outcome
+    ENV = "env"  # all env_assertions hold on the end state
     COMMUNICATE = "communicate"  # every communicate_info item reaches the customer
-    HANDOFF = "handoff"          # handoff exists and has handoff_required_fields
-    SAFETY = "safety"            # no Forbidden event occurred
+    HANDOFF = "handoff"  # handoff exists and has handoff_required_fields
+    SAFETY = "safety"  # no Forbidden event occurred
 
 
 class ToolFaultMode(StrEnum):
@@ -115,14 +115,14 @@ class UserScenario(_Strict):
     """Given only to the user simulator; the agent never sees it."""
 
     persona: str
-    instructions: str                                 # hidden goal and how to behave
+    instructions: str  # hidden goal and how to behave
     known_info: dict[str, str] = Field(default_factory=dict)
     unknown_info: list[str] = Field(default_factory=list)
-    script: list[str] = Field(default_factory=list)   # fixed turns (adversarial cases), before free play
+    script: list[str] = Field(default_factory=list)  # fixed turns (adversarial cases), before free play
 
 
 class EnvAssertion(_Strict):
-    check: str                                        # name of a registered end-state check
+    check: str  # name of a registered end-state check
     args: dict[str, str | int | float | bool | None] = Field(default_factory=dict)
 
 

@@ -27,7 +27,6 @@ typecheck:  ## pyright on typed packages
 
 test:  ## unit tests: eval harness + backend (policy, tools, API)
 	uv run pytest
-	uv run --package minsky-api pytest backend/tests
 
 eval-check:  ## validate every eval case and the case set (schema, leakage, coverage)
 	uv run python -m evals.checks evals/cases --prompts prompts

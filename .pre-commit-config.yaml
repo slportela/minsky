@@ -4,17 +4,17 @@ repos:
     hooks:
       - id: ruff
         name: ruff
-        entry: uv run ruff check --fix
+        entry: uv run --frozen ruff check --fix
         language: system
         types: [python]
       - id: ruff-format
         name: ruff format
-        entry: uv run ruff format
+        entry: uv run --frozen ruff format
         language: system
         files: ^(evals|tests|backend)/.*\.py$
       - id: eval-check
         name: eval cases
-        entry: uv run python -m evals.checks evals/cases --prompts prompts
+        entry: uv run --frozen python -m evals.checks evals/cases --prompts prompts
         language: system
         pass_filenames: false
         files: ^(evals/cases|prompts)/

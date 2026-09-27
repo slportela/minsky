@@ -104,7 +104,8 @@ def model_sql(table, spec, types, maps):
         "from checked",
         "left join manifest on manifest.source_key = checked._source_key",
         "-- a PK delivered twice (late or corrected file): keep the most recent ingestion",
-        f"qualify row_number() over (partition by {pk} order by manifest.ingested_at desc nulls last, checked._source_key desc) = 1",
+        f"qualify row_number() over (partition by {pk} order by manifest.ingested_at desc nulls last, "
+        "checked._source_key desc) = 1",
         "",
     ]
     return "\n".join(lines)
@@ -137,7 +138,8 @@ def model_yml(table, spec, types):
                     {"name": "month", "data_type": "integer", "description": "Partition month (from the bronze path)"}]
     columns += [
         {"name": "_dq_issues", "data_type": "varchar[]",
-         "description": "Data-quality issues of the row: cast_failed / not_null / undocumented_value / out_of_range:<column>"},
+         "description": "Data-quality issues of the row: "
+                        "cast_failed / not_null / undocumented_value / out_of_range:<column>"},
         {"name": "_source_key", "data_type": "varchar", "description": "Bronze file the row came from"},
         {"name": "_ingested_at", "data_type": "timestamp", "description": "When that file was copied to bronze"},
         {"name": "_run_id", "data_type": "varchar", "description": "Bronze ingestion run"},

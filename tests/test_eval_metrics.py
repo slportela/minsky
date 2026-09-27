@@ -2,8 +2,16 @@ import math
 
 import pytest
 
-from evals.metrics import (Rate, cost_per, mean_over_tasks, pass_at_k, pass_hat_k, percentile,
-                           wilson_interval, zero_event_upper_bound)
+from evals.metrics import (
+    Rate,
+    cost_per,
+    mean_over_tasks,
+    pass_at_k,
+    pass_hat_k,
+    percentile,
+    wilson_interval,
+    zero_event_upper_bound,
+)
 
 
 def test_pass_hat_k_matches_power_when_estimating_from_a_known_rate():
@@ -30,7 +38,9 @@ def test_invalid_trial_counts(n, c, k):
 
 
 def test_wilson_interval_contains_estimate_and_handles_empty():
-    lo, hi = wilson_interval(8, 10)
+    interval = wilson_interval(8, 10)
+    assert interval is not None
+    lo, hi = interval
     assert lo < 0.8 < hi and 0 <= lo and hi <= 1
     assert wilson_interval(0, 0) is None
 
@@ -51,4 +61,5 @@ def test_percentile_and_cost():
     assert percentile([1, 2, 3, 4, 100], 95) == 100
     assert percentile([], 50) is None
     assert cost_per(1.5, 0) is None
-    assert math.isclose(cost_per(1.5, 3), 0.5)
+    cost = cost_per(1.5, 3)
+    assert cost is not None and math.isclose(cost, 0.5)

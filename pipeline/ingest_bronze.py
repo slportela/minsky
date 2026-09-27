@@ -23,11 +23,10 @@ import sys
 import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import boto3
-
 from bank_data import BUCKET, DATA, _get_bytes, inventory
 
 MANIFEST_DIR = "_manifest"
@@ -101,7 +100,7 @@ def copy_one(row, dest, run_id):
     error = verify(body, row.etag, row.size)
     if error:
         raise ValueError(f"{row.key}: {error}")
-    ingested_at = datetime.now(timezone.utc).isoformat()
+    ingested_at = datetime.now(UTC).isoformat()
     dest.write(row.key, body, {"source-bucket": BUCKET, "source-etag": row.etag,
                                "source-last-modified": row.last_modified.isoformat(),
                                "ingested-at": ingested_at, "run-id": run_id})
@@ -137,7 +136,7 @@ def main(argv=None):
         src = src[src["partition_date"].isna() | (src["partition_date"] <= args.end)]
 
     done = already_ingested(dest)
-    todo = src[[(k, e) not in done for k, e in zip(src["key"], src["etag"])]]
+    todo = src[[(k, e) not in done for k, e in zip(src["key"], src["etag"], strict=True)]]
     print(f"source: s3://{BUCKET}/{DATA} · in scope: {len(src):,} files · "
           f"already in bronze: {len(src) - len(todo):,} · to copy: {len(todo):,} "
           f"({todo['size'].sum() / 1e6:,.1f} MB) → {dest}")
@@ -146,7 +145,7 @@ def main(argv=None):
             print(todo.groupby("table").agg(files=("key", "size"), mb=("size", lambda s: round(s.sum() / 1e6, 1))))
         return 0
 
-    run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + "-" + uuid.uuid4().hex[:6]
+    run_id = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ") + "-" + uuid.uuid4().hex[:6]
     records, failures, t0 = [], [], time.time()
     with ThreadPoolExecutor(args.workers) as ex:
         futures = {ex.submit(copy_one, row, dest, run_id): row.key for row in todo.itertuples()}
