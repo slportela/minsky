@@ -45,8 +45,8 @@ What is scored: a working system, proven by evals, that knows when **not** to ac
 ## Commands
 
 ```bash
-make setup        # uv sync + git hooks
-make ci           # lint + typecheck + tests + eval-check: must pass before any PR
+make setup        # Python + frontend dependencies, git hooks
+make ci           # lint, format, types, all tests, eval-check, frontend types: must pass before any PR
 make test         # eval-harness + backend tests
 make eval-check   # validate eval cases (schema, leakage, coverage)
 make up / down    # full stack locally with compose (https://localhost)

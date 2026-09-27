@@ -48,7 +48,7 @@ minsky/
 │   └── notebooks/                 evidence behind docs/known_issues.md
 ├── evals/                         eval harness: case schema, set checks, metrics, cases/{dev,val,test}
 ├── prompts/                       versioned prompts
-├── tests/                         eval-harness tests (backend tests live in backend/tests)
+├── tests/                         eval-harness tests (backend tests in backend/tests; `make test` runs both)
 ├── infra/
 │   ├── caddy/                     TLS + routing for local and demo
 │   └── tofu/                      OpenTofu: modules/ + envs/demo (POC; production: docs/architecture.md)
@@ -64,19 +64,25 @@ minsky/
 |---|---|
 | Data pipeline to silver; data issues documented | Evidence for disputes from the data; gold read models |
 | Dispute policy (code + tests + doc) | Tools, identity, orchestrator, LLM steps, guardrails |
-| Backend and frontend skeletons, compose stack, POC IaC | Chat and console UIs, trace view, POC deployment |
+| Backend and frontend skeletons, compose stack, POC IaC (verified locally: all services healthy, `tofu validate` passes) | Chat and console UIs, trace view, POC deployment |
 | Target architecture and POC → production map (proposed) | Production IaC modules (plan only), if time allows |
 | Eval strategy, case schema, set checks, metrics, 5 example cases | Eval runner, customer simulator, graders, router ladder |
 
 ## Quick start
 
+Needs: `uv`, Node.js 22+, Docker, OpenTofu (only for the AWS demo).
+
 ```bash
-cp .env.example .env   # organizer (read-only) credentials, our bucket, AWS_PROFILE for Bedrock
-make setup             # uv sync + git hooks  (and: cd frontend && npm install)
-make ci                # lint, typecheck, tests, eval-case checks: must pass before any PR
-make up                # full stack → https://localhost
+cp .env.example .env   # organizer (read-only) credentials, our bucket, AWS_PROFILE (Bedrock access)
+make setup             # Python + frontend dependencies, git hooks
+make ci                # lint, format, types, all tests, eval-case checks, frontend types: must pass before any PR
+make up                # full stack → https://localhost  (health: https://localhost/api/health)
+make down              # stop it (data is kept)
 make help              # all targets
 ```
+
+- `make up` serves the web app and API through Caddy with a self-signed certificate. It exposes Postgres on `localhost:5433` (`POSTGRES_HOST_PORT`).
+- Optional trace viewer: `docker compose --profile observability up -d phoenix` → http://localhost:6006 (set `OTEL_EXPORTER_OTLP_ENDPOINT=http://phoenix:6006` in `.env`).
 
 ## Data pipeline
 

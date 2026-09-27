@@ -7,15 +7,16 @@ PROFILE    := $(shell grep '^BRONZE_AWS_PROFILE=' .env 2>/dev/null | cut -d= -f2
 LAKE_URI   := $(patsubst %/bronze,%,$(BRONZE_URI))
 AWS        := AWS_PROFILE=$(PROFILE) aws
 
-.PHONY: help setup lint typecheck test eval-check ci up down logs demo-plan demo-apply pipeline bronze mirror silver publish docs
+.PHONY: help setup lint typecheck test frontend-check eval-check ci up down logs demo-plan demo-apply pipeline bronze mirror silver publish docs
 
 # ---- Development ---------------------------------------------------------------------------
 
 help:  ## list targets
-	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-12s %s\n", $$1, $$2}'
+	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-15s %s\n", $$1, $$2}'
 
-setup:  ## install dependencies and git hooks
-	uv sync
+setup:  ## install Python and frontend dependencies, and git hooks
+	uv sync --all-packages
+	npm --prefix frontend install --no-audit --no-fund
 	uv run pre-commit install
 
 lint:  ## ruff lint + format check
@@ -28,10 +29,13 @@ typecheck:  ## pyright on typed packages
 test:  ## unit tests: eval harness + backend (policy, tools, API)
 	uv run pytest
 
+frontend-check:  ## frontend type check
+	npm --prefix frontend run typecheck
+
 eval-check:  ## validate every eval case and the case set (schema, leakage, coverage)
 	uv run python -m evals.checks evals/cases --prompts prompts
 
-ci: lint typecheck test eval-check  ## everything a PR must pass (runs locally; no external CI service)
+ci: lint typecheck test eval-check frontend-check  ## everything a PR must pass (runs locally; no external CI service)
 
 # ---- Run the system (see infra/README.md) ------------------------------------------------------
 
