@@ -15,7 +15,10 @@ The issues most likely to affect the customer-service workflow:
 | [Customers and agents do not join to branches](#customers-and-agents-do-not-join-to-branches) | No branch context for a customer or an agent |
 | [Values in Spanish, dictionary in English](#values-in-spanish-dictionary-in-english) | Filters written against the dictionary return nothing unless silver is used |
 | [Mexico operates in USD; no MXN](#mexico-operates-in-usd-no-mxn-in-products-or-transactions) | `amount_usd` is null for every USD transaction: naive USD totals undercount Mexico |
-| [`contact_reason` duplicates `reason_category`](#contact_reason-duplicates-reason_category) | Only 6 coarse contact reasons; finer intents must come from transcripts |
+| [`contact_reason` duplicates `reason_category`](#contact_reason-duplicates-reason_category) | Only 6 coarse contact reasons, and the transcripts do not add finer ones |
+| [Disputes cannot be traced to a transaction](#disputes-cannot-be-traced-to-a-transaction) | Complaints give aggregate baselines, not case-level ground truth for a dispute workflow |
+| [Transcripts are two templates](#transcripts-are-two-templates) | No real conversation text: no source for intents, phrasing or dispute dialogues |
+| [`fraud_score` leaks `is_fraud`](#fraud_score-leaks-is_fraud) | A fraud "model" on this score is trivial; it cannot be the learned component |
 | [Spanish only](#spanish-only) | The brief requires Portuguese; there is no Portuguese data to ground or evaluate it |
 
 ## Volume
@@ -133,7 +136,36 @@ Summing `amount_usd` therefore undercounts Mexico by two orders of magnitude: US
 
 `call_center_interactions.contact_reason` ("main contact reason", documented as VARCHAR(100)) has the same 6 values as `reason_category`, in Spanish, with an exact one-to-one correspondence in all 686,296 rows. There is no finer-grained contact reason.
 
-**Handling:** none; use `reason_category`. Finer intents must come from `call_transcripts` (`detected_intents`, `main_topics`) or from text.
+**Handling:** none; use `reason_category`. The transcripts do not provide finer intents either (see [Transcripts are two templates](#transcripts-are-two-templates)).
+
+## Disputes and text
+
+### Disputes cannot be traced to a transaction
+
+Charge disputes live in `complaints`: subcategory `Cargo no reconocido` (category Transactions, 12,297 rows + 1,283 with a null subcategory) and `Cobro indebido` (category Fees, 12,194 + 1,359). Together they are 27,133 cases, 40 % of all complaints. They support aggregate baselines, but not case-level ground truth:
+
+- **No link to the disputed transaction.** There is no transaction id, and `origin_interaction_id` is always null. Matching by product, amount and date: of the 8,143 `Cargo no reconocido` cases with an `affected_product_id`, only 2,107 (26 %) have any transaction on that product in the 30 days before the complaint, **none** with an amount equal to `claimed_amount`, 19 with a reversed transaction and 5 with a fraud-flagged one. In the other direction, 115 of 44,750 reversed transactions are followed by a `Cargo no reconocido` complaint from the same customer within 30 days.
+- **Claimed amounts ignore the currency**: roughly uniform between 0 and 5,000 in every currency (median ≈ 2,500 in USD, MXN, COP and ARS alike; 2,500 COP is under US$1). Where granted, compensation is ≈ 10 % of the claim (median ratio 0.09-0.11).
+- **Templated text**: 2 distinct `description` values across the 27,133 cases ("Queja relacionada con transactions" / "fees") and 5 distinct `resolution` texts.
+- **Outcomes**: 70 % still Open or In Process, ~1,400 Escalated, 6,555 (24 %) Resolved or Closed, 258 (1 %) Rejected. Compensation is recorded for 1,940 of the resolved/closed cases. SLA breached in ~20 % of cases; median 15-16 days to resolution.
+
+**Handling:** none in silver. Use the complaints for aggregate baselines (volume, resolution time, SLA breach, rejection rate). Dispute cases for the system and its evals have to be built from `transactions` plus an explicit (synthetic, labeled) dispute policy.
+
+### Transcripts are two templates
+
+All 171,321 `call_transcripts` are variants of **two** balance-inquiry conversations ("consultar el saldo de mi tarjeta de crédito" / "saber cuál es mi saldo actual en mi cuenta de ahorros"), with 546 distinct texts in total:
+
+- Every transcript contains unfilled template placeholders: `{monto}`, `{moneda}`, `{limite}`.
+- `detected_intents` has a single value, `consulta_general`.
+- No transcript mentions a charge, a fee, a complaint or fraud (keyword search), including the 29,198 whose interaction reason is Complaint. `main_topics` has the same 6 categories as `reason_category`, in Spanish and with the same counts per category.
+
+**Handling:** none. The transcripts cannot ground intents, customer phrasing, simulator personas or dispute dialogues; those must be generated and labeled as such.
+
+### `fraud_score` leaks `is_fraud`
+
+In `transactions`, `fraud_score` is between 0 and 30 for every non-fraud transaction (max 30.00), and spreads over 0-100 for the 4,316 fraud ones (median 48.9). Any score above 30 is fraud with 100 % precision (3,264 of 4,316 fraud transactions, 75.6 % recall); 1,052 fraud transactions score ≤ 30.
+
+**Handling:** none. Do not present a fraud classifier trained on this score as a learned component; report the leakage if fraud is used at all.
 
 ### Inconsistent country spelling
 
