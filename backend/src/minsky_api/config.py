@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     aws_region: str = "us-east-1"
     # The dataset ends 2026-06-17: a fixed "today" keeps policy windows and evals reproducible.
     today: date = date(2026, 6, 17)
+    max_message_chars: int = 4000
 
 
 @lru_cache
