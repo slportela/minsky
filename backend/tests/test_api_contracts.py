@@ -12,15 +12,29 @@ from minsky_api.api.contracts import (
     UserMessage,
 )
 from minsky_api.config import get_settings
+from minsky_api.main import create_app
 
 CONVERSATION_ID = "7f1c2e9a-4b1d-4c3e-9a51-2d0b8f6e1a22"
 MAX_CHARS = get_settings().max_message_chars
 
 
+@pytest.fixture
+def max_chars_env(monkeypatch):
+    """Sets MINSKY_MAX_MESSAGE_CHARS for one test and leaves the settings cache clean afterwards."""
+
+    def set_value(value: str) -> None:
+        monkeypatch.setenv("MINSKY_MAX_MESSAGE_CHARS", value)
+        get_settings.cache_clear()
+
+    yield set_value
+    monkeypatch.delenv("MINSKY_MAX_MESSAGE_CHARS", raising=False)
+    get_settings.cache_clear()
+
+
 def test_first_request_has_no_conversation_id():
     request = ChatRequest.model_validate({"messages": [{"user": "Me cobraron dos veces ayer"}]})
     assert request.conversation_id is None
-    assert request.messages == [UserMessage(user="Me cobraron dos veces ayer")]
+    assert request.messages == (UserMessage(user="Me cobraron dos veces ayer"),)
 
 
 def test_follow_up_carries_the_whole_conversation():
@@ -52,16 +66,25 @@ def test_text_at_the_length_limit_is_accepted():
     ChatRequest.model_validate({"messages": [{"user": "a" * MAX_CHARS}]})
 
 
-def test_length_limit_comes_from_settings(monkeypatch):
-    monkeypatch.setenv("MINSKY_MAX_MESSAGE_CHARS", "5")
-    get_settings.cache_clear()
-    try:
-        ChatRequest.model_validate({"messages": [{"user": "12345"}]})
-        with pytest.raises(ValidationError):
-            ChatRequest.model_validate({"messages": [{"user": "123456"}]})
-    finally:
-        monkeypatch.delenv("MINSKY_MAX_MESSAGE_CHARS")
-        get_settings.cache_clear()
+def test_length_limit_comes_from_settings(max_chars_env):
+    max_chars_env("5")
+    ChatRequest.model_validate({"messages": [{"user": "12345"}]})
+    with pytest.raises(ValidationError):
+        ChatRequest.model_validate({"messages": [{"user": "123456"}]})
+
+
+@pytest.mark.parametrize("value", ["abc", "0", "-1"])
+def test_invalid_length_setting_fails_at_startup(max_chars_env, value):
+    max_chars_env(value)
+    with pytest.raises(ValidationError):
+        create_app()
+
+
+@pytest.mark.parametrize("value", ["abc", "0"])
+def test_invalid_length_setting_is_a_server_error_not_a_client_error(max_chars_env, value):
+    max_chars_env(value)
+    with pytest.raises(RuntimeError, match="invalid server settings"):
+        ChatRequest.model_validate({"messages": [{"user": "hola"}]})
 
 
 @pytest.mark.parametrize(
@@ -79,6 +102,15 @@ def test_length_limit_comes_from_settings(monkeypatch):
         pytest.param({"messages": [{"user": "a" * (MAX_CHARS + 1)}]}, id="text-too-long"),
         pytest.param({"messages": [{"user": 123}]}, id="text-not-a-string"),
         pytest.param({"messages": [{"user": "hola"}], "conversation_id": "abc"}, id="conversation-id-not-uuid"),
+        pytest.param(
+            {"messages": [{"user": "hola"}], "conversation_id": "00000000-0000-0000-0000-000000000000"},
+            id="conversation-id-nil-uuid",
+        ),
+        pytest.param(
+            {"messages": [{"user": "hola"}], "conversation_id": "6ba7b810-9dad-11d1-80b4-00c04fd430c8"},
+            id="conversation-id-not-uuid4",
+        ),
+        pytest.param({"messages": [{"user": "hola", "customer_id": "CUST-1"}]}, id="identity-inside-message"),
         pytest.param({"messages": [{"user": "hola"}], "customer_id": "CUST-1"}, id="identity-in-body"),
         pytest.param({"messages": [{"user": "hola"}], "channel": "web_chat"}, id="unknown-field"),
     ],
@@ -92,12 +124,14 @@ def test_requests_are_immutable():
     request = ChatRequest.model_validate({"messages": [{"user": "hola"}]})
     with pytest.raises(ValidationError):
         request.conversation_id = UUID(CONVERSATION_ID)  # type: ignore[misc]
+    assert isinstance(request.messages, tuple)
+    hash(request)
 
 
 def test_response_round_trips_to_the_request_shape():
     response = ChatResponse(
         conversation_id=UUID(CONVERSATION_ID),
-        messages=[UserMessage(user="hola"), AgentMessage(agent="¿En qué te ayudo?")],
+        messages=(UserMessage(user="hola"), AgentMessage(agent="¿En qué te ayudo?")),
     )
     assert response.model_dump(mode="json") == {
         "conversation_id": CONVERSATION_ID,
@@ -105,9 +139,20 @@ def test_response_round_trips_to_the_request_shape():
     }
 
 
-def test_response_requires_a_conversation_id():
+@pytest.mark.parametrize(
+    "body",
+    [
+        pytest.param({"messages": [{"agent": "hola"}]}, id="no-conversation-id"),
+        pytest.param({"conversation_id": CONVERSATION_ID, "messages": []}, id="no-messages"),
+        pytest.param(
+            {"conversation_id": CONVERSATION_ID, "messages": [{"agent": "hola"}, {"user": "chau"}]},
+            id="ends-with-user",
+        ),
+    ],
+)
+def test_rejects_invalid_responses(body):
     with pytest.raises(ValidationError):
-        ChatResponse.model_validate({"messages": [{"user": "hola"}]})
+        ChatResponse.model_validate(body)
 
 
 def test_error_response_uses_known_codes_only():
