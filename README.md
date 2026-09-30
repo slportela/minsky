@@ -42,9 +42,9 @@ minsky/
 │       └── observability/         OpenTelemetry + our trace/audit tables
 ├── frontend/                      Next.js: /chat (customers) · /console (agents)
 ├── ml/                            router training and L1 evaluation (the learned component)
-├── pipeline/                      data: organizer S3 → bronze → silver (dbt-duckdb) → our S3
+├── pipeline/                      data: organizer S3 → bronze → silver → gold (dbt-duckdb) → Postgres bank.*
 │   ├── data_dictionary.py         the contract for silver
-│   ├── transform/                 dbt project (silver generated from the dictionary)
+│   ├── transform/                 dbt project (silver generated from the dictionary; gold read models)
 │   └── notebooks/                 evidence behind docs/known_issues.md
 ├── evals/                         eval harness: case schema, set checks, metrics, cases/{dev,val,test}
 ├── prompts/                       versioned prompts
@@ -62,7 +62,7 @@ minsky/
 
 | Built | Next |
 |---|---|
-| Data pipeline to silver; data issues documented | Evidence for disputes from the data; gold read models |
+| Data pipeline to silver and gold (Postgres `bank.*`, `docs/read_models.md`); data issues documented | Tools and orchestrator on the read models |
 | Dispute policy (code + tests + doc) | Tools, identity, orchestrator, LLM steps, guardrails |
 | Backend and frontend skeletons, compose stack, POC IaC (verified locally: all services healthy, `tofu validate` passes) | Chat and console UIs, trace view, POC deployment |
 | Target architecture and POC → production map (proposed) | Production IaC modules (plan only), if time allows |
@@ -92,7 +92,7 @@ make help              # all targets
                copy                                                 ~90 s rebuild)
 ```
 
-- `make pipeline` runs all four steps. Bronze, mirror and publish are incremental.
+- `make pipeline` runs every step: bronze, mirror, silver, gold (build, export and load into Postgres; needs `make up`), publish. Bronze, mirror and publish are incremental.
 - dbt reads local files: reading ~1k small files from S3 takes minutes per table.
 - Silver models and `_silver.yml` are generated from `pipeline/data_dictionary.py` by `pipeline/transform/generate_silver.py`. Don't edit them by hand.
 - Test policy:

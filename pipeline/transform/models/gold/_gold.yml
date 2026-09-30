@@ -1,0 +1,113 @@
+# Gold: read models of the simulated bank. Loaded into Postgres as bank.<alias> by pipeline/load_gold.py;
+# the backend reads them through a read-only role. Column names keep the data dictionary's where they
+# come straight from silver. Contracts make the column names and types the interface for the backend.
+version: 2
+
+models:
+  - name: bank_customers
+    description: One row per customer. Only what the agent needs (no documents, contact details, income or score).
+    config: {contract: {enforced: true}}
+    columns:
+      - {name: customer_id, data_type: varchar, data_tests: [unique, not_null]}
+      - {name: first_name, data_type: varchar}
+      - {name: country, data_type: varchar, description: "Mexico, Colombia or Argentina (normalized in silver)"}
+      - {name: segment, data_type: varchar}
+      - {name: customer_status, data_type: varchar}
+      - {name: detected_accent, data_type: varchar, description: "mexican, colombian, argentine or neutral: drives the reply register (e.g. voseo)"}
+
+  - name: bank_products
+    description: One row per product. Card numbers reduced to their last four digits.
+    config: {contract: {enforced: true}}
+    columns:
+      - {name: product_id, data_type: varchar, data_tests: [unique, not_null]}
+      - name: customer_id
+        data_type: varchar
+        data_tests: [not_null, {relationships: {arguments: {to: "ref('bank_customers')", field: customer_id}}}]
+      - {name: product_type, data_type: varchar}
+      - {name: is_card, data_type: boolean}
+      - {name: product_number_last4, data_type: varchar}
+      - {name: currency, data_type: varchar}
+      - {name: product_status, data_type: varchar, description: "Active, Blocked, Closed or Suspended"}
+      - {name: opening_date, data_type: date}
+      - {name: expiration_date, data_type: date}
+      - {name: has_linked_app, data_type: boolean}
+
+  - name: bank_transactions
+    description: Every transaction (full history, 2023-06-17 to 2026-06-18) with amount_usd always filled in.
+    config: {contract: {enforced: true}}
+    columns:
+      - {name: transaction_id, data_type: varchar, data_tests: [unique, not_null]}
+      - name: customer_id
+        data_type: varchar
+        data_tests: [not_null, {relationships: {arguments: {to: "ref('bank_customers')", field: customer_id}}}]
+      - name: product_id
+        data_type: varchar
+        data_tests: [not_null, {relationships: {arguments: {to: "ref('bank_products')", field: product_id}}}]
+      - {name: transaction_date, data_type: timestamp}
+      - {name: process_date, data_type: date, description: "Partition day; cuts at 06:00, not midnight"}
+      - {name: transaction_type, data_type: varchar}
+      - {name: transaction_category, data_type: varchar}
+      - {name: amount, data_type: "decimal(15,2)"}
+      - {name: currency, data_type: varchar}
+      - {name: amount_usd, data_type: "decimal(15,2)", data_tests: [not_null]}
+      - name: amount_usd_source
+        data_type: varchar
+        description: "reported (source value), native_usd (amount, currency is USD) or converted (amount x the process date's rate)"
+        data_tests: [not_null, {accepted_values: {arguments: {values: [reported, native_usd, converted]}}}]
+      - {name: channel, data_type: varchar}
+      - {name: merchant_name, data_type: varchar}
+      - {name: merchant_category, data_type: varchar}
+      - {name: transaction_country, data_type: varchar}
+      - {name: transaction_city, data_type: varchar}
+      - {name: transaction_status, data_type: varchar, description: "Approved, Declined, Pending or Reversed"}
+      - {name: response_code, data_type: varchar}
+      - {name: is_fraud, data_type: boolean}
+      - {name: fraud_score, data_type: "decimal(5,2)", description: "Leaks is_fraud: any score above 30 is fraud (known_issues.md)"}
+
+  - name: bank_customer_complaint_stats
+    description: Complaint history per customer as of var('as_of_date'); one row per customer. Policy rule D08.
+    config: {contract: {enforced: true}}
+    columns:
+      - {name: customer_id, data_type: varchar, data_tests: [unique, not_null]}
+      - {name: complaints_total, data_type: bigint}
+      - {name: complaints_last_90d, data_type: bigint}
+      - {name: last_complaint_at, data_type: timestamp}
+      - {name: is_repeat_complainer, data_type: boolean, description: "At least one complaint in the 90 days before as_of_date"}
+
+  - name: bank_resolution_benchmarks
+    description: Historical complaint resolution by category and priority ('all' rolls a dimension up).
+    config: {contract: {enforced: true}}
+    data_tests:
+      - unique_combination: {arguments: {columns: [category, priority]}}
+    columns:
+      - {name: category, data_type: varchar}
+      - {name: priority, data_type: varchar}
+      - {name: cases, data_type: bigint}
+      - {name: resolved_cases, data_type: bigint}
+      - {name: median_resolution_days, data_type: double}
+      - {name: p75_resolution_days, data_type: double}
+      - {name: sla_breach_rate, data_type: double}
+      - {name: rejection_rate, data_type: double}
+
+  - name: bank_dispute_scenarios
+    description: >
+      Real (customer, transaction) pairs per dispute-policy rule, decided by the backend's own policy.
+      Source for data-derived eval cases and for the demo's test users. D04 needs an existing dispute
+      (cases.*), so it is not here.
+    config:
+      post_hook: ["{{ export_gold() }}"]
+      as_of: "{{ var('as_of_date') }}"
+    data_tests:
+      - every_rule_covered:
+          arguments:
+            rules: [D01-declined-not-charged, D02-already-reversed, D03-pending-not-posted, D05-outside-window,
+                    D06-possible-fraud, D07-above-auto-limit, D08-repeat-complainer, D09-eligible]
+    columns:
+      - {name: rule_id, data_tests: [not_null]}
+      - {name: route}
+      - {name: offer_card_block}
+      - {name: customer_says_not_me, description: "true: the 'it wasn't me' claim is simulated on this transaction"}
+      - name: customer_id
+        data_tests: [not_null, {relationships: {arguments: {to: "ref('bank_customers')", field: customer_id}}}]
+      - name: transaction_id
+        data_tests: [not_null, {relationships: {arguments: {to: "ref('bank_transactions')", field: transaction_id}}}]

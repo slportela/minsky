@@ -13,3 +13,11 @@
     group by all
     having count(*) > 1
 {% endtest %}
+
+
+{# Every rule in `rules` has at least one row in the model (dispute scenarios cover the policy). #}
+{% test every_rule_covered(model, rules) %}
+    select rule
+    from (select unnest([{% for r in rules %}'{{ r }}'{{ "," if not loop.last }}{% endfor %}]) as rule)
+    where rule not in (select rule_id from {{ model }})
+{% endtest %}
