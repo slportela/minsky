@@ -42,9 +42,9 @@ minsky/
 │       └── observability/         OpenTelemetry + our trace/audit tables
 ├── frontend/                      Next.js: /chat (customers) · /console (agents)
 ├── ml/                            router training and L1 evaluation (the learned component)
-├── pipeline/                      data: organizer S3 → bronze → silver (dbt-duckdb) → our S3
+├── pipeline/                      data: organizer S3 → bronze → silver → gold (dbt-duckdb) → Postgres bank.*
 │   ├── data_dictionary.py         the contract for silver
-│   ├── transform/                 dbt project (silver generated from the dictionary)
+│   ├── transform/                 dbt project (silver generated from the dictionary; gold read models)
 │   └── notebooks/                 evidence behind docs/known_issues.md
 ├── evals/                         eval harness: case schema, set checks, metrics, cases/{dev,val,test}
 ├── prompts/                       versioned prompts
@@ -62,7 +62,7 @@ minsky/
 
 | Built | Next |
 |---|---|
-| Data pipeline to silver; data issues documented | Evidence for disputes from the data; gold read models |
+| Data pipeline to silver and gold (Postgres `bank.*`, `docs/read_models.md`); data issues documented | Tools and orchestrator on the read models |
 | Dispute policy (code + tests + doc) | Tools, identity, orchestrator, LLM steps, guardrails |
 | Backend and frontend skeletons, compose stack, POC IaC (verified locally: all services healthy, `tofu validate` passes) | Chat and console UIs, trace view, POC deployment |
 | Target architecture and POC → production map (proposed) | Production IaC modules (plan only), if time allows |
@@ -87,15 +87,34 @@ make help              # all targets
 ## Data pipeline
 
 ```
- organizer S3 ──bronze──▶ our S3 /bronze ──mirror──▶ data/bronze ──silver──▶ data/lake/silver ──publish──▶ our S3 /silver
- (read-only)   verified    + run manifest   (local)                (dbt-duckdb,                (local)
-               copy                                                 ~90 s rebuild)
+ organizer S3 ──bronze──▶ our S3 /bronze ──mirror──▶ data/bronze ──silver──▶ data/lake/silver ──gold──▶ data/lake/gold ──load──▶ Postgres bank.*
+ (read-only)   verified    + run manifest   (local)                (dbt-duckdb,                (read models,             (atomic swap,
+               copy                                                 ~90 s rebuild)              ~35 s with load)          ops.load_runs)
+                                                                          └──────────────── publish ──▶ our S3 /silver, /gold
 ```
 
-- `make pipeline` runs all four steps. Bronze, mirror and publish are incremental.
+- `make pipeline` runs every step: bronze, mirror, silver, gold (build, export and load into Postgres; needs `make up`), publish. Bronze, mirror and publish are incremental.
 - dbt reads local files: reading ~1k small files from S3 takes minutes per table.
 - Silver models and `_silver.yml` are generated from `pipeline/data_dictionary.py` by `pipeline/transform/generate_silver.py`. Don't edit them by hand.
 - Test policy:
   - **error** = what silver guarantees (primary keys, casts);
   - **warn** = source issues against the dictionary, also flagged per row in `_dq_issues`.
 - `make docs` serves dbt docs with lineage.
+
+### Read models (gold)
+
+What the agent reads: `bank.customers`, `bank.products`, `bank.transactions` (full history), `bank.customer_complaint_stats`, `bank.resolution_benchmarks` and `bank.dispute_scenarios`. Tables, columns and conventions: [`docs/read_models.md`](docs/read_models.md).
+
+```bash
+make up                        # Postgres must be running (AWS_PROFILE set in .env or the shell)
+make gold                      # build + test (dbt), export to data/lake/gold, load into Postgres bank.*
+docker compose -f compose.yaml -f compose.local.yaml exec postgres psql -U minsky -d minsky
+```
+
+```sql
+select transaction_date, merchant_name, amount, currency, amount_usd, transaction_status
+from bank.transactions where customer_id = 'CLI-D3GMCTFDAIOT'
+order by transaction_date desc limit 10;
+```
+
+Postgres is also reachable from the laptop on `127.0.0.1:5433` (user, password and database `minsky`). Each load is recorded in `ops.load_runs`.

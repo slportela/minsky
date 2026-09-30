@@ -14,17 +14,27 @@ vars:
   bronze_root: "../../data/bronze"
   # Where silver Parquet is exported (published to S3 with `make publish`).
   lake_root: "../../data/lake"
+  # The simulated "today" for gold (policy windows, complaint recency). Must equal MINSKY_TODAY,
+  # the backend's fixed date (backend/src/minsky_api/config.py); the dispute_scenarios model checks it.
+  as_of_date: "2026-06-17"
 
 models:
   minsky:
     silver:
       +materialized: table
+      +tags: ["silver"]
       +contract:
         enforced: true
+    gold:
+      # Read models of the simulated bank, loaded into Postgres as bank.* (pipeline/load_gold.py).
+      +materialized: table
+      +schema: bank
+      +tags: ["gold"]
 
 seeds:
   minsky:
     enum_mappings:
+      +tags: ["silver"]  # not ref'd by the models (the generator inlines it), so tag it to rebuild with silver
       +column_types:
         table_name: varchar
         column_name: varchar

@@ -24,17 +24,17 @@ Status: ✅ done · 🟡 partial · ⬜ planned · ⚠️ risk or gap
 
 | ID | Requirement | Our answer | Where | Status |
 |---|---|---|---|---|
-| P1.1 | Analyze contact reasons, demand patterns, data quality, operational constraints | Analysis notebook/report on interactions, transcripts, complaints | `known_issues.md` (quality) | 🟡 quality done |
-| P1.2 | Use the evidence to prioritize the workflow and define customer and business outcomes | Numbers backing ADR 0005; outcomes in `solution.md` | ADR 0005 | ⬜ |
+| P1.1 | Analyze contact reasons, demand patterns, data quality, operational constraints | Data quality vs. the dictionary; dispute volume, backlog, resolution time, SLA breach and first-contact resolution | `known_issues.md`, `disputes_findings.md` | 🟡 quality and dispute evidence done; demand patterns pending |
+| P1.2 | Use the evidence to prioritize the workflow and define customer and business outcomes | Disputes are 40 % of complaints, 70 % still open, 15-16 days to resolve, ~20 % SLA breach; outcomes in `solution.md` | ADR 0005, `disputes_findings.md` | 🟡 evidence done; ADR 0005 to cite it |
 | P2.1 | Maintain conversational context | Orchestrator state per conversation | `backend/agent` | ⬜ |
 | P2.2 | Clarify ambiguity | Clarify step with masked candidates | `solution.md` | ⬜ |
-| P2.3 | Ground answers in permitted account, transaction or policy information | Tools scoped to the session; output grounding check | `backend/tools`, `guardrails` | ⬜ |
+| P2.3 | Ground answers in permitted account, transaction or policy information | Read models in Postgres `bank.*`; tools scoped to the session; output grounding check | `read_models.md`, `backend/tools`, `guardrails` | 🟡 read models done |
 | P2.4 | Use tools when they serve the workflow; report only verified outcomes | Read-back after every write | AGENTS rule 2 | ⬜ |
 | P3.1 | Define what it answers, what needs confirmation, when to abstain or transfer | Policy D01-D09; confirmation for dispute and card block | `dispute_policy.md` | 🟡 |
 | P3.2 | Enforce permissions and policy outside model-generated text | Pure policy module; tool-layer checks; RLS in production | `backend/policy` | 🟡 policy done |
 | P3.3 | Give the human the request, verified facts, actions, evidence, open questions | Structured handoff JSON + console | `solution.md`, `frontend` | ⬜ |
-| P4.1 | Repeatable data preparation with contracts, quality checks, lineage | Dictionary → generated dbt models + tests, dbt lineage, bronze manifest | `pipeline/` | ✅ |
-| P4.2 | Update and freshness policy | Incremental bronze; freshness recorded and alarmed | `pipeline/`, `architecture.md` | 🟡 |
+| P4.1 | Repeatable data preparation with contracts, quality checks, lineage | Dictionary → generated silver models + tests; gold read models with contracts; dbt lineage; bronze manifest | `pipeline/`, `read_models.md` | ✅ |
+| P4.2 | Update and freshness policy | Incremental bronze; atomic gold loads recorded in `ops.load_runs`; freshness alarm in production | `pipeline/`, `read_models.md`, `architecture.md` | 🟡 recorded, not alarmed |
 | P4.3 | If data is static, demonstrate update correctness with a labeled test fixture | Late and corrected partition fixture | — | ⬜ |
 | P4.4 | Evaluate at least one learned component against a baseline | Router ladder | `ml/README.md` | ⬜ |
 | P4.5 | Valid labels, no leakage, justified representations, metrics, thresholds, splits | Customer + time splits; leakage check; threshold on val | `ml/README.md`, `evals.md` | ⬜ |
@@ -51,7 +51,7 @@ Status: ✅ done · 🟡 partial · ⬜ planned · ⚠️ risk or gap
 |---|---|---|---|---|
 | B1 | Only organizer-approved data and permitted resources | LATAM Bank dataset + team-generated cases only | — | ✅ |
 | B2 | Label inputs as real, de-identified, synthetic or team-generated | `provenance` on every case; synthetic policy labeled | `evals/schema.py` | 🟡 |
-| B3 | No private records, credentials or restricted data in public submissions or external model requests | `.env` never committed; minimization toward models; Bedrock in our account | AGENTS rules 6-7 | 🟡 |
+| B3 | No private records, credentials or restricted data in public submissions or external model requests | `.env` never committed; read models exclude documents, contact details, income and score; Bedrock in our account | AGENTS rules 6-7, `read_models.md` | 🟡 |
 | B4 | Sandbox services and mock tools allowed if contracts and limits are documented | Tool contracts documented with the code | `backend/tools` | ⬜ |
 | B5 | Authentication with a trusted test session; an id alone is not identity | Test sessions + simulated OTP; Cognito in production | `backend/identity` | ⬜ |
 | B6 | Access and action permissions enforced in the service or tool layer | Session-scoped tools, denial tests | AGENTS conventions | ⬜ |
@@ -81,6 +81,6 @@ Status: ✅ done · 🟡 partial · ⬜ planned · ⚠️ risk or gap
 |---|---|---|---|
 | J1 | Project rationale and documentation | README reading order, ADRs, this page | 🟡 |
 | J2 | AI engineering: backend, frontend, deployment | FastAPI, Next.js, POC on AWS + target architecture | 🟡 skeletons |
-| J3 | Data analytics: data quality and insights | `known_issues.md` + workflow evidence + results by slice | 🟡 |
-| J4 | Data engineering: extraction and transformation | Bronze → silver pipeline with contracts | ✅ |
+| J3 | Data analytics: data quality and insights | `known_issues.md` + `disputes_findings.md` + results by slice | 🟡 |
+| J4 | Data engineering: extraction and transformation | Bronze → silver → gold pipeline with contracts, loaded atomically into Postgres | ✅ |
 | J5 | ML: model selection, optimization, implementation, **tracking** | Router ladder; every training run writes a committed report (git SHA, data snapshot, splits, params, metrics, model hash) (ADR 0007) | ⬜ |
