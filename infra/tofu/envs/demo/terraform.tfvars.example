@@ -1,0 +1,5 @@
+# Copy to terraform.tfvars (git-ignored) and fill in.
+region             = "us-east-1"
+lake_bucket        = "your-bucket"
+bedrock_model_arns = ["arn:aws:bedrock:us-east-1::foundation-model/<model-id>"]
+allowed_cidrs      = ["0.0.0.0/0"]

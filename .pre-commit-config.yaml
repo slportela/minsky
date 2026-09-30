@@ -1,0 +1,30 @@
+# Local hooks only: everything runs from the project env, no hook repositories fetched from the internet.
+repos:
+  - repo: local
+    hooks:
+      - id: ruff
+        name: ruff
+        entry: uv run --frozen ruff check --fix
+        language: system
+        types: [python]
+      - id: ruff-format
+        name: ruff format
+        entry: uv run --frozen ruff format
+        language: system
+        files: ^(evals|tests|backend)/.*\.py$
+      - id: eval-check
+        name: eval cases
+        entry: uv run --frozen python -m evals.checks evals/cases --prompts prompts
+        language: system
+        pass_filenames: false
+        files: ^(evals/cases|prompts)/
+      - id: no-env-file
+        name: never commit .env
+        entry: .env files must not be committed
+        language: fail
+        files: (^|/)\.env$
+      - id: gitleaks
+        name: gitleaks (secret scan; skipped with a warning if the binary is missing)
+        entry: sh -c 'command -v gitleaks >/dev/null || { echo "gitleaks not installed, secret scan skipped"; exit 0; }; gitleaks git --pre-commit --staged --redact'
+        language: system
+        pass_filenames: false

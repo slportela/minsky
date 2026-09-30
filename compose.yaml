@@ -1,0 +1,60 @@
+# Development and POC only: the whole system on one machine, a laptop (make up) or the demo EC2 host.
+# This is NOT the production architecture: production runs the same images on ECS with RDS PostgreSQL
+# (docs/architecture.md); docs/poc_to_prod.md maps every service below to its production counterpart.
+name: minsky
+
+
+services:
+  caddy:  # TLS and routing: /api/* -> api, everything else -> web
+    image: caddy:2-alpine
+    ports: ["80:80", "443:443"]
+    environment:
+      DOMAIN: ${DOMAIN:-localhost}
+    volumes:
+      - ./infra/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+    depends_on: [api, web]
+    restart: unless-stopped
+
+  web:
+    build: ./frontend
+    restart: unless-stopped
+
+  api:
+    build: {context: ., dockerfile: backend/Dockerfile}
+    environment:
+      MINSKY_ENVIRONMENT: ${MINSKY_ENVIRONMENT:-local}
+      MINSKY_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-minsky}:${POSTGRES_PASSWORD:-minsky}@postgres:5432/${POSTGRES_DB:-minsky}
+      MINSKY_AWS_REGION: ${AWS_REGION:-us-east-1}
+      AWS_REGION: ${AWS_REGION:-us-east-1}  # Bedrock and S3: instance role on EC2, ~/.aws locally
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}  # empty = no export; traces still land in postgres
+    depends_on:
+      postgres: {condition: service_healthy}
+    restart: unless-stopped
+
+  postgres:  # bank.* read models (gold, loaded from the lake) + cases.* writes
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-minsky}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-minsky}
+      POSTGRES_DB: ${POSTGRES_DB:-minsky}
+    volumes: [pgdata:/var/lib/postgresql/data]  # not published: only services on the compose network reach it
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER}"]
+      interval: 5s
+      retries: 10
+    restart: unless-stopped
+
+  phoenix:  # optional trace viewer for development (ADR 0007): docker compose --profile observability up
+    image: arizephoenix/phoenix:latest  # pin a version tag when setting up
+    profiles: [observability]
+    environment:
+      PHOENIX_WORKING_DIR: /data
+    ports: ["127.0.0.1:6006:6006"]  # UI and OTLP/HTTP (set OTEL_EXPORTER_OTLP_ENDPOINT=http://phoenix:6006 in .env)
+    volumes: [phoenix:/data]
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  caddy_data:
+  phoenix:
