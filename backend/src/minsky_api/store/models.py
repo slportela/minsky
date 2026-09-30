@@ -1,6 +1,9 @@
 """SQLModel rows for bank.* read models. Aligned to pipeline/transform/models/gold/_gold.yml.
 
 The pipeline owns DDL and schema swaps; the API never create_all on bank.
+
+Timestamps in bank.* are `timestamp without time zone`: local times of the source, with no zone.
+They are mapped naive (`_local_timestamp`); SQLModel's default would label them as UTC.
 """
 
 from __future__ import annotations
@@ -9,7 +12,12 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Any, ClassVar
 
+from sqlalchemy import DateTime
 from sqlmodel import Field, SQLModel
+
+
+def _local_timestamp() -> Any:
+    return Field(default=None, sa_type=DateTime(timezone=False))
 
 
 class Customer(SQLModel, table=True):
@@ -47,7 +55,7 @@ class Transaction(SQLModel, table=True):
     transaction_id: str = Field(primary_key=True)
     customer_id: str
     product_id: str
-    transaction_date: datetime | None = None
+    transaction_date: datetime | None = _local_timestamp()
     process_date: date | None = None
     transaction_type: str | None = None
     transaction_category: str | None = None
@@ -73,7 +81,7 @@ class CustomerComplaintStats(SQLModel, table=True):
     customer_id: str = Field(primary_key=True)
     complaints_total: int | None = None
     complaints_last_90d: int | None = None
-    last_complaint_at: datetime | None = None
+    last_complaint_at: datetime | None = _local_timestamp()
     is_repeat_complainer: bool | None = None
 
 
@@ -102,7 +110,7 @@ class DisputeScenario(SQLModel, table=True):
     offer_card_block: bool | None = None
     customer_id: str
     transaction_status: str | None = None
-    transaction_date: datetime | None = None
+    transaction_date: datetime | None = _local_timestamp()
     days_before_as_of: int | None = None
     amount_usd: Decimal | None = None
     is_fraud: bool | None = None
