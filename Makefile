@@ -7,7 +7,7 @@ PROFILE    := $(shell grep '^BRONZE_AWS_PROFILE=' .env 2>/dev/null | cut -d= -f2
 LAKE_URI   := $(patsubst %/bronze,%,$(BRONZE_URI))
 AWS        := AWS_PROFILE=$(PROFILE) aws
 
-.PHONY: help setup lint typecheck test frontend-check eval-check ci up down logs demo-plan demo-apply pipeline bronze mirror silver publish docs
+.PHONY: help setup lock-check lint typecheck test frontend-check eval-check ci up down logs demo-plan demo-apply pipeline bronze mirror silver publish docs
 
 # ---- Development ---------------------------------------------------------------------------
 
@@ -35,7 +35,12 @@ frontend-check:  ## frontend type check
 eval-check:  ## validate every eval case and the case set (schema, leakage, coverage)
 	uv run python -m evals.checks evals/cases --prompts prompts
 
-ci: lint typecheck test eval-check frontend-check  ## everything a PR must pass (runs locally; no external CI service)
+lock-check:  ## lockfiles resolve only from public registries (a private mirror breaks setup for everyone else)
+	@bad=$$( grep -nE '(registry|url) = "https://' uv.lock | grep -vE '"https://(pypi\.org|files\.pythonhosted\.org)/'; \
+		grep -nE '"resolved": "https://' frontend/package-lock.json | grep -v '"https://registry\.npmjs\.org/' ); \
+	if [ -n "$$bad" ]; then echo "$$bad" | head -5; echo "lockfile points at a non-public registry"; exit 1; fi
+
+ci: lock-check lint typecheck test eval-check frontend-check  ## everything a PR must pass (runs locally; no external CI service)
 
 # ---- Run the system (see infra/README.md) ------------------------------------------------------
 
