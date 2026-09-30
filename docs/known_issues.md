@@ -2,7 +2,7 @@
 
 Differences between the supplied data (`data/` in the organizer bucket, dataset v1.0.0) and its documentation (`kickoff_docs/LATAM_Bank_Complete_Data_Dictionary.pdf`, `LATAM_Bank_Dataset_Summary.pdf`).
 
-Every number below was measured on the full dataset (2026-09-25/26), with `notebooks/validate_vs_dictionary.ipynb` and the silver dbt tests (`make silver`). **Handling** says what the pipeline does about it; nothing is silently dropped or invented.
+Every number below was measured on the full dataset (2026-09-25/26), with `pipeline/notebooks/validate_vs_dictionary.ipynb` and the silver dbt tests (`make silver`). **Handling** says what the pipeline does about it; nothing is silently dropped or invented.
 
 ## Impact on the solution
 
@@ -107,7 +107,7 @@ The dictionary lists English values; several columns hold Spanish ones:
 | `customers.document_type` | Pasaporte → Passport |
 | country columns | México → Mexico |
 
-**Handling:** silver maps them to the documented values with `transform/seeds/enum_mappings.csv`. Bronze keeps the original bytes.
+**Handling:** silver maps them to the documented values with `pipeline/transform/seeds/enum_mappings.csv`. Bronze keeps the original bytes.
 
 ### Undocumented values
 
@@ -130,7 +130,7 @@ The documentation says transactions carry local currency (MXN/COP/ARS) plus a US
 
 Summing `amount_usd` therefore undercounts Mexico by two orders of magnitude: US$28.9 M instead of US$3,307 M for approved transactions.
 
-**Handling:** none in silver; use `coalesce(amount_usd, case when currency = 'USD' then amount end)` for USD totals, as in `notebooks/query_silver.ipynb`.
+**Handling:** none in silver; use `coalesce(amount_usd, case when currency = 'USD' then amount end)` for USD totals, as in `pipeline/notebooks/query_silver.ipynb`.
 
 ### `contact_reason` duplicates `reason_category`
 

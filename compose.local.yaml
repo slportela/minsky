@@ -1,0 +1,10 @@
+# Laptop-only additions (make up). The demo EC2 host uses compose.yaml alone and its instance role.
+services:
+  api:
+    environment:
+      AWS_PROFILE: ${AWS_PROFILE:?set AWS_PROFILE to a profile with Bedrock access}
+    volumes:
+      - ${HOME}/.aws:/home/app/.aws:ro
+
+  postgres:  # reachable from the laptop for psql/DBeaver; 5433 avoids clashing with a local Postgres
+    ports: ["127.0.0.1:${POSTGRES_HOST_PORT:-5433}:5432"]

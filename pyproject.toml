@@ -9,8 +9,47 @@ dependencies = [
     "ipykernel>=7.3.0",
     "jupyterlab>=4.6.4",
     "matplotlib>=3.11.2",
+    "minsky-api",
     "pandas>=3.0.6",
     "pyarrow>=25.0.1",
+    "pydantic>=2.11",
     "python-dotenv>=1.2.3",
-    "s3fs>=2025.1",
+    "pyyaml>=6.0",
 ]
+
+[tool.uv.workspace]
+members = ["backend"]
+
+[tool.uv.sources]
+minsky-api = { workspace = true }
+
+[dependency-groups]
+dev = [
+    "httpx>=0.27",
+    "pre-commit>=4.0",
+    "pyright>=1.1.400",
+    "pytest>=8.4",
+    "ruff>=0.12",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+extend-exclude = ["pipeline/notebooks", "pipeline/transform/target", "pipeline/transform/dbt_packages"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["evals", "minsky_api"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests", "backend/tests"]
+pythonpath = ["."]
+addopts = "-q"
+
+[tool.pyright]
+venvPath = "."
+venv = ".venv"
+include = ["evals", "tests", "backend/src", "backend/tests"]
+pythonVersion = "3.12"
