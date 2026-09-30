@@ -19,6 +19,10 @@ The issues most likely to affect the customer-service workflow:
 | [Disputes cannot be traced to a transaction](#disputes-cannot-be-traced-to-a-transaction) | Complaints give aggregate baselines, not case-level ground truth for a dispute workflow |
 | [Transcripts are two templates](#transcripts-are-two-templates) | No real conversation text: no source for intents, phrasing or dispute dialogues |
 | [`fraud_score` leaks `is_fraud`](#fraud_score-leaks-is_fraud) | A fraud "model" on this score is trivial; it cannot be the learned component |
+| [Survey comments are 13 templates](#survey-comments-are-13-templates) | No real feedback text; comment sentiment is a lookup of the template |
+| [No duplicate charges](#no-duplicate-charges) | A duplicate-charge scenario has no source data; it must be injected into the mock bank |
+| [Delinquency is independent of credit score](#delinquency-is-independent-of-credit-score) | No signal for a credit-risk model |
+| [Decline codes are uniformly distributed](#decline-codes-are-uniformly-distributed) | Decline reasons carry no pattern to explain or learn |
 | [Spanish only](#spanish-only) | The brief requires Portuguese; there is no Portuguese data to ground or evaluate it |
 
 ## Volume
@@ -166,6 +170,32 @@ All 171,321 `call_transcripts` are variants of **two** balance-inquiry conversat
 In `transactions`, `fraud_score` is between 0 and 30 for every non-fraud transaction (max 30.00), and spreads over 0-100 for the 4,316 fraud ones (median 48.9). Any score above 30 is fraud with 100 % precision (3,264 of 4,316 fraud transactions, 75.6 % recall); 1,052 fraud transactions score ≤ 30.
 
 **Handling:** none. Do not present a fraud classifier trained on this score as a learned component; report the leakage if fraud is used at all.
+
+### Survey comments are 13 templates
+
+`satisfaction_surveys.open_comments` is filled in 101,196 of 212,759 surveys with only **13 distinct texts** (e.g. "Tardaron mucho en atenderme.", "Aceptable.", "Muy satisfecho con el servicio."). The question texts are fixed as well (3, 1 and 1 distinct values for questions 1, 2 and 3). `comment_sentiment` is determined by the template: each text always has the same label (or null, ~5 %), and it follows the score (average `main_score` 2.6 for negative texts, 4.0 for positive ones). No NPS survey has a positive comment.
+
+**Handling:** none. The comments support counts, not NLP: a sentiment model would reach 100 % by looking up the text.
+
+## Transactions and credit
+
+### No duplicate charges
+
+There are **no duplicated charges** in `transactions`: 0 pairs with the same customer, product, amount, transaction type and merchant within one day. The query is not the reason: the same customer and product within one day gives 53,982 pairs. Pairs with the same customer, product and amount (127 in three years) are at least 5 days apart (median 332 days), i.e. coincidences of amount.
+
+**Handling:** none. A duplicate-charge scenario must be injected into the mock bank (e.g. a real transaction copied with a new id seconds later) and labeled as such in the eval cases.
+
+### Delinquency is independent of credit score
+
+`products.days_past_due` is filled only for credit products (Credit Card, Personal Loan, Mortgage), and about 15 % of them are past due whatever the customer: 15.4 % in the lowest credit-score quintile (average score 555) and 14.9 % in the highest (769); 14.7-15.2 % across segments.
+
+**Handling:** none. There is no signal for a credit-risk model; a credit workflow would need its risk estimate to be synthetic and labeled as such.
+
+### Decline codes are uniformly distributed
+
+Declined transactions (221,234) carry one of four `response_code` values in almost equal shares: 51 (23.9 %), 14 (23.8 %), 54 (23.7 %), 05 (23.6 %), plus 5 % null. The decline rate is the same for local and foreign transactions (5.0 % vs 4.9 %).
+
+**Handling:** none. A decline can be explained by looking up its code, but the codes carry no pattern to learn from.
 
 ### Inconsistent country spelling
 

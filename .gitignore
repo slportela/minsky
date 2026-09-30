@@ -20,3 +20,4 @@ infra/tofu/**/*.tfvars
 !infra/tofu/**/*.tfvars.example
 ci-results.log
 frontend/tsconfig.tsbuildinfo
+.DS_Store
