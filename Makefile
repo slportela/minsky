@@ -7,7 +7,7 @@ PROFILE    := $(shell grep '^BRONZE_AWS_PROFILE=' .env 2>/dev/null | cut -d= -f2
 LAKE_URI   := $(patsubst %/bronze,%,$(BRONZE_URI))
 AWS        := AWS_PROFILE=$(PROFILE) aws
 
-.PHONY: help setup lint typecheck test frontend-check eval-check ci up down logs demo-plan demo-apply pipeline bronze mirror silver publish docs
+.PHONY: help setup lock lock-check lint typecheck test frontend-check eval-check ci up down logs demo-plan demo-apply pipeline bronze mirror silver publish docs
 
 # ---- Development ---------------------------------------------------------------------------
 
@@ -15,27 +15,35 @@ help:  ## list targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-15s %s\n", $$1, $$2}'
 
 setup:  ## install Python and frontend dependencies, and git hooks
-	uv sync --all-packages
-	npm --prefix frontend install --no-audit --no-fund
-	uv run pre-commit install
+	uv sync --frozen --all-packages
+	npm --prefix frontend ci --no-audit --no-fund
+	uv run --frozen pre-commit install
 
 lint:  ## ruff lint + format check
-	uv run ruff check .
-	uv run ruff format --check evals tests backend
+	uv run --frozen ruff check .
+	uv run --frozen ruff format --check evals tests backend scripts
 
 typecheck:  ## pyright on typed packages
-	uv run pyright
+	uv run --frozen pyright
 
 test:  ## unit tests: eval harness + backend (policy, tools, API)
-	uv run pytest
+	uv run --frozen pytest
+
+lock:  ## re-resolve dependencies (uv + npm) and rewrite lock files to public registry URLs
+	uv lock
+	npm --prefix frontend install --package-lock-only --no-audit --no-fund
+	python3 scripts/public_lockfiles.py || python3 scripts/public_lockfiles.py --check
+
+lock-check:  ## fail if a lock file points at a non-public registry
+	python3 scripts/public_lockfiles.py --check
 
 frontend-check:  ## frontend type check
 	npm --prefix frontend run typecheck
 
 eval-check:  ## validate every eval case and the case set (schema, leakage, coverage)
-	uv run python -m evals.checks evals/cases --prompts prompts
+	uv run --frozen python -m evals.checks evals/cases --prompts prompts
 
-ci: lint typecheck test eval-check frontend-check  ## everything a PR must pass (runs locally; no external CI service)
+ci: lock-check lint typecheck test eval-check frontend-check  ## everything a PR must pass (runs locally; no external CI service)
 
 # ---- Run the system (see infra/README.md) ------------------------------------------------------
 

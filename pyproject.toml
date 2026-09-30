@@ -51,5 +51,5 @@ addopts = "-q"
 [tool.pyright]
 venvPath = "."
 venv = ".venv"
-include = ["evals", "tests", "backend/src", "backend/tests"]
+include = ["evals", "tests", "scripts", "backend/src", "backend/tests"]
 pythonVersion = "3.12"

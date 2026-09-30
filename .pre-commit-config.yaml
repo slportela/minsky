@@ -11,13 +11,19 @@ repos:
         name: ruff format
         entry: uv run --frozen ruff format
         language: system
-        files: ^(evals|tests|backend)/.*\.py$
+        files: ^(evals|tests|backend|scripts)/.*\.py$
       - id: eval-check
         name: eval cases
         entry: uv run --frozen python -m evals.checks evals/cases --prompts prompts
         language: system
         pass_filenames: false
         files: ^(evals/cases|prompts)/
+      - id: public-lockfiles
+        name: lock files use public registries only
+        entry: python3 scripts/public_lockfiles.py
+        language: system
+        files: ^(uv\.lock|frontend/package-lock\.json)$
+        pass_filenames: true
       - id: no-env-file
         name: never commit .env
         entry: .env files must not be committed

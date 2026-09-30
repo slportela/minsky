@@ -45,7 +45,8 @@ What is scored: a working system, proven by evals, that knows when **not** to ac
 ## Commands
 
 ```bash
-make setup        # Python + frontend dependencies, git hooks
+make setup        # Python + frontend dependencies from the lock files, git hooks
+make lock         # re-resolve dependencies; lock files keep public registry URLs
 make ci           # lint, format, types, all tests, eval-check, frontend types: must pass before any PR
 make test         # eval-harness + backend tests
 make eval-check   # validate eval cases (schema, leakage, coverage)
@@ -55,7 +56,9 @@ make pipeline     # data: bronze → mirror → silver → publish
 make help         # everything else
 ```
 
-Python is managed with `uv` (never `pip install`): add dependencies with `uv add` (backend: `uv add --package minsky-api`) so `uv.lock` stays in sync. The frontend uses `npm`; commit `package-lock.json`.
+Python is managed with `uv` (never `pip install`): add dependencies with `uv add` (backend: `uv add --package minsky-api`). The frontend uses `npm`; commit `package-lock.json`.
+
+**Lock files reference public registries only** (PyPI, npmjs). If your machine installs through a private mirror, re-lock with `make lock`: it rewrites mirror URLs to public ones (hashes unchanged). The pre-commit hook and `make ci` reject non-public URLs. The check targets run with `--frozen`, so they never re-lock.
 
 ## Workflow
 
