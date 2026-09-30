@@ -13,8 +13,9 @@ class Settings(BaseSettings):
     environment: str = "local"
     database_url: str = "postgresql+psycopg://minsky:minsky@postgres:5432/minsky"
     aws_region: str = "us-east-1"
-    # The dataset ends 2026-06-17: a fixed "today" keeps policy windows and evals reproducible.
-    today: date = date(2026, 6, 17)
+    # The data ends on 2026-06-18 (last transactions before 06:00, last complaints that morning): a fixed
+    # "today" keeps policy windows and evals reproducible. Must equal the dbt var as_of_date.
+    today: date = date(2026, 6, 18)
     max_message_chars: PositiveInt = 4000
 
 

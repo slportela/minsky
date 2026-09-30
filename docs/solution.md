@@ -121,7 +121,7 @@ The agent never has to read the raw transcript.
 
 - **One PostgreSQL** holds both the read models (gold tables loaded from the lake) and the writes (cases). Tools use a read-only role for `bank.*`. Every query is scoped to the session's customer, and in production Row-Level Security enforces it as a second line.
 - **The mock bank is our backend.** Tools are the "core banking API" of the demo: typed, permission-checked and audited. Their contracts and limits are documented, as the brief allows.
-- **Deterministic clock.** The dataset ends 2026-06-17; the system's "today" is configurable, so the policy windows and the evals are reproducible.
+- **Deterministic clock.** The data ends on 2026-06-18; the system's "today" is configurable, so the policy windows and the evals are reproducible.
 
 ## Evals for this workflow
 

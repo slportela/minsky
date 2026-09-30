@@ -5,12 +5,12 @@ import pytest
 
 from minsky_api.policy.disputes import DisputeFacts, PolicyConfig, Route, TxnStatus, decide
 
-TODAY = date(2026, 6, 17)  # the dataset's last day: the system's configured "today"
+TODAY = date(2026, 6, 18)  # the data's last day: the system's configured "today"
 ELIGIBLE = DisputeFacts(
     status=TxnStatus.APPROVED,
     transaction_date=TODAY - timedelta(days=5),
     amount_usd=40.0,
-    fraud_score=10.0,
+    is_fraud=False,
     existing_dispute_ref=None,
     repeat_complainer=False,
     customer_says_not_me=False,
@@ -27,7 +27,7 @@ ELIGIBLE = DisputeFacts(
         ({"existing_dispute_ref": "DSP-1"}, Route.INFORM, "D04-already-disputed"),
         ({"transaction_date": TODAY - timedelta(days=121)}, Route.REFUSE, "D05-outside-window"),
         ({"customer_says_not_me": True}, Route.ESCALATE_FRAUD, "D06-possible-fraud"),
-        ({"fraud_score": 80.0}, Route.ESCALATE_FRAUD, "D06-possible-fraud"),
+        ({"is_fraud": True}, Route.ESCALATE_FRAUD, "D06-possible-fraud"),
         ({"amount_usd": 500.01}, Route.ESCALATE_AGENT, "D07-above-auto-limit"),
         ({"repeat_complainer": True}, Route.ESCALATE_AGENT, "D08-repeat-complainer"),
     ],
@@ -40,12 +40,20 @@ def test_each_rule(change, route, rule):
 def test_boundaries_are_inclusive_for_the_customer():
     assert decide(replace(ELIGIBLE, transaction_date=TODAY - timedelta(days=120)), TODAY).route == Route.OPEN_DISPUTE
     assert decide(replace(ELIGIBLE, amount_usd=500.0), TODAY).route == Route.OPEN_DISPUTE
-    assert decide(replace(ELIGIBLE, fraud_score=None), TODAY).route == Route.OPEN_DISPUTE
 
 
 def test_only_fraud_offers_a_card_block():
     assert decide(replace(ELIGIBLE, customer_says_not_me=True), TODAY).offer_card_block
     assert not decide(replace(ELIGIBLE, amount_usd=9000.0), TODAY).offer_card_block
+
+
+def test_fraud_comes_before_the_dispute_window():
+    # A possibly compromised card gets the block offer and the fraud team, whatever the charge's age.
+    old = TODAY - timedelta(days=400)
+    for change in ({"customer_says_not_me": True}, {"is_fraud": True}):
+        decision = decide(replace(ELIGIBLE, transaction_date=old, **change), TODAY)
+        assert (decision.rule_id, decision.offer_card_block) == ("D06-possible-fraud", True)
+    assert decide(replace(ELIGIBLE, transaction_date=old), TODAY).rule_id == "D05-outside-window"
 
 
 def test_rule_order_status_before_fraud():
