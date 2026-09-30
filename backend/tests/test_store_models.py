@@ -104,3 +104,13 @@ def test_dispute_scenario_composite_key_fields():
 def test_table_args_are_not_shared_across_models():
     assert Customer.__table_args__ is not Product.__table_args__
     assert Customer.__table_args__ == {"schema": "bank"}
+
+
+def test_timestamps_are_naive_like_the_bank_columns():
+    # bank.* stores local times without a zone; a timezone-aware column would label them as UTC.
+    for column in (
+        Transaction.__table__.c.transaction_date,  # type: ignore[attr-defined]
+        CustomerComplaintStats.__table__.c.last_complaint_at,  # type: ignore[attr-defined]
+        DisputeScenario.__table__.c.transaction_date,  # type: ignore[attr-defined]
+    ):
+        assert column.type.timezone is False, column
