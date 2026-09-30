@@ -52,9 +52,9 @@ Status: ✅ done · 🟡 partial · ⬜ planned · ⚠️ risk or gap
 | B1 | Only organizer-approved data and permitted resources | LATAM Bank dataset + team-generated cases only | — | ✅ |
 | B2 | Label inputs as real, de-identified, synthetic or team-generated | `provenance` on every case; synthetic policy labeled | `evals/schema.py` | 🟡 |
 | B3 | No private records, credentials or restricted data in public submissions or external model requests | `.env` never committed; read models exclude documents, contact details, income and score; Bedrock in our account | AGENTS rules 6-7, `read_models.md` | 🟡 |
-| B4 | Sandbox services and mock tools allowed if contracts and limits are documented | Tool contracts documented with the code | `backend/tools` | ⬜ |
-| B5 | Authentication with a trusted test session; an id alone is not identity | Test sessions + simulated OTP; Cognito in production | `backend/identity` | ⬜ |
-| B6 | Access and action permissions enforced in the service or tool layer | Session-scoped tools, denial tests | AGENTS conventions | ⬜ |
+| B4 | Sandbox services and mock tools allowed if contracts and limits are documented | Tool contracts in `tools/bank.py`; six session-scoped tools + denial tests | `backend/tools` | 🟡 |
+| B5 | Authentication with a trusted test session; an id alone is not identity | `ToolSession` for tools; API-key + simulated OTP later; Cognito in production | `backend/identity` | 🟡 |
+| B6 | Access and action permissions enforced in the service or tool layer | Session-scoped tools, denial tests (`test_tools_bank.py`) | AGENTS conventions | 🟡 |
 | B7 | Credit workflows: separate risk and policy; no invented rules | Not our workflow; the same principle applies to disputes | — | ✅ n/a |
 | B8 | No live lending decisions or money movement | The system never moves money or grants refunds | `dispute_policy.md` | ✅ by design |
 
