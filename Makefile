@@ -7,7 +7,7 @@ PROFILE    := $(shell grep '^BRONZE_AWS_PROFILE=' .env 2>/dev/null | cut -d= -f2
 LAKE_URI   := $(patsubst %/bronze,%,$(BRONZE_URI))
 AWS        := AWS_PROFILE=$(PROFILE) aws
 
-.PHONY: help setup lock-check lint typecheck test llm-smoke frontend-check eval-check ci up down logs demo-plan demo-apply pipeline bronze mirror silver publish docs
+.PHONY: help setup lock-check lint typecheck test llm-smoke frontend-check eval-check ci up down logs demo-plan demo-apply pipeline bronze mirror silver gold publish docs
 
 # ---- Development ---------------------------------------------------------------------------
 
@@ -68,7 +68,7 @@ demo-apply:  ## create/update the AWS demo environment
 
 # ---- Data pipeline -------------------------------------------------------------------------
 
-pipeline: bronze mirror silver publish  ## bronze, mirror and publish are incremental; silver is a full rebuild (~90 s)
+pipeline: bronze mirror silver gold publish  ## bronze, mirror and publish are incremental; silver (~90 s) and gold (~45 s) rebuild in full
 
 bronze:  ## copy new/changed organizer files into our bronze bucket
 	uv run python pipeline/ingest_bronze.py
@@ -79,10 +79,16 @@ mirror:  ## sync bronze to data/bronze (dbt reads local files: S3 per-file laten
 silver:  ## generate models from the data dictionary and build + test them
 	uv run python pipeline/transform/generate_silver.py
 	mkdir -p data/lake/silver
-	cd pipeline/transform && uv run dbt build --profiles-dir .
+	cd pipeline/transform && uv run dbt build --profiles-dir . --select +tag:silver
 
-publish:  ## upload silver Parquet to the lake
+gold:  ## build + test the bank read models, export them to the lake and load them into Postgres (make up first)
+	mkdir -p data/lake/gold
+	cd pipeline/transform && uv run dbt build --profiles-dir . --select tag:gold
+	uv run python pipeline/load_gold.py
+
+publish:  ## upload silver and gold Parquet to the lake
 	$(AWS) s3 sync data/lake/silver $(LAKE_URI)/silver --delete --only-show-errors
+	$(AWS) s3 sync data/lake/gold $(LAKE_URI)/gold --delete --only-show-errors
 
 docs:  ## dbt docs with lineage at http://localhost:8080
 	cd pipeline/transform && uv run dbt docs generate --profiles-dir . && uv run dbt docs serve --profiles-dir .

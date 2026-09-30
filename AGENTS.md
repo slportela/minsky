@@ -35,7 +35,7 @@ What is scored: a working system, proven by evals, that knows when **not** to ac
 | `backend/` | FastAPI service; module map and rules in `backend/README.md` |
 | `frontend/` | Next.js: `/chat` and `/console`; rules in `frontend/README.md` |
 | `ml/` | Router training and L1 evaluation |
-| `pipeline/` | Data pipeline: organizer S3 → bronze → silver (dbt-duckdb); `data_dictionary.py` is the contract |
+| `pipeline/` | Data pipeline: organizer S3 → bronze → silver → gold (dbt-duckdb) → Postgres `bank.*`; `data_dictionary.py` is the contract for silver, `docs/read_models.md` for gold |
 | `evals/` | Eval harness: schema, set checks, metrics, `cases/{dev,val,test}` |
 | `prompts/` | Versioned prompts (see `prompts/README.md`) |
 | `infra/` | Caddy, OpenTofu (`envs/demo`); local/demo/production comparison in `infra/README.md` |
@@ -51,7 +51,7 @@ make test         # eval-harness + backend tests
 make eval-check   # validate eval cases (schema, leakage, coverage)
 make up / down    # full stack locally with compose (https://localhost)
 make demo-plan    # OpenTofu plan for the AWS demo (one EC2 + compose)
-make pipeline     # data: bronze → mirror → silver → publish
+make pipeline     # data: bronze → mirror → silver → gold (loads Postgres bank.*) → publish
 make help         # everything else
 ```
 
