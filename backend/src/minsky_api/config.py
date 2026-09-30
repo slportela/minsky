@@ -3,7 +3,7 @@
 from datetime import date
 from functools import lru_cache
 
-from pydantic import PositiveInt
+from pydantic import NonNegativeInt, PositiveInt
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -16,6 +16,9 @@ class Settings(BaseSettings):
     # The dataset ends 2026-06-17: a fixed "today" keeps policy windows and evals reproducible.
     today: date = date(2026, 6, 17)
     max_message_chars: PositiveInt = 4000
+    db_pool_size: PositiveInt = 5
+    db_max_overflow: NonNegativeInt = 10
+    db_pool_timeout: PositiveInt = 30
 
 
 @lru_cache
