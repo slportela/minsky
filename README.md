@@ -53,7 +53,7 @@ minsky/
 │   ├── caddy/                     TLS + routing for local and demo
 │   └── tofu/                      OpenTofu: modules/ + envs/demo (POC; production: docs/architecture.md)
 ├── docs/                          challenge · requirements · solution · architecture · poc_to_prod ·
-│                                  evals · dispute_policy · known_issues · adr/
+│                                  evals · dispute_policy · known_issues · data_findings · adr/
 ├── kickoff_docs/                  organizer documents (read-only)
 └── .claude/ · .github/            Claude Code settings and skills · PR template
 ```

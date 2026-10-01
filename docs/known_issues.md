@@ -24,6 +24,9 @@ The issues most likely to affect the customer-service workflow:
 | [No duplicate charges](#no-duplicate-charges) | A duplicate-charge scenario has no source data; it must be injected into the mock bank |
 | [Delinquency is independent of credit score](#delinquency-is-independent-of-credit-score) | No signal for a credit-risk model |
 | [Decline codes are uniformly distributed](#decline-codes-are-uniformly-distributed) | Decline reasons carry no pattern to explain or learn |
+| [`accepts_marketing` is not honored](#accepts_marketing-is-not-honored) | Consent does not filter campaign sends or engagement |
+| [`avg_csat` does not match measured satisfaction](#avg_csat-does-not-match-measured-satisfaction) | The agent attribute cannot be used for routing or quality claims |
+| [`customer_status` has no behavioral footprint](#customer_status-has-no-behavioral-footprint) | No churn model is possible from this data |
 | [Spanish only](#spanish-only) | The brief requires Portuguese; there is no Portuguese data to ground or evaluate it |
 
 ## Columns are generated independently
@@ -179,7 +182,7 @@ All 171,321 `call_transcripts` are variants of **two** balance-inquiry conversat
 
 - Every transcript contains unfilled template placeholders: `{monto}`, `{moneda}`, `{limite}`.
 - `detected_intents` has a single value, `consulta_general`.
-- No transcript mentions a charge, a fee, a complaint or fraud (keyword search), including the 29,198 whose interaction reason is Complaint. `main_topics` has the same 6 categories as `reason_category`, in Spanish and with the same counts per category.
+- No transcript mentions a charge, a fee, a complaint or fraud (keyword search), including the 29,198 whose interaction reason is Complaint. `main_topics` equals `contact_reason` on **100 % of rows** (171,321 checked), so it is a leakage column for any intent model.
 
 **Handling:** none. The transcripts cannot ground intents, customer phrasing, simulator personas or dispute dialogues; those must be generated and labeled as such.
 
@@ -238,6 +241,40 @@ With NPS scores between 2 and 7 there are **no promoters** (9–10): every categ
 `call_transcripts.duration_seconds` is documented NOT NULL but is null in 24,029 rows (14.0 %).
 
 **Handling:** rows kept, flagged as `not_null:duration_seconds`; the dbt `not_null` test warns.
+
+## Campaigns and agents
+
+Found in the learnability sweep (`docs/data_findings.md`, `pipeline/notebooks/explore_learnability.ipynb`).
+
+### `accepts_marketing` is not honored
+
+Customers with `accepts_marketing = false` (874,417 of 1,746,801 sends) receive campaigns at the same rate as those with it true, and engage identically: 38.6 % vs 38.6 % opens, 0.57 % vs 0.55 % conversions.
+
+**Handling:** none in silver. Consent is not modeled as a filter; if campaign tooling is ever exposed, the consent flag must be checked in code, not inferred from the data.
+
+### `avg_csat` does not match measured satisfaction
+
+`service_agents.avg_csat` correlates r = −0.03 with the satisfaction actually observed in the agent's own surveys (1,090 agents with ≥ 30 surveys; `docs/data_findings.md` H31). The declared attribute is unrelated to measured performance.
+
+**Handling:** none. Do not use `avg_csat` for routing, scoring or quality claims; use measured survey outcomes instead.
+
+### `customer_status` has no behavioral footprint
+
+Active (127,700), Inactive (14,914), Suspended (4,407) and Closed (2,979) customers are indistinguishable on transaction volume (32.6–32.9), complaint count (0.41–0.45), products held (2.82–2.87), delinquency (11.2–11.8 %) and transaction recency (43–45 days) — and equally on digital engagement (79.1–79.4 `digital_events` per customer, 9.8 sessions).
+
+**Handling:** none. No churn or attrition model is possible from these tables; do not claim one.
+
+### UTM parameters are decorative
+
+In `digital_events`, the 839,045 rows carrying `utm_source`/`utm_medium` (of 15,620,994) have **0.000 %** `Purchase` and **0.000 %** `Error` events — conversions and errors only occur on rows without UTM tags. Campaign attribution through the clickstream is impossible.
+
+**Handling:** none in silver (`digital_events` is not modeled). If UTM-based attribution is ever needed, treat the fields as decorative and say so.
+
+### Campaign event columns are post-hoc
+
+In `campaign_sends`, `open_device` and `open_country` are filled only when `was_opened` (438,377 of 487,309 opens have a device; never on non-opens), `click_date` only when `was_clicked`, and `conversion_value` only when `had_conversion`. WhatsApp and Voice sends (403,673 rows) have no open tracking at all (`was_opened` null).
+
+**Handling:** none. These columns are leakage for any funnel model; use only `send_*` columns known at send time as features.
 
 ## Dates
 

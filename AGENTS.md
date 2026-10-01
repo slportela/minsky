@@ -31,7 +31,7 @@ What is scored: a working system, proven by evals, that knows when **not** to ac
 | `docs/architecture.md` · `docs/poc_to_prod.md` | Target production architecture (proposed) · how the POC maps to it |
 | `docs/dispute_policy.md` | The synthetic policy (rules D01-D09); code in `backend/.../policy/` |
 | `docs/evals.md` | Eval strategy: the reference for anything eval-related |
-| `docs/adr/` · `docs/known_issues.md` · `docs/disputes_findings.md` | Decisions · data issues (**update it when you find a new one**) · what the data does and does not offer for disputes |
+| `docs/adr/` · `docs/known_issues.md` · `docs/disputes_findings.md` · `docs/data_findings.md` | Decisions · data issues (**update it when you find a new one**) · what the data does and does not offer for disputes · which variable relations are learnable (EDA sweep) |
 | `backend/` | FastAPI service; module map and rules in `backend/README.md` |
 | `frontend/` | Next.js: `/chat` and `/console`; rules in `frontend/README.md` |
 | `ml/` | Router training and L1 evaluation |
