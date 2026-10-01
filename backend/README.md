@@ -20,7 +20,7 @@ FastAPI service for dispute intake: the orchestrator, the policy, the mock bank 
    │  ├─▶ policy/      decide(facts) → route + rule id (pure, no I/O)
    │  └─▶ guardrails/  output checks: every fact grounded in tool results, reply language
    ▼
- store/          postgres: bank.* (read-only) and cases.* (writes)
+ store/          async SQLModel reads over bank.* (pooled); cases.* writes not yet
  observability/  one trace per turn: model calls, tool calls, policy decisions, versions
 ```
 
@@ -28,6 +28,7 @@ FastAPI service for dispute intake: the orchestrator, the policy, the mock bank 
 
 - `policy/` has no I/O and no model calls. It is tested rule by rule (`tests/test_policy_disputes.py`).
 - `tools/` never take a customer id from the model: they read it from the session. Every tool has a denial test.
+- `store/` reads `bank.*` by entity key (async, pooled). Customer authorization is checked once in identity/tools, not on every store query. `cases.*` writes are not implemented yet.
 - `llm/` is the only module that talks to Bedrock. Model ids come from config; prompts come from `prompts/`.
 - `agent/` never says an action is done before the tool result has been read back.
 
