@@ -17,7 +17,7 @@ Loads are atomic: tables are built in `bank_next`, indexed, and swapped in with 
 - Column names are the data dictionary's wherever the value comes straight from silver, so every column can be traced to the source. Derived columns have explicit names (`amount_usd_source`, `product_number_last4`, `is_repeat_complainer`).
 - dbt contracts fix the column names and types: changing them breaks `make gold` until `models/gold/_gold.yml` is updated in the same PR.
 - **Data minimisation**: only what the agent needs. Identity documents, contact details, address, income, credit score, location and branch stay in silver.
-- **Simulated today**: everything time-relative is computed as of `2026-06-17`, the dbt var `as_of_date`. It must equal the backend's `MINSKY_TODAY` (`backend/src/minsky_api/config.py`); `dispute_scenarios` fails the build if they differ.
+- **Simulated today**: everything time-relative is computed as of `2026-06-18`, the day the data ends (last transactions before 06:00, last complaints that morning), the dbt var `as_of_date`. It must equal the backend's `MINSKY_TODAY` (`backend/src/minsky_api/config.py`); `dispute_scenarios` fails the build if they differ.
 
 ## Tables
 
@@ -53,7 +53,7 @@ The full history (2023-06-17 to 2026-06-18). `transaction_id`, `customer_id`, `p
 Real (customer, transaction) pairs that trigger each policy rule, decided by the backend's own policy (`minsky_api.policy.disputes.decide`), so the table follows the policy when it changes. Up to 20 per rule, from a deterministic 2 % sample of customers. Columns: `rule_id`, `route`, `offer_card_block`, `customer_says_not_me` (true: the "it wasn't me" claim is simulated), `customer_id`, `transaction_id`, and the facts the rule used (`transaction_status`, `transaction_date`, `days_before_as_of`, `amount_usd`, `is_fraud`, `fraud_score`, `is_repeat_complainer`).
 
 - D04 (already disputed) is not here: it needs an existing dispute, which lives in `cases.*`.
-- D06 appears only through the "not me" claim, never through `fraud_score ≥ 80`: with rule D05 first, high-score fraud is almost always outside the 120-day window. This is a policy-order issue, not a data gap.
+- D06 is reached both by the bank's fraud flag (`is_fraud`) and by the simulated "not me" claim (`customer_says_not_me = true`).
 
 ## How to query
 

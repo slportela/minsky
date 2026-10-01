@@ -12,6 +12,7 @@ dependencies = [
     "uvicorn[standard]>=0.32",
     "sqlmodel>=0.0.47",
     "greenlet>=3.5.6",
+    "openai>=2.0",
 ]
 
 [dependency-groups]

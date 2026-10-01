@@ -46,7 +46,7 @@ def model(dbt, session):
                 status=TxnStatus(status),
                 transaction_date=tx_date.date(),
                 amount_usd=float(amount_usd),
-                fraud_score=float(fraud_score) if fraud_score is not None else None,
+                is_fraud=bool(is_fraud),
                 existing_dispute_ref=None,
                 repeat_complainer=bool(repeat),
                 customer_says_not_me=says_not_me,

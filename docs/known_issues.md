@@ -10,6 +10,7 @@ The issues most likely to affect the customer-service workflow:
 
 | Issue | Why it matters |
 |---|---|
+| [Columns are generated independently](#columns-are-generated-independently) | No business relationships to learn or explain: history gives aggregate numbers, not drivers; decisions must come from the written policy |
 | [Complaints cannot be linked to interactions](#complaints-cannot-be-linked-to-interactions) | No join from a complaint (PQR) to the call that originated it |
 | [Survey scales are truncated](#survey-scales-are-truncated) | NPS has no promoters; CSAT never reaches 5. Satisfaction baselines are biased |
 | [Customers and agents do not join to branches](#customers-and-agents-do-not-join-to-branches) | No branch context for a customer or an agent |
@@ -24,6 +25,23 @@ The issues most likely to affect the customer-service workflow:
 | [Delinquency is independent of credit score](#delinquency-is-independent-of-credit-score) | No signal for a credit-risk model |
 | [Decline codes are uniformly distributed](#decline-codes-are-uniformly-distributed) | Decline reasons carry no pattern to explain or learn |
 | [Spanish only](#spanish-only) | The brief requires Portuguese; there is no Portuguese data to ground or evaluate it |
+
+## Columns are generated independently
+
+The dataset has no business relationships between columns: each one looks drawn on its own, keeping only its distribution. The few relationships that exist are mechanical derivations (`resolution_days` from the dates, `nps_category` from the score, `comment_sentiment` from the template text, the range of `fraud_score` from `is_fraud`). Measured on the 15,363 resolved or closed complaints:
+
+| Relationship a real complaint process would show | In the data |
+|---|---|
+| Breaching the SLA means taking longer | No: 15.4 days on average when breached, 15.7 when not; both span 1-30 days |
+| Critical cases are resolved faster | No: Critical 15.5 days, High 15.6, Medium 15.6, Low 15.7; the SLA is breached in ~20 % of cases at every priority |
+| Compensation follows the claimed amount | No: correlation 0.04 |
+| Longer resolution lowers satisfaction | No: correlation −0.03 |
+| A slow first response predicts an SLA breach | No: correlation 0.002 |
+| `resolution_days` matches the dates | Yes, exactly (a derivation) |
+
+The same pattern shows elsewhere: delinquency does not depend on credit score, decline codes are uniform, complaint and transcript texts are templates (sections below).
+
+**Handling:** use history for aggregate, descriptive numbers only (share of disputes, backlog, median resolution time), never as drivers or causes. `sla_breached` is not an outcome metric: it is unrelated to the time taken. Breakdowns such as `bank.resolution_benchmarks` by category and priority add nothing over the overall row. Decisions come from the written policy (`docs/dispute_policy.md`), and the learned component is trained on generated, policy-labeled text, not on structured history.
 
 ## Volume
 

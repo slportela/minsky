@@ -28,6 +28,10 @@ services:
       MINSKY_AWS_REGION: ${AWS_REGION:-us-east-1}
       AWS_REGION: ${AWS_REGION:-us-east-1}  # Bedrock and S3: instance role on EC2, ~/.aws locally
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}  # empty = no export; traces still land in postgres
+      # model provider (ADR 0008): any OpenAI-compatible endpoint; interim = the OpenAI API
+      MINSKY_LLM_BASE_URL: ${MINSKY_LLM_BASE_URL:-https://api.openai.com/v1}
+      MINSKY_LLM_MODEL: ${MINSKY_LLM_MODEL:-gpt-6-luna}
+      MINSKY_LLM_API_KEY: ${MINSKY_LLM_API_KEY:-}
     depends_on:
       postgres: {condition: service_healthy}
     restart: unless-stopped

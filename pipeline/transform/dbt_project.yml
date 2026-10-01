@@ -16,7 +16,7 @@ vars:
   lake_root: "../../data/lake"
   # The simulated "today" for gold (policy windows, complaint recency). Must equal MINSKY_TODAY,
   # the backend's fixed date (backend/src/minsky_api/config.py); the dispute_scenarios model checks it.
-  as_of_date: "2026-06-17"
+  as_of_date: "2026-06-18"
 
 models:
   minsky:
