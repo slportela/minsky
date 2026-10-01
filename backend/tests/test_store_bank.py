@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 
@@ -155,3 +155,18 @@ async def test_dispute_scenario_list_for_rule_and_all():
     assert await store.list_all() == (row,)
     assert "rule_id" in _sql(session.exec_statements[0])
     assert len(session.exec_statements) == 2
+
+
+@pytest.mark.asyncio
+async def test_transaction_filters_are_customer_scoped_and_escape_like_wildcards():
+    session = FakeSession(exec_rows=[])
+    store = TransactionStore(session)  # type: ignore[arg-type]
+    await store.list_by_customer(
+        "C1", limit=5, merchant="50%_off", date_from=date(2026, 6, 1), date_to=date(2026, 6, 15)
+    )
+    statement = session.exec_statements[0]
+    sql = _sql(statement)
+    assert "customer_id" in sql and "ILIKE" in sql.upper()
+    params = statement.compile(dialect=postgresql.dialect()).params
+    assert "%50\\%\\_off%" in params.values()  # the customer's % and _ are literal, not wildcards
+    assert date(2026, 6, 16) in params.values()  # date_to is inclusive: < the next day
