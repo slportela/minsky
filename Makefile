@@ -7,7 +7,7 @@ PROFILE    := $(shell grep '^BRONZE_AWS_PROFILE=' .env 2>/dev/null | cut -d= -f2
 LAKE_URI   := $(patsubst %/bronze,%,$(BRONZE_URI))
 AWS        := AWS_PROFILE=$(PROFILE) aws
 
-.PHONY: help setup lock-check lint typecheck test frontend-check eval-check ci up down logs demo-plan demo-apply pipeline bronze mirror silver gold publish docs
+.PHONY: help setup lock-check lint typecheck test llm-smoke frontend-check eval-check ci up down logs demo-plan demo-apply pipeline bronze mirror silver gold publish docs
 
 # ---- Development ---------------------------------------------------------------------------
 
@@ -31,6 +31,9 @@ test:  ## unit tests: eval harness + backend (policy, tools, API)
 
 frontend-check:  ## frontend type check
 	npm --prefix frontend run typecheck
+
+llm-smoke:  ## one real call to the configured model (MINSKY_LLM_* in .env): key, endpoint, pinned model
+	uv run --env-file .env python -m minsky_api.llm.smoke
 
 eval-check:  ## validate every eval case and the case set (schema, leakage, coverage)
 	uv run python -m evals.checks evals/cases --prompts prompts
