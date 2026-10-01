@@ -3,7 +3,7 @@
 from datetime import date
 from functools import lru_cache
 
-from pydantic import PositiveFloat, PositiveInt, SecretStr
+from pydantic import NonNegativeInt, PositiveFloat, PositiveInt, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     llm_model: str = "gpt-6-luna"
     llm_api_key: SecretStr | None = None
     llm_timeout_s: PositiveFloat = 30.0
-    llm_max_retries: int = 2
+    llm_max_retries: NonNegativeInt = 2
 
 
 @lru_cache

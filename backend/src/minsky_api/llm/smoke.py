@@ -4,13 +4,15 @@ Run with `make llm-smoke` (reads MINSKY_LLM_* from .env). Prints the model that 
 tokens; never the key.
 """
 
+import asyncio
+
 from minsky_api.config import get_settings
 from minsky_api.llm.client import LLM
 
 
-def main() -> None:
+async def main() -> None:
     settings = get_settings()
-    result = LLM(settings).respond(
+    result = await LLM(settings).respond(
         "Respondé en una sola oración, en el idioma del usuario.",
         [{"role": "user", "content": "Hola, ¿con qué modelo estoy hablando?"}],
         max_output_tokens=64,
@@ -22,4 +24,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
