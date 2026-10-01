@@ -3,7 +3,9 @@
 Pure functions over verified facts: no I/O, no model calls. Every decision carries the id of
 the rule that produced it, so replies, handoffs and traces can cite it. The rules are a
 SYNTHETIC policy written for the hackathon (docs/dispute_policy.md); they do not reproduce any
-real bank's rules. Rules are evaluated in order; the first match wins.
+real bank's rules. Rules are evaluated in order; the first match wins. Rule ids are stable
+identifiers (they are cited in replies, traces and eval cases), so a rule keeps its id when the
+order changes: D06 is evaluated before D05.
 """
 
 from __future__ import annotations
@@ -33,7 +35,6 @@ class Route(StrEnum):
 class PolicyConfig:
     dispute_window_days: int = 120
     auto_limit_usd: float = 500.0
-    fraud_score_threshold: float = 80.0
 
 
 @dataclass(frozen=True)
@@ -42,8 +43,8 @@ class DisputeFacts:
 
     status: TxnStatus
     transaction_date: date
-    amount_usd: float
-    fraud_score: float | None
+    amount_usd: float  # bank.transactions.amount_usd: never null in gold (docs/read_models.md)
+    is_fraud: bool  # the bank's own fraud flag on the transaction
     existing_dispute_ref: str | None
     repeat_complainer: bool
     customer_says_not_me: bool  # the customer's claim, confirmed back to them
@@ -68,10 +69,13 @@ def decide(facts: DisputeFacts, today: date, config: PolicyConfig = DEFAULT_CONF
         return Decision(Route.ABSTAIN, "D03-pending-not-posted")
     if facts.existing_dispute_ref:
         return Decision(Route.INFORM, "D04-already-disputed")
+    # Fraud comes before the dispute window: a card that may be compromised gets a block offer and
+    # the fraud team whatever the charge's age. The fraud signal is the bank's flag, not fraud_score,
+    # which leaks it (any score above 30 is fraud in this data: docs/known_issues.md).
+    if facts.customer_says_not_me or facts.is_fraud:
+        return Decision(Route.ESCALATE_FRAUD, "D06-possible-fraud", offer_card_block=True)
     if (today - facts.transaction_date).days > config.dispute_window_days:
         return Decision(Route.REFUSE, "D05-outside-window")
-    if facts.customer_says_not_me or (facts.fraud_score or 0) >= config.fraud_score_threshold:
-        return Decision(Route.ESCALATE_FRAUD, "D06-possible-fraud", offer_card_block=True)
     if facts.amount_usd > config.auto_limit_usd:
         return Decision(Route.ESCALATE_AGENT, "D07-above-auto-limit")
     if facts.repeat_complainer:
