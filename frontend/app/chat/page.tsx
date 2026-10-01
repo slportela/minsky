@@ -1,10 +1,145 @@
-// Customer surface: test login (simulated OTP), then a conversation with the dispute assistant.
+"use client";
+
+// Customer surface: POC customer-id gate, then conversation with the dispute assistant.
 // Shows only what the backend returns; it never builds facts or decisions on its own.
+
+import { FormEvent, useState } from "react";
+
+import { ApiError, ChatMessage, postChatTurn } from "../../lib/api";
+
+function messageText(message: ChatMessage): string {
+  return "user" in message ? message.user : message.agent;
+}
+
+function messageRole(message: ChatMessage): "user" | "agent" {
+  return "user" in message ? "user" : "agent";
+}
+
 export default function ChatPage() {
+  const [customerId, setCustomerId] = useState("");
+  const [loggedIn, setLoggedIn] = useState(false);
+  const [conversationId, setConversationId] = useState<string | undefined>();
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [draft, setDraft] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  function continueAsCustomer(event: FormEvent) {
+    event.preventDefault();
+    const id = customerId.trim();
+    if (!id) {
+      setError("Indica un customer id de prueba.");
+      return;
+    }
+    setError(null);
+    setLoggedIn(true);
+  }
+
+  async function sendText(text: string) {
+    const trimmed = text.trim();
+    if (!trimmed || busy || !loggedIn) {
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const response = await postChatTurn({
+        customerId: customerId.trim(),
+        conversationId,
+        messages: [...messages, { user: trimmed }],
+      });
+      setConversationId(response.conversation_id);
+      setMessages(response.messages);
+      setDraft("");
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setError(err.code ? `${err.code}: ${err.message}` : err.message);
+      } else {
+        setError(err instanceof Error ? err.message : "Error desconocido");
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function onSubmit(event: FormEvent) {
+    event.preventDefault();
+    void sendText(draft);
+  }
+
+  if (!loggedIn) {
+    return (
+      <main>
+        <h1>Chat</h1>
+        <p>
+          Identidad de prueba (POC): el valor se envía como{" "}
+          <code>X-Minsky-Customer-Id</code>. No es autenticación real.
+        </p>
+        <form onSubmit={continueAsCustomer}>
+          <label>
+            Customer id{" "}
+            <input
+              value={customerId}
+              onChange={(e) => setCustomerId(e.target.value)}
+              autoComplete="username"
+              disabled={busy}
+            />
+          </label>{" "}
+          <button type="submit">Continuar</button>
+        </form>
+        {error ? <p role="alert">{error}</p> : null}
+      </main>
+    );
+  }
+
   return (
     <main>
       <h1>Chat</h1>
-      <p>To build: test-user login, message list, typing state, confirmation buttons for actions.</p>
+      <p>
+        Cliente <code>{customerId.trim()}</code>
+        {conversationId ? (
+          <>
+            {" "}
+            · conversación <code>{conversationId}</code>
+          </>
+        ) : null}
+      </p>
+
+      <section aria-live="polite" style={{ display: "grid", gap: "0.75rem", marginBottom: "1.5rem" }}>
+        {messages.length === 0 ? <p>Escribe el cargo que quieres disputar.</p> : null}
+        {messages.map((message, index) => (
+          <div key={`${messageRole(message)}-${index}`}>
+            <strong>{messageRole(message) === "user" ? "Tú" : "Asistente"}</strong>
+            <div style={{ whiteSpace: "pre-wrap" }}>{messageText(message)}</div>
+          </div>
+        ))}
+      </section>
+
+      <form onSubmit={onSubmit} style={{ display: "grid", gap: "0.5rem", maxWidth: "40rem" }}>
+        <label>
+          Mensaje
+          <textarea
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            rows={3}
+            disabled={busy}
+            style={{ display: "block", width: "100%" }}
+          />
+        </label>
+        <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+          <button type="submit" disabled={busy || !draft.trim()}>
+            Enviar
+          </button>
+          <button type="button" disabled={busy} onClick={() => void sendText("sí")}>
+            Sí
+          </button>
+          <button type="button" disabled={busy} onClick={() => void sendText("no")}>
+            No
+          </button>
+        </div>
+      </form>
+      {busy ? <p>Pensando…</p> : null}
+      {error ? <p role="alert">{error}</p> : null}
     </main>
   );
 }
