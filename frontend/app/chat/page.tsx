@@ -3,9 +3,9 @@
 // Customer surface: POC customer-id gate, then conversation with the dispute assistant.
 // Shows only what the backend returns; it never builds facts or decisions on its own.
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useRef, useState } from "react";
 
-import { ApiError, ChatMessage, postChatTurn } from "../../lib/api";
+import { ApiError, ChatMessage, ChatResponse, postChatTurn } from "../../lib/api";
 
 function messageText(message: ChatMessage): string {
   return "user" in message ? message.user : message.agent;
@@ -13,6 +13,26 @@ function messageText(message: ChatMessage): string {
 
 function messageRole(message: ChatMessage): "user" | "agent" {
   return "user" in message ? "user" : "agent";
+}
+
+function assertChatResponse(value: ChatResponse): ChatResponse {
+  if (typeof value.conversation_id !== "string" || !value.conversation_id) {
+    throw new Error("Respuesta inválida: falta conversation_id");
+  }
+  if (!Array.isArray(value.messages)) {
+    throw new Error("Respuesta inválida: messages no es una lista");
+  }
+  for (const message of value.messages) {
+    if (message == null || typeof message !== "object") {
+      throw new Error("Respuesta inválida: mensaje mal formado");
+    }
+    const hasUser = "user" in message && typeof message.user === "string";
+    const hasAgent = "agent" in message && typeof message.agent === "string";
+    if (hasUser === hasAgent) {
+      throw new Error("Respuesta inválida: cada mensaje debe ser user o agent");
+    }
+  }
+  return value;
 }
 
 export default function ChatPage() {
@@ -23,6 +43,7 @@ export default function ChatPage() {
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const inFlight = useRef(false);
 
   function continueAsCustomer(event: FormEvent) {
     event.preventDefault();
@@ -35,22 +56,37 @@ export default function ChatPage() {
     setLoggedIn(true);
   }
 
-  async function sendText(text: string) {
-    const trimmed = text.trim();
-    if (!trimmed || busy || !loggedIn) {
+  function startNewConversation() {
+    if (inFlight.current) {
       return;
     }
+    setConversationId(undefined);
+    setMessages([]);
+    setDraft("");
+    setError(null);
+  }
+
+  async function sendText(text: string, opts?: { clearDraft?: boolean }) {
+    const trimmed = text.trim();
+    if (!trimmed || inFlight.current || !loggedIn) {
+      return;
+    }
+    inFlight.current = true;
     setBusy(true);
     setError(null);
     try {
-      const response = await postChatTurn({
-        customerId: customerId.trim(),
-        conversationId,
-        messages: [...messages, { user: trimmed }],
-      });
+      const response = assertChatResponse(
+        await postChatTurn({
+          customerId: customerId.trim(),
+          conversationId,
+          messages: [...messages, { user: trimmed }],
+        }),
+      );
       setConversationId(response.conversation_id);
       setMessages(response.messages);
-      setDraft("");
+      if (opts?.clearDraft) {
+        setDraft("");
+      }
     } catch (err) {
       if (err instanceof ApiError) {
         setError(err.code ? `${err.code}: ${err.message}` : err.message);
@@ -58,13 +94,14 @@ export default function ChatPage() {
         setError(err instanceof Error ? err.message : "Error desconocido");
       }
     } finally {
+      inFlight.current = false;
       setBusy(false);
     }
   }
 
   function onSubmit(event: FormEvent) {
     event.preventDefault();
-    void sendText(draft);
+    void sendText(draft, { clearDraft: true });
   }
 
   if (!loggedIn) {
@@ -102,7 +139,10 @@ export default function ChatPage() {
             {" "}
             · conversación <code>{conversationId}</code>
           </>
-        ) : null}
+        ) : null}{" "}
+        <button type="button" disabled={busy} onClick={startNewConversation}>
+          Nueva conversación
+        </button>
       </p>
 
       <section aria-live="polite" style={{ display: "grid", gap: "0.75rem", marginBottom: "1.5rem" }}>
