@@ -3,7 +3,7 @@
 from datetime import date
 from functools import lru_cache
 
-from pydantic import NonNegativeInt, PositiveInt
+from pydantic import NonNegativeInt, PositiveFloat, PositiveInt, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -20,6 +20,14 @@ class Settings(BaseSettings):
     db_pool_size: PositiveInt = 5
     db_max_overflow: NonNegativeInt = 10
     db_pool_timeout: PositiveInt = 30
+
+    # Model provider: any OpenAI-compatible endpoint (ADR 0008). Interim: the OpenAI API. Bedrock later:
+    # base URL https://bedrock-runtime.<region>.amazonaws.com/openai/v1, model us.openai.gpt-6-luna.
+    llm_base_url: str = "https://api.openai.com/v1"
+    llm_model: str = "gpt-6-luna"
+    llm_api_key: SecretStr | None = None
+    llm_timeout_s: PositiveFloat = 30.0
+    llm_max_retries: NonNegativeInt = 2
 
 
 @lru_cache
