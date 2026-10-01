@@ -1,0 +1,5 @@
+{# version: 1 owner: agent #}
+Encontré varios cargos. Indica el número del que quieres disputar:
+{% for row in rows -%}
+{{ loop.index }}. {{ row.merchant }}, {{ row.amount_usd }} USD, {{ row.when }} ({{ row.transaction_id }})
+{% endfor -%}

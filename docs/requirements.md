@@ -26,10 +26,10 @@ Status: ✅ done · 🟡 partial · ⬜ planned · ⚠️ risk or gap
 |---|---|---|---|---|
 | P1.1 | Analyze contact reasons, demand patterns, data quality, operational constraints | Data quality vs. the dictionary; dispute volume, backlog, resolution time, SLA breach and first-contact resolution | `known_issues.md`, `disputes_findings.md` | 🟡 quality and dispute evidence done; demand patterns pending |
 | P1.2 | Use the evidence to prioritize the workflow and define customer and business outcomes | Disputes are 40 % of complaints, 70 % still open, 15-16 days to resolve, ~20 % SLA breach; outcomes in `solution.md` | ADR 0005, `disputes_findings.md` | 🟡 evidence done; ADR 0005 to cite it |
-| P2.1 | Maintain conversational context | Orchestrator state per conversation | `backend/agent` | ⬜ |
-| P2.2 | Clarify ambiguity | Clarify step with masked candidates | `solution.md` | ⬜ |
+| P2.1 | Maintain conversational context | Orchestrator state per conversation (`ConversationStore` + phases) | `backend/agent` | 🟡 in-memory POC |
+| P2.2 | Clarify ambiguity | Clarify step with masked candidates | `solution.md`, `backend/agent` | 🟡 |
 | P2.3 | Ground answers in permitted account, transaction or policy information | Read models in Postgres `bank.*`; tools scoped to the session; output grounding check | `read_models.md`, `backend/tools`, `guardrails` | 🟡 read models done |
-| P2.4 | Use tools when they serve the workflow; report only verified outcomes | Read-back after every write | AGENTS rule 2 | ⬜ |
+| P2.4 | Use tools when they serve the workflow; report only verified outcomes | Read-back after every write in orchestrator | AGENTS rule 2, `backend/agent` | 🟡 |
 | P3.1 | Define what it answers, what needs confirmation, when to abstain or transfer | Policy D01-D09; confirmation for dispute and card block | `dispute_policy.md` | 🟡 |
 | P3.2 | Enforce permissions and policy outside model-generated text | Pure policy module; tool-layer checks; RLS in production | `backend/policy` | 🟡 policy done |
 | P3.3 | Give the human the request, verified facts, actions, evidence, open questions | Structured handoff JSON + console | `solution.md`, `frontend` | ⬜ |
