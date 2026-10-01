@@ -6,7 +6,7 @@ Ese cargo ya fue revertido: el dinero ya volvió.
 {%- elif rule_id == "D03-pending-not-posted" -%}
 Ese cargo sigue pendiente: se puede disputar cuando quede registrado.
 {%- elif rule_id == "D04-already-disputed" -%}
-Ya hay un reclamo abierto para ese cargo; te paso con un asesor si hace falta.
+Ya hay un reclamo abierto para ese cargo{% if existing_dispute_id %} (ref. {{ existing_dispute_id }}){% endif %}; te paso con un asesor si hace falta.
 {%- else -%}
 No hay nada que disputar automáticamente ({{ rule_id }}).
 {%- endif %}

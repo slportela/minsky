@@ -8,6 +8,8 @@ from decimal import Decimal
 from typing import Any
 from uuid import uuid4
 
+import pytest
+
 from minsky_api.agent.extract import DisputeDetails
 from minsky_api.agent.orchestrator import run_turn
 from minsky_api.agent.state import ConversationState, Phase
@@ -31,6 +33,7 @@ class FakeSession:
     def __init__(self, *, get_result: Any = None, exec_rows: list[Any] | None = None) -> None:
         self.get_result = get_result
         self.exec_rows = exec_rows or []
+        self.exec_statements: list[Any] = []
 
     async def get(self, model: type, identity: Any) -> Any:
         if isinstance(self.get_result, dict):
@@ -38,6 +41,7 @@ class FakeSession:
         return self.get_result if isinstance(self.get_result, model) else None
 
     async def exec(self, statement: Any) -> _FakeResult:
+        self.exec_statements.append(statement)
         return _FakeResult(self.exec_rows)
 
 
@@ -110,8 +114,8 @@ def _ctx(txn: Transaction | None = None, *, exec_rows: list[Any] | None = None, 
     )
 
 
-def _state() -> ConversationState:
-    return ConversationState(conversation_id=uuid4())
+def _state(customer_id: str = "C1") -> ConversationState:
+    return ConversationState(conversation_id=uuid4(), customer_id=customer_id)
 
 
 def _details(**kwargs: Any) -> DisputeDetails:
@@ -242,3 +246,78 @@ def test_settings_defaults():
     settings = Settings()
     assert settings.max_turns == 12
     assert settings.max_clarify_attempts == 2
+
+
+def test_empty_extract_does_not_list_latest_txns():
+    """No merchant/amount/date/id → clarify, never an unfiltered list dump."""
+    t1 = _txn(transaction_id="T1")
+    t2 = _txn(transaction_id="T2", merchant="Other")
+    ctx = _ctx(t1, exec_rows=[t1, t2])
+    state = _state()
+    llm = FakeLLM(_details(merchant=None, amount=None, transaction_id=None))
+    state, reply = asyncio.run(run_turn(state, "hola quiero algo", ctx, llm))  # type: ignore[arg-type]
+    assert state.phase == Phase.CLARIFY
+    assert "T1" not in reply and "T2" not in reply
+    assert ctx.db.exec_statements == []  # type: ignore[attr-defined]
+    assert "coincida" in reply.lower() or "detalle" in reply.lower()
+
+
+def test_card_offer_without_product_does_not_claim_block():
+    txn = _txn(is_fraud=True)
+    ctx = _ctx(txn)
+    state = _state()
+    llm = FakeLLM(_details(customer_says_not_me=True))
+    state, _ = asyncio.run(run_turn(state, "No fui yo", ctx, llm))  # type: ignore[arg-type]
+    state, _ = asyncio.run(run_turn(state, "sí", ctx, llm))  # type: ignore[arg-type]
+    assert state.phase == Phase.CARD_OFFER
+    state.selected_product_id = None
+    state, reply = asyncio.run(run_turn(state, "sí", ctx, llm))  # type: ignore[arg-type]
+    assert state.phase == Phase.DONE
+    assert ctx.cases.get_card_block("P1") is None
+    assert "bloqueé" not in reply.lower()
+    assert any(a.tool == "create_handoff" and a.outcome == "ok" for a in ctx.cases.list_audit())
+
+
+def test_lone_y_is_not_confirmation():
+    ctx = _ctx()
+    state = _state()
+    llm = FakeLLM(_details())
+    state, _ = asyncio.run(run_turn(state, "Cafe 25", ctx, llm))  # type: ignore[arg-type]
+    assert state.phase == Phase.CONFIRM_TXN
+    state, reply = asyncio.run(run_turn(state, "y", ctx, llm))  # type: ignore[arg-type]
+    assert state.phase == Phase.CONFIRM_TXN
+    assert "entendí" in reply.lower() or "sí" in reply.lower()
+
+
+def test_customer_mismatch_denied():
+    ctx = _ctx()
+    state = ConversationState(conversation_id=uuid4(), customer_id="OTHER")
+    llm = FakeLLM(_details())
+    with pytest.raises(PermissionError, match="conversation_customer_mismatch"):
+        asyncio.run(run_turn(state, "Cafe 25", ctx, llm))  # type: ignore[arg-type]
+
+
+def test_clarify_exhausted_handoff(monkeypatch):
+    get_settings.cache_clear()
+    monkeypatch.setenv("MINSKY_MAX_CLARIFY_ATTEMPTS", "1")
+    get_settings.cache_clear()
+    try:
+        ctx = _ctx(exec_rows=[])
+        state = _state()
+        llm = FakeLLM(_details(merchant="Nope", amount=None))
+        state, _ = asyncio.run(run_turn(state, "Nope", ctx, llm))  # type: ignore[arg-type]
+        assert state.phase == Phase.CLARIFY
+        state, reply = asyncio.run(run_turn(state, "sigue sin aparecer", ctx, llm))  # type: ignore[arg-type]
+        assert state.phase == Phase.DONE
+        assert any(a.tool == "create_handoff" and a.outcome == "ok" for a in ctx.cases.list_audit())
+        assert "asesor" in reply.lower() or "claridad" in reply.lower()
+    finally:
+        monkeypatch.delenv("MINSKY_MAX_CLARIFY_ATTEMPTS", raising=False)
+        get_settings.cache_clear()
+
+
+def test_d04_inform_includes_existing_dispute_ref():
+    from minsky_api.agent.replies import policy_inform
+
+    text = policy_inform(rule_id="D04-already-disputed", existing_dispute_id="DSP-abc")
+    assert "DSP-abc" in text

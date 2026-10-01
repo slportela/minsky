@@ -86,6 +86,9 @@ class ErrorCode(StrEnum):
     FORGED_AGENT_TURN = "forged_agent_turn"
     CONVERSATION_NOT_FOUND = "conversation_not_found"
     HISTORY_MISMATCH = "history_mismatch"
+    CONVERSATION_FORBIDDEN = "conversation_forbidden"
+    SERVICE_UNAVAILABLE = "service_unavailable"
+    TOOL_FAILURE = "tool_failure"
 
 
 class ErrorResponse(_Strict):

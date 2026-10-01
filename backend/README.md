@@ -30,7 +30,8 @@ FastAPI service for dispute intake: the orchestrator, the policy, the mock bank 
 - `tools/` never take a customer id from the model: they read it from the session. Every tool has a denial test. Plain async + Pydantic (no LangGraph); `open_dispute` / `block_card` require `confirmed=True`.
 - `store/` reads `bank.*` by entity key (async, pooled). Customer authorization is checked once in identity/tools, not on every store query. Postgres `cases.*` is not wired yet; tools write through `InMemoryCasesBackend`.
 - `identity/` exposes `ToolSession` + `require_customer` for tools; HTTP chat uses a POC header
-  `X-Minsky-Customer-Id` until API-key + OTP exist.
+  `X-Minsky-Customer-Id` (spoofable; not real auth) until API-key + OTP exist. Conversations are
+  bound to that customer id; client history must match the server store.
 - `llm/` talks to an OpenAI-compatible endpoint (ADR 0008). Model ids come from config.
 - `agent/` is a code-owned state machine (`run_turn`): extract → find/clarify → policy → confirm →
   open/block/handoff; never says an action is done before the tool result has been read back.

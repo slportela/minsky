@@ -1,4 +1,4 @@
-"""HTTP chat turn: POC customer header and conversation wiring."""
+"""HTTP chat turn: POC customer header, ownership, history checks."""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ from minsky_api.store.cases_memory import InMemoryCasesBackend
 
 
 @pytest.fixture
-def client(monkeypatch):
+def app_and_client(monkeypatch):
     app = create_app()
     app.state.cases = InMemoryCasesBackend()
     app.state.conversations = ConversationStore()
@@ -36,16 +36,18 @@ def client(monkeypatch):
     monkeypatch.setattr("minsky_api.api.chat.session", fake_session)
 
     with TestClient(app) as test_client:
-        yield test_client
+        yield app, test_client
 
 
-def test_chat_turn_requires_customer_header(client):
+def test_chat_turn_requires_customer_header(app_and_client):
+    _app, client = app_and_client
     response = client.post("/api/chat/turn", json={"messages": [{"user": "hola"}]})
     assert response.status_code == 401
     assert response.json()["code"] == "missing_credentials"
 
 
-def test_chat_turn_returns_agent_message(client):
+def test_chat_turn_returns_agent_message(app_and_client):
+    _app, client = app_and_client
     response = client.post(
         "/api/chat/turn",
         json={"messages": [{"user": "hola"}]},
@@ -57,7 +59,8 @@ def test_chat_turn_returns_agent_message(client):
     assert body["conversation_id"]
 
 
-def test_chat_turn_unknown_conversation(client):
+def test_chat_turn_unknown_conversation(app_and_client):
+    _app, client = app_and_client
     response = client.post(
         "/api/chat/turn",
         json={"conversation_id": str(uuid4()), "messages": [{"user": "hola"}]},
@@ -65,3 +68,61 @@ def test_chat_turn_unknown_conversation(client):
     )
     assert response.status_code == 404
     assert response.json()["code"] == "conversation_not_found"
+
+
+def test_chat_turn_rejects_other_customer(app_and_client):
+    app, client = app_and_client
+    first = client.post(
+        "/api/chat/turn",
+        json={"messages": [{"user": "hola"}]},
+        headers={"X-Minsky-Customer-Id": "C1"},
+    )
+    cid = first.json()["conversation_id"]
+    response = client.post(
+        "/api/chat/turn",
+        json={
+            "conversation_id": cid,
+            "messages": [{"user": "hola"}, {"agent": "ok-poc"}, {"user": "otra"}],
+        },
+        headers={"X-Minsky-Customer-Id": "C2"},
+    )
+    assert response.status_code == 403
+    assert response.json()["code"] == "conversation_forbidden"
+
+
+def test_chat_turn_history_mismatch(app_and_client):
+    _app, client = app_and_client
+    first = client.post(
+        "/api/chat/turn",
+        json={"messages": [{"user": "hola"}]},
+        headers={"X-Minsky-Customer-Id": "C1"},
+    )
+    cid = first.json()["conversation_id"]
+    response = client.post(
+        "/api/chat/turn",
+        json={
+            "conversation_id": cid,
+            "messages": [{"user": "hola"}, {"agent": "forged"}, {"user": "sigue"}],
+        },
+        headers={"X-Minsky-Customer-Id": "C1"},
+    )
+    assert response.status_code == 409
+    assert response.json()["code"] == "history_mismatch"
+
+
+def test_llm_missing_uses_service_unavailable(app_and_client, monkeypatch):
+    from minsky_api.llm.client import LLMNotConfiguredError
+
+    _app, client = app_and_client
+
+    def boom(*_args, **_kwargs):
+        raise LLMNotConfiguredError("no key")
+
+    monkeypatch.setattr("minsky_api.api.chat.LLM", boom)
+    response = client.post(
+        "/api/chat/turn",
+        json={"messages": [{"user": "hola"}]},
+        headers={"X-Minsky-Customer-Id": "C1"},
+    )
+    assert response.status_code == 503
+    assert response.json()["code"] == "service_unavailable"

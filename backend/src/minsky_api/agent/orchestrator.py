@@ -33,7 +33,8 @@ from minsky_api.tools.schemas import (
     TransactionView,
 )
 
-_YES = re.compile(r"^\s*(sí|si|yes|y|ok|vale|confirmo|confirm[oa])\s*[.!?]?\s*$", re.IGNORECASE)
+# No lone "y": too easy to false-confirm on noisy input.
+_YES = re.compile(r"^\s*(sí|si|yes|ok|vale|confirmo|confirm[oa])\s*[.!?]?\s*$", re.IGNORECASE)
 _NO = re.compile(r"^\s*(no|n|cancel[oa]?|negativo)\s*[.!?]?\s*$", re.IGNORECASE)
 _PICK = re.compile(r"^\s*(\d+)\s*$")
 
@@ -44,6 +45,18 @@ def _is_yes(text: str) -> bool:
 
 def _is_no(text: str) -> bool:
     return _NO.match(text) is not None
+
+
+def _has_search_filters(details: DisputeDetails) -> bool:
+    return any(
+        (
+            details.transaction_id,
+            details.merchant,
+            details.amount is not None,
+            details.date_from is not None,
+            details.date_to is not None,
+        )
+    )
 
 
 async def _handoff(
@@ -73,13 +86,21 @@ async def _handoff(
     return replies.handoff_done(handoff_id=result.handoff.handoff_id, rule_id=rule_id)
 
 
+async def _get_owned_txn(ctx: ToolContext, transaction_id: str) -> TransactionView | None:
+    try:
+        got = await get_transaction(ctx, GetTransactionArgs(transaction_id=transaction_id))
+    except ToolDenied:
+        return None
+    return got.transaction
+
+
 async def _search(ctx: ToolContext, details: DisputeDetails) -> list[TransactionView]:
     if details.transaction_id:
-        try:
-            got = await get_transaction(ctx, GetTransactionArgs(transaction_id=details.transaction_id))
-        except ToolDenied:
-            return []
-        return [got.transaction]
+        txn = await _get_owned_txn(ctx, details.transaction_id)
+        return [txn] if txn is not None else []
+    # Never dump the customer's latest N rows: require at least one narrowing signal.
+    if not _has_search_filters(details):
+        return []
     found = await get_transactions(
         ctx,
         GetTransactionsArgs(
@@ -155,9 +176,9 @@ async def _apply_policy(ctx: ToolContext, state: ConversationState) -> str:
         text = replies.policy_refuse(rule_id=decision.rule_id)
         handoff_text = await _handoff(ctx, state, reason="policy_refuse", rule_id=decision.rule_id)
         return f"{text} {handoff_text}"
-    # inform / abstain
+    # inform / abstain (include existing dispute ref when D04)
     state.phase = Phase.DONE
-    return replies.policy_inform(rule_id=decision.rule_id)
+    return replies.policy_inform(rule_id=decision.rule_id, existing_dispute_id=decision.existing_dispute_id)
 
 
 async def _phase_understand(ctx: ToolContext, state: ConversationState, text: str, llm: LLM) -> str:
@@ -179,21 +200,20 @@ async def _phase_clarify(ctx: ToolContext, state: ConversationState, text: str, 
     if pick and state.candidate_txn_ids:
         index = int(pick.group(1)) - 1
         if 0 <= index < len(state.candidate_txn_ids):
-            txn_id = state.candidate_txn_ids[index]
-            got = await get_transaction(ctx, GetTransactionArgs(transaction_id=txn_id))
-            state.selected_txn_id = got.transaction.transaction_id
-            state.selected_product_id = got.transaction.product_id
+            txn = await _get_owned_txn(ctx, state.candidate_txn_ids[index])
+            if txn is None:
+                return await _after_candidates(ctx, state, [])
+            state.selected_txn_id = txn.transaction_id
+            state.selected_product_id = txn.product_id
             state.phase = Phase.CONFIRM_TXN
-            return replies.ask_confirm_txn(got.transaction)
-    # Treat as more detail: re-extract and search again
+            return replies.ask_confirm_txn(txn)
     details = await extract_dispute_details(llm, text)
     state.customer_says_not_me = state.customer_says_not_me or details.customer_says_not_me
     if details.out_of_scope:
         return await _handoff(ctx, state, reason="out_of_scope")
-    # Direct id in clarify text
     if details.transaction_id:
-        got = await get_transaction(ctx, GetTransactionArgs(transaction_id=details.transaction_id))
-        return await _after_candidates(ctx, state, [got.transaction])
+        txn = await _get_owned_txn(ctx, details.transaction_id)
+        return await _after_candidates(ctx, state, [txn] if txn is not None else [])
     txns = await _search(ctx, details)
     return await _after_candidates(ctx, state, txns)
 
@@ -232,25 +252,33 @@ async def _phase_confirm_act(ctx: ToolContext, state: ConversationState, text: s
 
 
 async def _phase_card_offer(ctx: ToolContext, state: ConversationState, text: str) -> str:
-    actions: list[str] = []
     if _is_yes(text):
+        actions: list[str] = []
+        blocked_ok = False
         if state.selected_product_id:
-            blocked = await block_card(
-                ctx,
-                BlockCardArgs(product_id=state.selected_product_id, confirmed=True),
-            )
-            actions.append(f"card_blocked:{blocked.block.product_id}")
+            try:
+                blocked = await block_card(
+                    ctx,
+                    BlockCardArgs(product_id=state.selected_product_id, confirmed=True),
+                )
+                actions.append(f"card_blocked:{blocked.block.product_id}")
+                blocked_ok = True
+            except ToolDenied:
+                blocked_ok = False
         result = await create_handoff(
             ctx,
             CreateHandoffArgs(
                 reason="possible_fraud",
                 rule_id=state.rule_id,
-                facts={"transaction_id": state.selected_txn_id},
+                facts={"transaction_id": state.selected_txn_id, "card_blocked": blocked_ok},
                 actions=tuple(actions),
             ),
         )
         state.phase = Phase.DONE
-        return replies.card_blocked_handoff(handoff_id=result.handoff.handoff_id, rule_id=state.rule_id)
+        if blocked_ok:
+            return replies.card_blocked_handoff(handoff_id=result.handoff.handoff_id, rule_id=state.rule_id)
+        # Never claim a block we did not verify.
+        return replies.handoff_done(handoff_id=result.handoff.handoff_id, rule_id=state.rule_id)
     if _is_no(text):
         return await _handoff(ctx, state, reason="possible_fraud_no_block", rule_id=state.rule_id)
     return replies.need_yes_or_no()
@@ -265,6 +293,8 @@ async def run_turn(
     """One customer message → updated state + agent reply. Never reports a write before tool read-back."""
     if ctx.session.state != SessionState.VALID:
         raise PermissionError("session must be valid")
+    if not ctx.session.customer_id or ctx.session.customer_id != state.customer_id:
+        raise PermissionError("conversation_customer_mismatch")
     stripped = text.strip()
     if not stripped:
         raise ValueError("text must not be blank")

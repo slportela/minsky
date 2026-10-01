@@ -47,8 +47,12 @@ def opened_dispute(*, dispute_id: str, rule_id: str) -> str:
     return render("agent.reply.opened.j2", dispute_id=dispute_id, rule_id=rule_id)
 
 
-def policy_inform(*, rule_id: str) -> str:
-    return render("agent.reply.policy_inform.j2", rule_id=rule_id)
+def policy_inform(*, rule_id: str, existing_dispute_id: str | None = None) -> str:
+    return render(
+        "agent.reply.policy_inform.j2",
+        rule_id=rule_id,
+        existing_dispute_id=existing_dispute_id,
+    )
 
 
 def policy_refuse(*, rule_id: str) -> str:

@@ -21,6 +21,7 @@ class Phase(StrEnum):
 @dataclass
 class ConversationState:
     conversation_id: UUID
+    customer_id: str
     phase: Phase = Phase.UNDERSTAND
     turn_count: int = 0
     clarify_count: int = 0
