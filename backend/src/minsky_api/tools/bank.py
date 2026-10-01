@@ -4,8 +4,14 @@ Contracts and limits (B4):
 - Every call takes ToolContext (session + db + cases); never a customer_id from the model.
 - Reads use bank.* stores; writes use InMemoryCasesBackend until Postgres cases.* exists.
 - open_dispute and block_card require confirmed=True (orchestrator sets it after explicit YES).
-- Writes return only after read-back of the stored row.
-- get_transactions limit is 1..100 (default 20).
+- open_dispute also enforces the dispute policy itself (policy.disputes.decide on verified facts):
+  only rule D09 (eligible) opens a dispute; any other rule is a denial whose reason is the rule id.
+  This is the last line of defense behind the orchestrator (AGENTS rule 1).
+- evaluate_dispute returns that decision without writing, so the orchestrator can route the case
+  without ever seeing the fraud flag.
+- Writes return only after read-back of the stored row; open_dispute says whether it created the
+  dispute or it already existed.
+- get_transactions limit is 1..100 (default 20), with optional customer-scoped filters.
 """
 
 from __future__ import annotations
@@ -15,9 +21,13 @@ import json
 from collections.abc import Awaitable, Callable
 from typing import Any, NoReturn, Protocol
 
+from minsky_api.config import get_settings
 from minsky_api.identity.errors import PermissionDenied
 from minsky_api.identity.session import require_customer
+from minsky_api.policy.disputes import Decision, DisputeFacts, Route, TxnStatus, decide
+from minsky_api.store.complaint_stats import ComplaintStatsStore
 from minsky_api.store.errors import StoreError
+from minsky_api.store.models import Transaction
 from minsky_api.store.products import ProductStore
 from minsky_api.store.transactions import TransactionStore
 from minsky_api.tools.context import ToolContext
@@ -29,6 +39,8 @@ from minsky_api.tools.schemas import (
     CreateHandoffArgs,
     CreateHandoffResult,
     DisputeView,
+    EvaluateDisputeArgs,
+    EvaluateDisputeResult,
     GetDisputeArgs,
     GetDisputeResult,
     GetTransactionArgs,
@@ -123,14 +135,22 @@ def _owned[OwnedT: _HasCustomerId](
 
 async def get_transactions(ctx: ToolContext, args: GetTransactionsArgs | None = None) -> GetTransactionsResult:
     params = args or GetTransactionsArgs()
-    audit_args = {"limit": params.limit}
+    audit_args = params.model_dump(exclude_none=True)
     customer_id = _require_customer(ctx, tool="get_transactions", args=audit_args)
     rows = await _store(
         ctx,
         tool="get_transactions",
         args=audit_args,
         customer_id=customer_id,
-        call=lambda: TransactionStore(ctx.db).list_by_customer(customer_id, limit=params.limit),
+        call=lambda: TransactionStore(ctx.db).list_by_customer(
+            customer_id,
+            limit=params.limit,
+            merchant=params.merchant,
+            min_amount=params.min_amount,
+            max_amount=params.max_amount,
+            date_from=params.date_from,
+            date_to=params.date_to,
+        ),
     )
     result = GetTransactionsResult(transactions=tuple(TransactionView.model_validate(row) for row in rows))
     _audit(ctx, tool="get_transactions", args=audit_args, outcome="ok", customer_id=customer_id)
@@ -153,11 +173,80 @@ async def get_transaction(ctx: ToolContext, args: GetTransactionArgs) -> GetTran
     return result
 
 
+async def _dispute_decision(
+    ctx: ToolContext,
+    *,
+    tool: str,
+    args: dict[str, Any],
+    customer_id: str,
+    txn: Transaction,
+    says_not_me: bool,
+) -> Decision:
+    """The policy's decision on verified facts only: the bank's rows and our own cases, never the chat."""
+    stats = await _store(
+        ctx,
+        tool=tool,
+        args=args,
+        customer_id=customer_id,
+        call=lambda: ComplaintStatsStore(ctx.db).get(customer_id),
+    )
+    if stats is None or txn.transaction_status is None or txn.transaction_date is None:
+        # bank.* guarantees these (one stats row per customer; status and date on every transaction)
+        _audit(ctx, tool=tool, args=args, outcome="error", reason="missing_facts", customer_id=customer_id)
+        raise ToolError(f"{tool}: facts missing for {txn.transaction_id}")
+    existing = ctx.cases.get_dispute_by_transaction(customer_id=customer_id, transaction_id=txn.transaction_id)
+    facts = DisputeFacts(
+        status=TxnStatus(txn.transaction_status),
+        transaction_date=txn.transaction_date.date(),
+        amount_usd=float(txn.amount_usd),
+        is_fraud=bool(txn.is_fraud),
+        existing_dispute_ref=existing.dispute_id if existing else None,
+        repeat_complainer=bool(stats.is_repeat_complainer),
+        customer_says_not_me=says_not_me,
+    )
+    return decide(facts, get_settings().today)
+
+
+async def evaluate_dispute(ctx: ToolContext, args: EvaluateDisputeArgs) -> EvaluateDisputeResult:
+    """Read-only: what the policy decides for one of the customer's transactions."""
+    audit_args = {"transaction_id": args.transaction_id, "customer_says_not_me": args.customer_says_not_me}
+    customer_id = _require_customer(ctx, tool="evaluate_dispute", args=audit_args)
+    row = await _store(
+        ctx,
+        tool="evaluate_dispute",
+        args=audit_args,
+        customer_id=customer_id,
+        call=lambda: TransactionStore(ctx.db).get(args.transaction_id),
+    )
+    txn = _owned(row, customer_id=customer_id, ctx=ctx, tool="evaluate_dispute", args=audit_args)
+    decision = await _dispute_decision(
+        ctx,
+        tool="evaluate_dispute",
+        args=audit_args,
+        customer_id=customer_id,
+        txn=txn,
+        says_not_me=args.customer_says_not_me,
+    )
+    existing = ctx.cases.get_dispute_by_transaction(customer_id=customer_id, transaction_id=txn.transaction_id)
+    result = EvaluateDisputeResult(
+        transaction_id=txn.transaction_id,
+        rule_id=decision.rule_id,
+        route=decision.route.value,
+        offer_card_block=decision.offer_card_block,
+        existing_dispute_id=existing.dispute_id if existing else None,
+    )
+    _audit(
+        ctx, tool="evaluate_dispute", args=audit_args, outcome="ok", reason=decision.rule_id, customer_id=customer_id
+    )
+    return result
+
+
 async def open_dispute(ctx: ToolContext, args: OpenDisputeArgs) -> OpenDisputeResult:
     audit_args = {
         "transaction_id": args.transaction_id,
         "reason": args.reason,
         "confirmed": args.confirmed,
+        "customer_says_not_me": args.customer_says_not_me,
     }
     customer_id = _require_customer(ctx, tool="open_dispute", args=audit_args)
     if not args.confirmed:
@@ -169,16 +258,30 @@ async def open_dispute(ctx: ToolContext, args: OpenDisputeArgs) -> OpenDisputeRe
         customer_id=customer_id,
         call=lambda: TransactionStore(ctx.db).get(args.transaction_id),
     )
-    _owned(row, customer_id=customer_id, ctx=ctx, tool="open_dispute", args=audit_args)
-    created = ctx.cases.create_dispute(
+    txn = _owned(row, customer_id=customer_id, ctx=ctx, tool="open_dispute", args=audit_args)
+    existing = ctx.cases.get_dispute_by_transaction(customer_id=customer_id, transaction_id=txn.transaction_id)
+    if existing is None:
+        decision = await _dispute_decision(
+            ctx,
+            tool="open_dispute",
+            args=audit_args,
+            customer_id=customer_id,
+            txn=txn,
+            says_not_me=args.customer_says_not_me,
+        )
+        if decision.route != Route.OPEN_DISPUTE:
+            _deny(
+                ctx, tool="open_dispute", args=audit_args, reason=f"policy:{decision.rule_id}", customer_id=customer_id
+            )
+    record = existing or ctx.cases.create_dispute(
         customer_id=customer_id,
         transaction_id=args.transaction_id,
         reason=args.reason,
     )
-    verified = ctx.cases.get_dispute(created.dispute_id)
+    verified = ctx.cases.get_dispute(record.dispute_id)
     if verified is None:
         raise ToolError("open_dispute read-back failed")
-    result = OpenDisputeResult(dispute=DisputeView.model_validate(verified))
+    result = OpenDisputeResult(dispute=DisputeView.model_validate(verified), created=existing is None)
     _audit(ctx, tool="open_dispute", args=audit_args, outcome="ok", customer_id=customer_id)
     return result
 
@@ -248,6 +351,7 @@ async def create_handoff(ctx: ToolContext, args: CreateHandoffArgs) -> CreateHan
 __all__ = [
     "block_card",
     "create_handoff",
+    "evaluate_dispute",
     "get_dispute",
     "get_transaction",
     "get_transactions",
