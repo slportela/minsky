@@ -260,9 +260,21 @@ Customers with `accepts_marketing = false` (874,417 of 1,746,801 sends) receive 
 
 ### `customer_status` has no behavioral footprint
 
-Active (127,700), Inactive (14,914), Suspended (4,407) and Closed (2,979) customers are indistinguishable on transaction volume (32.6–32.9), complaint count (0.41–0.45), products held (2.82–2.87), delinquency (11.2–11.8 %) and transaction recency (43–45 days).
+Active (127,700), Inactive (14,914), Suspended (4,407) and Closed (2,979) customers are indistinguishable on transaction volume (32.6–32.9), complaint count (0.41–0.45), products held (2.82–2.87), delinquency (11.2–11.8 %) and transaction recency (43–45 days) — and equally on digital engagement (79.1–79.4 `digital_events` per customer, 9.8 sessions).
 
 **Handling:** none. No churn or attrition model is possible from these tables; do not claim one.
+
+### UTM parameters are decorative
+
+In `digital_events`, the 839,045 rows carrying `utm_source`/`utm_medium` (of 15,620,994) have **0.000 %** `Purchase` and **0.000 %** `Error` events — conversions and errors only occur on rows without UTM tags. Campaign attribution through the clickstream is impossible.
+
+**Handling:** none in silver (`digital_events` is not modeled). If UTM-based attribution is ever needed, treat the fields as decorative and say so.
+
+### Campaign event columns are post-hoc
+
+In `campaign_sends`, `open_device` and `open_country` are filled only when `was_opened` (438,377 of 487,309 opens have a device; never on non-opens), `click_date` only when `was_clicked`, and `conversion_value` only when `had_conversion`. WhatsApp and Voice sends (403,673 rows) have no open tracking at all (`was_opened` null).
+
+**Handling:** none. These columns are leakage for any funnel model; use only `send_*` columns known at send time as features.
 
 ## Dates
 
