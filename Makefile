@@ -33,17 +33,20 @@ frontend-check:  ## frontend type check
 	npm --prefix frontend run typecheck
 
 llm-smoke:  ## one real call to the configured model (MINSKY_LLM_* in .env): key, endpoint, pinned model
-	uv run --env-file .env python -m minsky_api.llm.smoke
+	MINSKY_ENVIRONMENT=local uv run python -m minsky_api.llm.smoke
 
 eval-check:  ## validate every eval case and the case set (schema, leakage, coverage)
 	uv run python -m evals.checks evals/cases --prompts prompts
+
+regression-smoke:  ## offline chat regressions (scripted extraction; no provider spend)
+	uv run python -m evals.regression_smoke --output evals/runs/pr24-regressions.json
 
 lock-check:  ## lockfiles resolve only from public registries (a private mirror breaks setup for everyone else)
 	@bad=$$( grep -nE '(registry|url) = "https://' uv.lock | grep -vE '"https://(pypi\.org|files\.pythonhosted\.org)/'; \
 		grep -nE '"resolved": "https://' frontend/package-lock.json | grep -v '"https://registry\.npmjs\.org/' ); \
 	if [ -n "$$bad" ]; then echo "$$bad" | head -5; echo "lockfile points at a non-public registry"; exit 1; fi
 
-ci: lock-check lint typecheck test eval-check frontend-check  ## everything a PR must pass (runs locally; no external CI service)
+ci: lock-check lint typecheck test eval-check regression-smoke frontend-check  ## everything a PR must pass (runs locally; no external CI service)
 
 # ---- Run the system (see infra/README.md) ------------------------------------------------------
 

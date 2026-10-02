@@ -64,6 +64,7 @@ class InMemoryCasesBackend:
     _disputes_by_id: dict[str, DisputeRecord] = field(default_factory=dict, repr=False)
     _disputes_by_txn: dict[tuple[str, str], str] = field(default_factory=dict, repr=False)
     _handoffs_by_id: dict[str, HandoffRecord] = field(default_factory=dict, repr=False)
+    _handoffs_by_key: dict[tuple[str, str], str] = field(default_factory=dict, repr=False)
     _blocks_by_product: dict[str, CardBlockRecord] = field(default_factory=dict, repr=False)
     _audit: list[AuditRecord] = field(default_factory=list, repr=False)
 
@@ -105,8 +106,12 @@ class InMemoryCasesBackend:
         rule_id: str | None,
         facts: dict[str, Any],
         actions: tuple[str, ...],
+        idempotency_key: str | None = None,
     ) -> HandoffRecord:
         with self._lock:
+            key = (customer_id, idempotency_key) if idempotency_key is not None else None
+            if key is not None and key in self._handoffs_by_key:
+                return self._handoffs_by_id[self._handoffs_by_key[key]]
             handoff_id = f"HO-{uuid4().hex[:12]}"
             record = HandoffRecord(
                 handoff_id=handoff_id,
@@ -118,6 +123,8 @@ class InMemoryCasesBackend:
                 created_at=_now(),
             )
             self._handoffs_by_id[handoff_id] = record
+            if key is not None:
+                self._handoffs_by_key[key] = handoff_id
             return record
 
     def get_handoff(self, handoff_id: str) -> HandoffRecord | None:

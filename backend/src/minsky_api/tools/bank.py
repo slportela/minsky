@@ -339,6 +339,7 @@ async def create_handoff(ctx: ToolContext, args: CreateHandoffArgs) -> CreateHan
         rule_id=args.rule_id,
         facts=args.facts,
         actions=args.actions,
+        idempotency_key=args.idempotency_key,
     )
     verified = ctx.cases.get_handoff(created.handoff_id)
     if verified is None:

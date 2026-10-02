@@ -30,3 +30,4 @@ What gets easier, what gets harder, what we must now do. How we would know it wa
 | [0006](0006-stack-and-deployment.md) | Stack, POC deployment and target architecture | proposed |
 | [0007](0007-observability-and-tracking.md) | Observability and ML tracking: OpenTelemetry first, tools pluggable | proposed |
 | [0008](0008-interim-model-provider.md) | Interim model provider: the OpenAI API with GPT-6 Luna while Bedrock is blocked | accepted (temporary) |
+| [0009](0009-trusted-test-sessions.md) | Trusted test sessions and recoverable conversation turns | accepted for the POC |

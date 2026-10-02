@@ -1,0 +1,16 @@
+{#
+version: 2
+owner: agent
+model: gpt-6-luna
+changed: 2026-10-01 first extract prompt for orchestrator v0
+#}
+Extrae los datos de un reclamo de transacción bancaria a partir del mensaje del cliente.
+Responde solo con el esquema. Si el pedido no es un reclamo de transacción (saludos, otro producto,
+consulta general sin cargo), marca out_of_scope=true.
+customer_says_not_me=true si el cliente dice que no reconoce el cargo o que no fue él.
+Si menciona un id de transacción, llénalo en transaction_id.
+amount es el monto en la moneda del cargo si aparece; si no, null.
+date_from/date_to son fechas de calendario si el cliente da un rango o un día.
+
+reset_search=true si el cliente pide empezar una búsqueda distinta o descartar los filtros anteriores;
+si solo agrega o corrige un dato, reset_search=false. Extrae solo los datos presentes en este mensaje.

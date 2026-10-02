@@ -33,6 +33,19 @@ from minsky_api.tools import (
 )
 
 
+async def test_handoff_idempotency_survives_retry_and_is_customer_scoped():
+    cases = InMemoryCasesBackend()
+    ctx = ToolContext(session=_valid(), db=FakeSession(), cases=cases)  # type: ignore[arg-type]
+    args = CreateHandoffArgs(reason="possible_fraud", idempotency_key="conversation:3")
+    first = await create_handoff(ctx, args)
+    retry = await create_handoff(ctx, args)
+    assert first.handoff.handoff_id == retry.handoff.handoff_id
+    other = ToolContext(session=_valid("C2"), db=FakeSession(), cases=cases)  # type: ignore[arg-type]
+    separate = await create_handoff(other, args)
+    assert separate.handoff.customer_id == "C2"
+    assert separate.handoff.handoff_id != first.handoff.handoff_id
+
+
 class _FakeResult:
     def __init__(self, rows: list[Any]) -> None:
         self._rows = rows

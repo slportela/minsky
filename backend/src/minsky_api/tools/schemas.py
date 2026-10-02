@@ -131,6 +131,7 @@ class BlockCardResult(_Strict):
 
 
 class CreateHandoffArgs(_Strict):
+    idempotency_key: str | None = Field(default=None, min_length=1, max_length=128)
     reason: str = Field(min_length=1, max_length=200)
     rule_id: str | None = None
     facts: dict[str, Any] = Field(default_factory=dict)
