@@ -1,6 +1,6 @@
 "use client";
 
-// Customer surface: POC customer-id gate, then conversation with the dispute assistant.
+// Customer surface: trusted test-session gate, then conversation with the dispute assistant.
 // Shows only what the backend returns; it never builds facts or decisions on its own.
 
 import { FormEvent, useRef, useState } from "react";
@@ -36,7 +36,7 @@ function assertChatResponse(value: ChatResponse): ChatResponse {
 }
 
 export default function ChatPage() {
-  const [customerId, setCustomerId] = useState("");
+  const [credential, setCredential] = useState("");
   const [loggedIn, setLoggedIn] = useState(false);
   const [conversationId, setConversationId] = useState<string | undefined>();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -45,15 +45,22 @@ export default function ChatPage() {
   const [error, setError] = useState<string | null>(null);
   const inFlight = useRef(false);
 
-  function continueAsCustomer(event: FormEvent) {
+  function continueWithCredential(event: FormEvent) {
     event.preventDefault();
-    const id = customerId.trim();
+    const id = credential.trim();
     if (!id) {
-      setError("Indica un customer id de prueba.");
+      setError("Indica tu credencial de prueba.");
       return;
     }
     setError(null);
     setLoggedIn(true);
+  }
+
+  function changeSession() {
+    if (inFlight.current) return;
+    startNewConversation();
+    setCredential("");
+    setLoggedIn(false);
   }
 
   function startNewConversation() {
@@ -77,7 +84,7 @@ export default function ChatPage() {
     try {
       const response = assertChatResponse(
         await postChatTurn({
-          customerId: customerId.trim(),
+          credential: credential.trim(),
           conversationId,
           messages: [...messages, { user: trimmed }],
         }),
@@ -108,17 +115,15 @@ export default function ChatPage() {
     return (
       <main>
         <h1>Chat</h1>
-        <p>
-          Identidad de prueba (POC): el valor se envía como{" "}
-          <code>X-Minsky-Customer-Id</code>. No es autenticación real.
-        </p>
-        <form onSubmit={continueAsCustomer}>
+        <p>Ingresa la credencial de prueba que te proporcionó el equipo.</p>
+        <form onSubmit={continueWithCredential}>
           <label>
-            Customer id{" "}
+            Credencial de prueba{" "}
             <input
-              value={customerId}
-              onChange={(e) => setCustomerId(e.target.value)}
-              autoComplete="username"
+              value={credential}
+              onChange={(e) => setCredential(e.target.value)}
+              type="password"
+              autoComplete="off"
               disabled={busy}
             />
           </label>{" "}
@@ -133,7 +138,7 @@ export default function ChatPage() {
     <main>
       <h1>Chat</h1>
       <p>
-        Cliente <code>{customerId.trim()}</code>
+        Sesión de prueba
         {conversationId ? (
           <>
             {" "}
@@ -142,6 +147,9 @@ export default function ChatPage() {
         ) : null}{" "}
         <button type="button" disabled={busy} onClick={startNewConversation}>
           Nueva conversación
+        </button>{" "}
+        <button type="button" disabled={busy} onClick={changeSession}>
+          Cambiar sesión
         </button>
       </p>
 

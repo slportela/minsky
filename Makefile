@@ -31,6 +31,7 @@ test:  ## unit tests: eval harness + backend (policy, tools, API)
 
 frontend-check:  ## frontend type check
 	npm --prefix frontend run typecheck
+	npm --prefix frontend run test:api
 
 llm-smoke:  ## one real call to the configured model (MINSKY_LLM_* in .env): key, endpoint, pinned model
 	uv run --env-file .env python -m minsky_api.llm.smoke

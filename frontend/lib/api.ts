@@ -63,10 +63,8 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-const CUSTOMER_HEADER = "X-Minsky-Customer-Id";
-
 export async function postChatTurn(args: {
-  customerId: string;
+  credential: string;
   conversationId?: string;
   messages: ChatMessage[];
 }): Promise<ChatResponse> {
@@ -76,7 +74,7 @@ export async function postChatTurn(args: {
   };
   return api<ChatResponse>("/chat/turn", {
     method: "POST",
-    headers: { [CUSTOMER_HEADER]: args.customerId },
+    headers: { Authorization: `Bearer ${args.credential}` },
     body: JSON.stringify(body),
   });
 }

@@ -80,7 +80,7 @@ Status: ✅ done · 🟡 partial · ⬜ planned · ⚠️ risk or gap
 | ID | Criterion | Our answer | Status |
 |---|---|---|---|
 | J1 | Project rationale and documentation | README reading order, ADRs, this page | 🟡 |
-| J2 | AI engineering: backend, frontend, deployment | FastAPI, Next.js, POC on AWS + target architecture | 🟡 skeletons |
+| J2 | AI engineering: backend, frontend, deployment | FastAPI, Next.js, POC on AWS + target architecture | 🟡 chat UI + orchestrator implemented; console, live smoke, deployment pending |
 | J3 | Data analytics: data quality and insights | `known_issues.md` + `disputes_findings.md` + results by slice | 🟡 |
 | J4 | Data engineering: extraction and transformation | Bronze → silver → gold pipeline with contracts, loaded atomically into Postgres | ✅ |
 | J5 | ML: model selection, optimization, implementation, **tracking** | Router ladder; every training run writes a committed report (git SHA, data snapshot, splits, params, metrics, model hash) (ADR 0007) | ⬜ |
