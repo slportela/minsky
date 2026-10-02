@@ -1,0 +1,643 @@
+{
+  "mode": "offline-scripted",
+  "model": "scripted-regression",
+  "git_sha": "165b8287cbad161975f90ce5d5e72d51390b8183",
+  "cases": {
+    "dispute-auth-header-denied-es": "b10524b0f6773415ad6b2e0da58ac0edae8f1dbf7dd8d47c818b4d9df47ea695",
+    "dispute-clarify-retain-merchant-es": "a028c06a55fdaca5cf4f56185b6e01efd2d4ac0c1a49ce74d46118566d0e8fa6",
+    "dispute-policy-failure-retry-es": "48a7ce01aa24e71668d3d00c95447ba28d0603ec75a0c78695f599bd42faff7a",
+    "dispute-miss-retain-merchant-es": "105558106bc8e8ad0dc52b931045d9b8e8f97a9fb4aa6d2bd225a002f2f63d4e"
+  },
+  "trials_per_case": 1,
+  "database": "isolated SQLite (not PostgreSQL)",
+  "trials": [
+    {
+      "case_id": "dispute-auth-header-denied-es",
+      "passed": true,
+      "reasons": [],
+      "responses": [
+        {
+          "request": {
+            "messages": [
+              {
+                "user": "Quiero disputar una transacci\u00f3n."
+              }
+            ]
+          },
+          "status": 401,
+          "response": {
+            "code": "missing_credentials",
+            "message": "test session credential is missing, invalid, or expired",
+            "request_id": "a9ad7525-f153-4e06-8347-7caacde97d5f"
+          }
+        }
+      ],
+      "audit": [],
+      "dispute": null
+    },
+    {
+      "case_id": "dispute-clarify-retain-merchant-es",
+      "passed": true,
+      "reasons": [],
+      "responses": [
+        {
+          "request": {
+            "messages": [
+              {
+                "user": "Quiero disputar un cargo de Cafe."
+              }
+            ]
+          },
+          "status": 200,
+          "response": {
+            "conversation_id": "f8eafd01-d115-41f7-8fb5-02cfd74374d8",
+            "messages": [
+              {
+                "user": "Quiero disputar un cargo de Cafe."
+              },
+              {
+                "agent": "Encontr\u00e9 varios cargos. Indica el n\u00famero del que quieres disputar:\n1. Cafe, 25.0000000000 USD, 2026-06-10 (TRX-REGRESSION)\n2. Cafe, 30.0000000000 USD, 2026-06-10 (TRX-CAFE-OTHER)"
+              }
+            ]
+          }
+        },
+        {
+          "request": {
+            "messages": [
+              {
+                "user": "Quiero disputar un cargo de Cafe."
+              },
+              {
+                "agent": "Encontr\u00e9 varios cargos. Indica el n\u00famero del que quieres disputar:\n1. Cafe, 25.0000000000 USD, 2026-06-10 (TRX-REGRESSION)\n2. Cafe, 30.0000000000 USD, 2026-06-10 (TRX-CAFE-OTHER)"
+              },
+              {
+                "user": "El monto fue 25.00."
+              }
+            ],
+            "conversation_id": "f8eafd01-d115-41f7-8fb5-02cfd74374d8"
+          },
+          "status": 200,
+          "response": {
+            "conversation_id": "f8eafd01-d115-41f7-8fb5-02cfd74374d8",
+            "messages": [
+              {
+                "user": "Quiero disputar un cargo de Cafe."
+              },
+              {
+                "agent": "Encontr\u00e9 varios cargos. Indica el n\u00famero del que quieres disputar:\n1. Cafe, 25.0000000000 USD, 2026-06-10 (TRX-REGRESSION)\n2. Cafe, 30.0000000000 USD, 2026-06-10 (TRX-CAFE-OTHER)"
+              },
+              {
+                "user": "El monto fue 25.00."
+              },
+              {
+                "agent": "Encontr\u00e9 este cargo: Cafe, 25.0000000000 USD, 2026-06-10 (ref. TRX-REGRESSION). \u00bfEs este el que quieres disputar? Responde s\u00ed para confirmar, o no para cancelar."
+              }
+            ]
+          }
+        },
+        {
+          "request": {
+            "messages": [
+              {
+                "user": "Quiero disputar un cargo de Cafe."
+              },
+              {
+                "agent": "Encontr\u00e9 varios cargos. Indica el n\u00famero del que quieres disputar:\n1. Cafe, 25.0000000000 USD, 2026-06-10 (TRX-REGRESSION)\n2. Cafe, 30.0000000000 USD, 2026-06-10 (TRX-CAFE-OTHER)"
+              },
+              {
+                "user": "El monto fue 25.00."
+              },
+              {
+                "agent": "Encontr\u00e9 este cargo: Cafe, 25.0000000000 USD, 2026-06-10 (ref. TRX-REGRESSION). \u00bfEs este el que quieres disputar? Responde s\u00ed para confirmar, o no para cancelar."
+              },
+              {
+                "user": "s\u00ed"
+              }
+            ],
+            "conversation_id": "f8eafd01-d115-41f7-8fb5-02cfd74374d8"
+          },
+          "status": 200,
+          "response": {
+            "conversation_id": "f8eafd01-d115-41f7-8fb5-02cfd74374d8",
+            "messages": [
+              {
+                "user": "Quiero disputar un cargo de Cafe."
+              },
+              {
+                "agent": "Encontr\u00e9 varios cargos. Indica el n\u00famero del que quieres disputar:\n1. Cafe, 25.0000000000 USD, 2026-06-10 (TRX-REGRESSION)\n2. Cafe, 30.0000000000 USD, 2026-06-10 (TRX-CAFE-OTHER)"
+              },
+              {
+                "user": "El monto fue 25.00."
+              },
+              {
+                "agent": "Encontr\u00e9 este cargo: Cafe, 25.0000000000 USD, 2026-06-10 (ref. TRX-REGRESSION). \u00bfEs este el que quieres disputar? Responde s\u00ed para confirmar, o no para cancelar."
+              },
+              {
+                "user": "s\u00ed"
+              },
+              {
+                "agent": "Seg\u00fan la pol\u00edtica (D09-eligible), puedo abrir el reclamo del cargo TRX-REGRESSION de forma autom\u00e1tica. \u00bfConfirmas que lo abra? Responde s\u00ed para confirmar, o no para cancelar."
+              }
+            ]
+          }
+        },
+        {
+          "request": {
+            "messages": [
+              {
+                "user": "Quiero disputar un cargo de Cafe."
+              },
+              {
+                "agent": "Encontr\u00e9 varios cargos. Indica el n\u00famero del que quieres disputar:\n1. Cafe, 25.0000000000 USD, 2026-06-10 (TRX-REGRESSION)\n2. Cafe, 30.0000000000 USD, 2026-06-10 (TRX-CAFE-OTHER)"
+              },
+              {
+                "user": "El monto fue 25.00."
+              },
+              {
+                "agent": "Encontr\u00e9 este cargo: Cafe, 25.0000000000 USD, 2026-06-10 (ref. TRX-REGRESSION). \u00bfEs este el que quieres disputar? Responde s\u00ed para confirmar, o no para cancelar."
+              },
+              {
+                "user": "s\u00ed"
+              },
+              {
+                "agent": "Seg\u00fan la pol\u00edtica (D09-eligible), puedo abrir el reclamo del cargo TRX-REGRESSION de forma autom\u00e1tica. \u00bfConfirmas que lo abra? Responde s\u00ed para confirmar, o no para cancelar."
+              },
+              {
+                "user": "s\u00ed"
+              }
+            ],
+            "conversation_id": "f8eafd01-d115-41f7-8fb5-02cfd74374d8"
+          },
+          "status": 200,
+          "response": {
+            "conversation_id": "f8eafd01-d115-41f7-8fb5-02cfd74374d8",
+            "messages": [
+              {
+                "user": "Quiero disputar un cargo de Cafe."
+              },
+              {
+                "agent": "Encontr\u00e9 varios cargos. Indica el n\u00famero del que quieres disputar:\n1. Cafe, 25.0000000000 USD, 2026-06-10 (TRX-REGRESSION)\n2. Cafe, 30.0000000000 USD, 2026-06-10 (TRX-CAFE-OTHER)"
+              },
+              {
+                "user": "El monto fue 25.00."
+              },
+              {
+                "agent": "Encontr\u00e9 este cargo: Cafe, 25.0000000000 USD, 2026-06-10 (ref. TRX-REGRESSION). \u00bfEs este el que quieres disputar? Responde s\u00ed para confirmar, o no para cancelar."
+              },
+              {
+                "user": "s\u00ed"
+              },
+              {
+                "agent": "Seg\u00fan la pol\u00edtica (D09-eligible), puedo abrir el reclamo del cargo TRX-REGRESSION de forma autom\u00e1tica. \u00bfConfirmas que lo abra? Responde s\u00ed para confirmar, o no para cancelar."
+              },
+              {
+                "user": "s\u00ed"
+              },
+              {
+                "agent": "Listo: abr\u00ed el reclamo DSP-73c8cc5a105c (regla D09-eligible). Te avisaremos del avance. \u00bfNecesitas algo m\u00e1s sobre este caso?"
+              }
+            ]
+          }
+        }
+      ],
+      "audit": [
+        {
+          "tool": "get_transactions",
+          "session_id": "test-session-0",
+          "customer_id": "CLI-REGRESSION",
+          "args_digest": "d25d9ad28bc895c6",
+          "outcome": "ok",
+          "reason": null,
+          "at": "2026-10-02 14:31:35.036497+00:00"
+        },
+        {
+          "tool": "get_transactions",
+          "session_id": "test-session-0",
+          "customer_id": "CLI-REGRESSION",
+          "args_digest": "a03a6bf0bf032aa0",
+          "outcome": "ok",
+          "reason": null,
+          "at": "2026-10-02 14:31:35.039424+00:00"
+        },
+        {
+          "tool": "evaluate_dispute",
+          "session_id": "test-session-0",
+          "customer_id": "CLI-REGRESSION",
+          "args_digest": "235be29a6c3e6cc9",
+          "outcome": "ok",
+          "reason": "D09-eligible",
+          "at": "2026-10-02 14:31:35.042089+00:00"
+        },
+        {
+          "tool": "open_dispute",
+          "session_id": "test-session-0",
+          "customer_id": "CLI-REGRESSION",
+          "args_digest": "df63309dcba28221",
+          "outcome": "ok",
+          "reason": null,
+          "at": "2026-10-02 14:31:35.043556+00:00"
+        },
+        {
+          "tool": "get_dispute",
+          "session_id": "test-session-0",
+          "customer_id": "CLI-REGRESSION",
+          "args_digest": "e596556288924fd6",
+          "outcome": "ok",
+          "reason": null,
+          "at": "2026-10-02 14:31:35.043570+00:00"
+        }
+      ],
+      "dispute": {
+        "dispute_id": "DSP-73c8cc5a105c",
+        "customer_id": "CLI-REGRESSION",
+        "transaction_id": "TRX-REGRESSION",
+        "reason": "unrecognized_charge",
+        "status": "open",
+        "created_at": "2026-10-02 14:31:35.043506+00:00"
+      }
+    },
+    {
+      "case_id": "dispute-policy-failure-retry-es",
+      "passed": true,
+      "reasons": [],
+      "responses": [
+        {
+          "request": {
+            "messages": [
+              {
+                "user": "Quiero disputar un cargo de 25.00 en Cafe."
+              }
+            ]
+          },
+          "status": 200,
+          "response": {
+            "conversation_id": "2dc8ff62-61fc-4a7b-b3dc-01c54ab3760e",
+            "messages": [
+              {
+                "user": "Quiero disputar un cargo de 25.00 en Cafe."
+              },
+              {
+                "agent": "Encontr\u00e9 este cargo: Cafe, 25.0000000000 USD, 2026-06-10 (ref. TRX-RETRY). \u00bfEs este el que quieres disputar? Responde s\u00ed para confirmar, o no para cancelar."
+              }
+            ]
+          }
+        },
+        {
+          "request": {
+            "messages": [
+              {
+                "user": "Quiero disputar un cargo de 25.00 en Cafe."
+              },
+              {
+                "agent": "Encontr\u00e9 este cargo: Cafe, 25.0000000000 USD, 2026-06-10 (ref. TRX-RETRY). \u00bfEs este el que quieres disputar? Responde s\u00ed para confirmar, o no para cancelar."
+              },
+              {
+                "user": "s\u00ed"
+              }
+            ],
+            "conversation_id": "2dc8ff62-61fc-4a7b-b3dc-01c54ab3760e"
+          },
+          "status": 502,
+          "response": {
+            "code": "tool_failure",
+            "message": "scripted transient failure",
+            "request_id": "308e8a70-aa4d-4423-994e-1b9e59031414"
+          }
+        },
+        {
+          "request": {
+            "messages": [
+              {
+                "user": "Quiero disputar un cargo de 25.00 en Cafe."
+              },
+              {
+                "agent": "Encontr\u00e9 este cargo: Cafe, 25.0000000000 USD, 2026-06-10 (ref. TRX-RETRY). \u00bfEs este el que quieres disputar? Responde s\u00ed para confirmar, o no para cancelar."
+              },
+              {
+                "user": "s\u00ed"
+              }
+            ],
+            "conversation_id": "2dc8ff62-61fc-4a7b-b3dc-01c54ab3760e"
+          },
+          "status": 200,
+          "response": {
+            "conversation_id": "2dc8ff62-61fc-4a7b-b3dc-01c54ab3760e",
+            "messages": [
+              {
+                "user": "Quiero disputar un cargo de 25.00 en Cafe."
+              },
+              {
+                "agent": "Encontr\u00e9 este cargo: Cafe, 25.0000000000 USD, 2026-06-10 (ref. TRX-RETRY). \u00bfEs este el que quieres disputar? Responde s\u00ed para confirmar, o no para cancelar."
+              },
+              {
+                "user": "s\u00ed"
+              },
+              {
+                "agent": "Seg\u00fan la pol\u00edtica (D09-eligible), puedo abrir el reclamo del cargo TRX-RETRY de forma autom\u00e1tica. \u00bfConfirmas que lo abra? Responde s\u00ed para confirmar, o no para cancelar."
+              }
+            ]
+          }
+        },
+        {
+          "request": {
+            "messages": [
+              {
+                "user": "Quiero disputar un cargo de 25.00 en Cafe."
+              },
+              {
+                "agent": "Encontr\u00e9 este cargo: Cafe, 25.0000000000 USD, 2026-06-10 (ref. TRX-RETRY). \u00bfEs este el que quieres disputar? Responde s\u00ed para confirmar, o no para cancelar."
+              },
+              {
+                "user": "s\u00ed"
+              },
+              {
+                "agent": "Seg\u00fan la pol\u00edtica (D09-eligible), puedo abrir el reclamo del cargo TRX-RETRY de forma autom\u00e1tica. \u00bfConfirmas que lo abra? Responde s\u00ed para confirmar, o no para cancelar."
+              },
+              {
+                "user": "s\u00ed"
+              }
+            ],
+            "conversation_id": "2dc8ff62-61fc-4a7b-b3dc-01c54ab3760e"
+          },
+          "status": 200,
+          "response": {
+            "conversation_id": "2dc8ff62-61fc-4a7b-b3dc-01c54ab3760e",
+            "messages": [
+              {
+                "user": "Quiero disputar un cargo de 25.00 en Cafe."
+              },
+              {
+                "agent": "Encontr\u00e9 este cargo: Cafe, 25.0000000000 USD, 2026-06-10 (ref. TRX-RETRY). \u00bfEs este el que quieres disputar? Responde s\u00ed para confirmar, o no para cancelar."
+              },
+              {
+                "user": "s\u00ed"
+              },
+              {
+                "agent": "Seg\u00fan la pol\u00edtica (D09-eligible), puedo abrir el reclamo del cargo TRX-RETRY de forma autom\u00e1tica. \u00bfConfirmas que lo abra? Responde s\u00ed para confirmar, o no para cancelar."
+              },
+              {
+                "user": "s\u00ed"
+              },
+              {
+                "agent": "Listo: abr\u00ed el reclamo DSP-4e48cd3f365c (regla D09-eligible). Te avisaremos del avance. \u00bfNecesitas algo m\u00e1s sobre este caso?"
+              }
+            ]
+          }
+        }
+      ],
+      "audit": [
+        {
+          "tool": "get_transactions",
+          "session_id": "test-session-0",
+          "customer_id": "CLI-REGRESSION",
+          "args_digest": "a03a6bf0bf032aa0",
+          "outcome": "ok",
+          "reason": null,
+          "at": "2026-10-02 14:31:35.053198+00:00"
+        },
+        {
+          "tool": "evaluate_dispute",
+          "session_id": "test-session-0",
+          "customer_id": "CLI-REGRESSION",
+          "args_digest": "9357319a57c7329b",
+          "outcome": "ok",
+          "reason": "D09-eligible",
+          "at": "2026-10-02 14:31:35.054590+00:00"
+        },
+        {
+          "tool": "open_dispute",
+          "session_id": "test-session-0",
+          "customer_id": "CLI-REGRESSION",
+          "args_digest": "b0fbb0f90e11e8cc",
+          "outcome": "ok",
+          "reason": null,
+          "at": "2026-10-02 14:31:35.054971+00:00"
+        },
+        {
+          "tool": "get_dispute",
+          "session_id": "test-session-0",
+          "customer_id": "CLI-REGRESSION",
+          "args_digest": "dcae6f837988e250",
+          "outcome": "ok",
+          "reason": null,
+          "at": "2026-10-02 14:31:35.054981+00:00"
+        }
+      ],
+      "dispute": {
+        "dispute_id": "DSP-4e48cd3f365c",
+        "customer_id": "CLI-REGRESSION",
+        "transaction_id": "TRX-RETRY",
+        "reason": "unrecognized_charge",
+        "status": "open",
+        "created_at": "2026-10-02 14:31:35.054957+00:00"
+      }
+    },
+    {
+      "case_id": "dispute-miss-retain-merchant-es",
+      "passed": false,
+      "reasons": [
+        "expected dispute missing"
+      ],
+      "responses": [
+        {
+          "request": {
+            "messages": [
+              {
+                "user": "Quiero disputar un cargo de 50.00 en Cafe."
+              }
+            ]
+          },
+          "status": 200,
+          "response": {
+            "conversation_id": "4bc8ec72-6c38-438c-85ee-def4ab60f392",
+            "messages": [
+              {
+                "user": "Quiero disputar un cargo de 50.00 en Cafe."
+              },
+              {
+                "agent": "No encontr\u00e9 un cargo que coincida. \u00bfPuedes darme el comercio, el monto o la fecha con m\u00e1s detalle?"
+              }
+            ]
+          }
+        },
+        {
+          "request": {
+            "messages": [
+              {
+                "user": "Quiero disputar un cargo de 50.00 en Cafe."
+              },
+              {
+                "agent": "No encontr\u00e9 un cargo que coincida. \u00bfPuedes darme el comercio, el monto o la fecha con m\u00e1s detalle?"
+              },
+              {
+                "user": "El monto fue 25.00."
+              }
+            ],
+            "conversation_id": "4bc8ec72-6c38-438c-85ee-def4ab60f392"
+          },
+          "status": 200,
+          "response": {
+            "conversation_id": "4bc8ec72-6c38-438c-85ee-def4ab60f392",
+            "messages": [
+              {
+                "user": "Quiero disputar un cargo de 50.00 en Cafe."
+              },
+              {
+                "agent": "No encontr\u00e9 un cargo que coincida. \u00bfPuedes darme el comercio, el monto o la fecha con m\u00e1s detalle?"
+              },
+              {
+                "user": "El monto fue 25.00."
+              },
+              {
+                "agent": "Encontr\u00e9 varios cargos. Indica el n\u00famero del que quieres disputar:\n1. Cafe, 25.0000000000 USD, 2026-06-10 (TRX-REGRESSION)\n2. Other, 25.0000000000 USD, 2026-06-10 (TRX-OTHER-MERCHANT)"
+              }
+            ]
+          }
+        },
+        {
+          "request": {
+            "messages": [
+              {
+                "user": "Quiero disputar un cargo de 50.00 en Cafe."
+              },
+              {
+                "agent": "No encontr\u00e9 un cargo que coincida. \u00bfPuedes darme el comercio, el monto o la fecha con m\u00e1s detalle?"
+              },
+              {
+                "user": "El monto fue 25.00."
+              },
+              {
+                "agent": "Encontr\u00e9 varios cargos. Indica el n\u00famero del que quieres disputar:\n1. Cafe, 25.0000000000 USD, 2026-06-10 (TRX-REGRESSION)\n2. Other, 25.0000000000 USD, 2026-06-10 (TRX-OTHER-MERCHANT)"
+              },
+              {
+                "user": "s\u00ed"
+              }
+            ],
+            "conversation_id": "4bc8ec72-6c38-438c-85ee-def4ab60f392"
+          },
+          "status": 200,
+          "response": {
+            "conversation_id": "4bc8ec72-6c38-438c-85ee-def4ab60f392",
+            "messages": [
+              {
+                "user": "Quiero disputar un cargo de 50.00 en Cafe."
+              },
+              {
+                "agent": "No encontr\u00e9 un cargo que coincida. \u00bfPuedes darme el comercio, el monto o la fecha con m\u00e1s detalle?"
+              },
+              {
+                "user": "El monto fue 25.00."
+              },
+              {
+                "agent": "Encontr\u00e9 varios cargos. Indica el n\u00famero del que quieres disputar:\n1. Cafe, 25.0000000000 USD, 2026-06-10 (TRX-REGRESSION)\n2. Other, 25.0000000000 USD, 2026-06-10 (TRX-OTHER-MERCHANT)"
+              },
+              {
+                "user": "s\u00ed"
+              },
+              {
+                "agent": "No logr\u00e9 identificar el cargo con claridad. Te derivo con un asesor. Referencia de traspaso: HO-f1ed064fc019."
+              }
+            ]
+          }
+        },
+        {
+          "request": {
+            "messages": [
+              {
+                "user": "Quiero disputar un cargo de 50.00 en Cafe."
+              },
+              {
+                "agent": "No encontr\u00e9 un cargo que coincida. \u00bfPuedes darme el comercio, el monto o la fecha con m\u00e1s detalle?"
+              },
+              {
+                "user": "El monto fue 25.00."
+              },
+              {
+                "agent": "Encontr\u00e9 varios cargos. Indica el n\u00famero del que quieres disputar:\n1. Cafe, 25.0000000000 USD, 2026-06-10 (TRX-REGRESSION)\n2. Other, 25.0000000000 USD, 2026-06-10 (TRX-OTHER-MERCHANT)"
+              },
+              {
+                "user": "s\u00ed"
+              },
+              {
+                "agent": "No logr\u00e9 identificar el cargo con claridad. Te derivo con un asesor. Referencia de traspaso: HO-f1ed064fc019."
+              },
+              {
+                "user": "s\u00ed"
+              }
+            ],
+            "conversation_id": "4bc8ec72-6c38-438c-85ee-def4ab60f392"
+          },
+          "status": 200,
+          "response": {
+            "conversation_id": "4bc8ec72-6c38-438c-85ee-def4ab60f392",
+            "messages": [
+              {
+                "user": "Quiero disputar un cargo de 50.00 en Cafe."
+              },
+              {
+                "agent": "No encontr\u00e9 un cargo que coincida. \u00bfPuedes darme el comercio, el monto o la fecha con m\u00e1s detalle?"
+              },
+              {
+                "user": "El monto fue 25.00."
+              },
+              {
+                "agent": "Encontr\u00e9 varios cargos. Indica el n\u00famero del que quieres disputar:\n1. Cafe, 25.0000000000 USD, 2026-06-10 (TRX-REGRESSION)\n2. Other, 25.0000000000 USD, 2026-06-10 (TRX-OTHER-MERCHANT)"
+              },
+              {
+                "user": "s\u00ed"
+              },
+              {
+                "agent": "No logr\u00e9 identificar el cargo con claridad. Te derivo con un asesor. Referencia de traspaso: HO-f1ed064fc019."
+              },
+              {
+                "user": "s\u00ed"
+              },
+              {
+                "agent": "Esta conversaci\u00f3n ya termin\u00f3. Si necesitas otro reclamo, inicia una conversaci\u00f3n nueva."
+              }
+            ]
+          }
+        }
+      ],
+      "audit": [
+        {
+          "tool": "get_transactions",
+          "session_id": "test-session-0",
+          "customer_id": "CLI-REGRESSION",
+          "args_digest": "98c7136ba343154a",
+          "outcome": "ok",
+          "reason": null,
+          "at": "2026-10-02 14:31:35.062394+00:00"
+        },
+        {
+          "tool": "get_transactions",
+          "session_id": "test-session-0",
+          "customer_id": "CLI-REGRESSION",
+          "args_digest": "3fbcb3b12e99fc31",
+          "outcome": "ok",
+          "reason": null,
+          "at": "2026-10-02 14:31:35.063784+00:00"
+        },
+        {
+          "tool": "get_transactions",
+          "session_id": "test-session-0",
+          "customer_id": "CLI-REGRESSION",
+          "args_digest": "3fbcb3b12e99fc31",
+          "outcome": "ok",
+          "reason": null,
+          "at": "2026-10-02 14:31:35.064515+00:00"
+        },
+        {
+          "tool": "create_handoff",
+          "session_id": "test-session-0",
+          "customer_id": "CLI-REGRESSION",
+          "args_digest": "809dbe8230986c5b",
+          "outcome": "ok",
+          "reason": null,
+          "at": "2026-10-02 14:31:35.064956+00:00"
+        }
+      ],
+      "dispute": null
+    }
+  ]
+}

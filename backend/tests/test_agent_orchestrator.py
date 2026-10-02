@@ -349,3 +349,45 @@ def test_copy_store_does_not_commit_failed_mutations():
     copy.messages.append(("user", "failed turn"))
     unchanged = store.get(state.conversation_id)
     assert unchanged is not None and unchanged.messages == []
+
+
+async def test_search_miss_keeps_filters_when_amount_is_corrected():
+    from datetime import date
+
+    from evals.fixtures import FixtureBank
+
+    bank = FixtureBank([_txn(), _txn(transaction_id="T2", merchant="Other")])
+    ctx = ToolContext(session=_valid(), db=bank, cases=InMemoryCasesBackend())  # type: ignore[arg-type]
+    state = _state()
+    first = _details(amount=Decimal("50"), date_from=date(2026, 6, 1), date_to=date(2026, 6, 15))
+    llm = FakeLLM([first, _details(merchant=None, amount=Decimal("25"))])
+    try:
+        state, reply = await run_turn(state, "Cafe, 50", ctx, llm)  # type: ignore[arg-type]
+        assert "No encontré" in reply
+        assert state.search_details == first
+        state, reply = await run_turn(state, "Era de 25", ctx, llm)  # type: ignore[arg-type]
+        assert state.phase == Phase.CONFIRM_TXN
+        assert state.selected_txn_id == "T1"
+        assert state.search_details.merchant == "Cafe"
+        assert state.search_details.date_from == first.date_from
+        assert state.search_details.date_to == first.date_to
+        assert state.search_details.amount == Decimal("25")
+    finally:
+        bank.close()
+
+
+async def test_missing_merchant_does_not_select_another_merchant_on_amount_followup():
+    from evals.fixtures import FixtureBank
+
+    bank = FixtureBank([_txn(merchant="Other")])
+    ctx = ToolContext(session=_valid(), db=bank, cases=InMemoryCasesBackend())  # type: ignore[arg-type]
+    llm = FakeLLM([_details(amount=None), _details(merchant=None, amount=Decimal("25"))])
+    try:
+        state, _ = await run_turn(_state(), "Un cargo de Cafe", ctx, llm)  # type: ignore[arg-type]
+        state, reply = await run_turn(state, "Era de 25", ctx, llm)  # type: ignore[arg-type]
+        assert state.phase == Phase.CLARIFY
+        assert state.selected_txn_id is None
+        assert "No encontré" in reply
+        assert all(row.tool != "open_dispute" for row in ctx.cases.list_audit())
+    finally:
+        bank.close()
