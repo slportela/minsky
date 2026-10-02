@@ -1,12 +1,12 @@
 {
   "mode": "offline-scripted",
   "model": "scripted-regression",
-  "git_sha": "165b8287cbad161975f90ce5d5e72d51390b8183",
+  "git_sha": "213b4d426971786805fc1838444ff88959472d54",
   "cases": {
     "dispute-auth-header-denied-es": "b10524b0f6773415ad6b2e0da58ac0edae8f1dbf7dd8d47c818b4d9df47ea695",
     "dispute-clarify-retain-merchant-es": "a028c06a55fdaca5cf4f56185b6e01efd2d4ac0c1a49ce74d46118566d0e8fa6",
     "dispute-policy-failure-retry-es": "48a7ce01aa24e71668d3d00c95447ba28d0603ec75a0c78695f599bd42faff7a",
-    "dispute-miss-retain-merchant-es": "105558106bc8e8ad0dc52b931045d9b8e8f97a9fb4aa6d2bd225a002f2f63d4e"
+    "dispute-miss-retain-merchant-es": "1ff1c6f3b791adf6c71be683307cab565c00813100ceafe7216d15fdeeb17df0"
   },
   "trials_per_case": 1,
   "database": "isolated SQLite (not PostgreSQL)",
@@ -28,7 +28,7 @@
           "response": {
             "code": "missing_credentials",
             "message": "test session credential is missing, invalid, or expired",
-            "request_id": "1a570bf3-12c9-4080-9abe-101de6fc99a0"
+            "request_id": "2f712882-3788-48fe-92a6-6285c93e9ffd"
           }
         }
       ],
@@ -50,7 +50,7 @@
           },
           "status": 200,
           "response": {
-            "conversation_id": "3b4b27ad-174b-43bd-9acf-6b4907ba8603",
+            "conversation_id": "be7af2f4-22fe-4a36-bb77-b27dd5b9f552",
             "messages": [
               {
                 "user": "Quiero disputar un cargo de Cafe."
@@ -74,11 +74,11 @@
                 "user": "El monto fue 25.00."
               }
             ],
-            "conversation_id": "3b4b27ad-174b-43bd-9acf-6b4907ba8603"
+            "conversation_id": "be7af2f4-22fe-4a36-bb77-b27dd5b9f552"
           },
           "status": 200,
           "response": {
-            "conversation_id": "3b4b27ad-174b-43bd-9acf-6b4907ba8603",
+            "conversation_id": "be7af2f4-22fe-4a36-bb77-b27dd5b9f552",
             "messages": [
               {
                 "user": "Quiero disputar un cargo de Cafe."
@@ -114,11 +114,11 @@
                 "user": "s\u00ed"
               }
             ],
-            "conversation_id": "3b4b27ad-174b-43bd-9acf-6b4907ba8603"
+            "conversation_id": "be7af2f4-22fe-4a36-bb77-b27dd5b9f552"
           },
           "status": 200,
           "response": {
-            "conversation_id": "3b4b27ad-174b-43bd-9acf-6b4907ba8603",
+            "conversation_id": "be7af2f4-22fe-4a36-bb77-b27dd5b9f552",
             "messages": [
               {
                 "user": "Quiero disputar un cargo de Cafe."
@@ -166,11 +166,11 @@
                 "user": "s\u00ed"
               }
             ],
-            "conversation_id": "3b4b27ad-174b-43bd-9acf-6b4907ba8603"
+            "conversation_id": "be7af2f4-22fe-4a36-bb77-b27dd5b9f552"
           },
           "status": 200,
           "response": {
-            "conversation_id": "3b4b27ad-174b-43bd-9acf-6b4907ba8603",
+            "conversation_id": "be7af2f4-22fe-4a36-bb77-b27dd5b9f552",
             "messages": [
               {
                 "user": "Quiero disputar un cargo de Cafe."
@@ -194,7 +194,7 @@
                 "user": "s\u00ed"
               },
               {
-                "agent": "Listo: abr\u00ed el reclamo DSP-b771564e3d26 (regla D09-eligible). Te avisaremos del avance. \u00bfNecesitas algo m\u00e1s sobre este caso?"
+                "agent": "Listo: abr\u00ed el reclamo DSP-ba2e9d7e5a70 (regla D09-eligible). Te avisaremos del avance. \u00bfNecesitas algo m\u00e1s sobre este caso?"
               }
             ]
           }
@@ -208,7 +208,7 @@
           "args_digest": "d25d9ad28bc895c6",
           "outcome": "ok",
           "reason": null,
-          "at": "2026-10-02 14:32:01.468737+00:00"
+          "at": "2026-10-02 14:33:43.810486+00:00"
         },
         {
           "tool": "get_transactions",
@@ -217,7 +217,7 @@
           "args_digest": "a03a6bf0bf032aa0",
           "outcome": "ok",
           "reason": null,
-          "at": "2026-10-02 14:32:01.470753+00:00"
+          "at": "2026-10-02 14:33:43.812625+00:00"
         },
         {
           "tool": "evaluate_dispute",
@@ -226,7 +226,7 @@
           "args_digest": "235be29a6c3e6cc9",
           "outcome": "ok",
           "reason": "D09-eligible",
-          "at": "2026-10-02 14:32:01.473215+00:00"
+          "at": "2026-10-02 14:33:43.815035+00:00"
         },
         {
           "tool": "open_dispute",
@@ -235,25 +235,25 @@
           "args_digest": "df63309dcba28221",
           "outcome": "ok",
           "reason": null,
-          "at": "2026-10-02 14:32:01.474066+00:00"
+          "at": "2026-10-02 14:33:43.815895+00:00"
         },
         {
           "tool": "get_dispute",
           "session_id": "test-session-0",
           "customer_id": "CLI-REGRESSION",
-          "args_digest": "fcd76bb78b9c4af5",
+          "args_digest": "86c8408971b5681d",
           "outcome": "ok",
           "reason": null,
-          "at": "2026-10-02 14:32:01.474079+00:00"
+          "at": "2026-10-02 14:33:43.815907+00:00"
         }
       ],
       "dispute": {
-        "dispute_id": "DSP-b771564e3d26",
+        "dispute_id": "DSP-ba2e9d7e5a70",
         "customer_id": "CLI-REGRESSION",
         "transaction_id": "TRX-REGRESSION",
         "reason": "unrecognized_charge",
         "status": "open",
-        "created_at": "2026-10-02 14:32:01.474034+00:00"
+        "created_at": "2026-10-02 14:33:43.815864+00:00"
       }
     },
     {
@@ -271,7 +271,7 @@
           },
           "status": 200,
           "response": {
-            "conversation_id": "278726e5-ca9d-4857-a63c-1caa13135e40",
+            "conversation_id": "2dddd3ed-a09c-4f4d-ac04-0cf715e5e43b",
             "messages": [
               {
                 "user": "Quiero disputar un cargo de 25.00 en Cafe."
@@ -295,13 +295,13 @@
                 "user": "s\u00ed"
               }
             ],
-            "conversation_id": "278726e5-ca9d-4857-a63c-1caa13135e40"
+            "conversation_id": "2dddd3ed-a09c-4f4d-ac04-0cf715e5e43b"
           },
           "status": 502,
           "response": {
             "code": "tool_failure",
             "message": "scripted transient failure",
-            "request_id": "957c03fb-ecd1-479f-aee0-7128b816d527"
+            "request_id": "decf3438-990a-4458-aea8-b30331c0ed36"
           }
         },
         {
@@ -317,11 +317,11 @@
                 "user": "s\u00ed"
               }
             ],
-            "conversation_id": "278726e5-ca9d-4857-a63c-1caa13135e40"
+            "conversation_id": "2dddd3ed-a09c-4f4d-ac04-0cf715e5e43b"
           },
           "status": 200,
           "response": {
-            "conversation_id": "278726e5-ca9d-4857-a63c-1caa13135e40",
+            "conversation_id": "2dddd3ed-a09c-4f4d-ac04-0cf715e5e43b",
             "messages": [
               {
                 "user": "Quiero disputar un cargo de 25.00 en Cafe."
@@ -357,11 +357,11 @@
                 "user": "s\u00ed"
               }
             ],
-            "conversation_id": "278726e5-ca9d-4857-a63c-1caa13135e40"
+            "conversation_id": "2dddd3ed-a09c-4f4d-ac04-0cf715e5e43b"
           },
           "status": 200,
           "response": {
-            "conversation_id": "278726e5-ca9d-4857-a63c-1caa13135e40",
+            "conversation_id": "2dddd3ed-a09c-4f4d-ac04-0cf715e5e43b",
             "messages": [
               {
                 "user": "Quiero disputar un cargo de 25.00 en Cafe."
@@ -379,7 +379,7 @@
                 "user": "s\u00ed"
               },
               {
-                "agent": "Listo: abr\u00ed el reclamo DSP-3ae0b289b5eb (regla D09-eligible). Te avisaremos del avance. \u00bfNecesitas algo m\u00e1s sobre este caso?"
+                "agent": "Listo: abr\u00ed el reclamo DSP-41ac427f2ca6 (regla D09-eligible). Te avisaremos del avance. \u00bfNecesitas algo m\u00e1s sobre este caso?"
               }
             ]
           }
@@ -393,7 +393,7 @@
           "args_digest": "a03a6bf0bf032aa0",
           "outcome": "ok",
           "reason": null,
-          "at": "2026-10-02 14:32:01.480488+00:00"
+          "at": "2026-10-02 14:33:43.822302+00:00"
         },
         {
           "tool": "evaluate_dispute",
@@ -402,7 +402,7 @@
           "args_digest": "9357319a57c7329b",
           "outcome": "ok",
           "reason": "D09-eligible",
-          "at": "2026-10-02 14:32:01.481561+00:00"
+          "at": "2026-10-02 14:33:43.823377+00:00"
         },
         {
           "tool": "open_dispute",
@@ -411,25 +411,25 @@
           "args_digest": "b0fbb0f90e11e8cc",
           "outcome": "ok",
           "reason": null,
-          "at": "2026-10-02 14:32:01.481912+00:00"
+          "at": "2026-10-02 14:33:43.823738+00:00"
         },
         {
           "tool": "get_dispute",
           "session_id": "test-session-0",
           "customer_id": "CLI-REGRESSION",
-          "args_digest": "49029bdae9126d8d",
+          "args_digest": "80c1ef83691cfa14",
           "outcome": "ok",
           "reason": null,
-          "at": "2026-10-02 14:32:01.481921+00:00"
+          "at": "2026-10-02 14:33:43.823748+00:00"
         }
       ],
       "dispute": {
-        "dispute_id": "DSP-3ae0b289b5eb",
+        "dispute_id": "DSP-41ac427f2ca6",
         "customer_id": "CLI-REGRESSION",
         "transaction_id": "TRX-RETRY",
         "reason": "unrecognized_charge",
         "status": "open",
-        "created_at": "2026-10-02 14:32:01.481901+00:00"
+        "created_at": "2026-10-02 14:33:43.823726+00:00"
       }
     },
     {
@@ -447,7 +447,7 @@
           },
           "status": 200,
           "response": {
-            "conversation_id": "62c8eb85-56f6-4750-a3b1-9298eb0b863b",
+            "conversation_id": "523150f3-8c99-4a75-aa3b-ca4fe3156653",
             "messages": [
               {
                 "user": "Quiero disputar un cargo de 50.00 en Cafe."
@@ -471,11 +471,11 @@
                 "user": "El monto fue 25.00."
               }
             ],
-            "conversation_id": "62c8eb85-56f6-4750-a3b1-9298eb0b863b"
+            "conversation_id": "523150f3-8c99-4a75-aa3b-ca4fe3156653"
           },
           "status": 200,
           "response": {
-            "conversation_id": "62c8eb85-56f6-4750-a3b1-9298eb0b863b",
+            "conversation_id": "523150f3-8c99-4a75-aa3b-ca4fe3156653",
             "messages": [
               {
                 "user": "Quiero disputar un cargo de 50.00 en Cafe."
@@ -511,11 +511,11 @@
                 "user": "s\u00ed"
               }
             ],
-            "conversation_id": "62c8eb85-56f6-4750-a3b1-9298eb0b863b"
+            "conversation_id": "523150f3-8c99-4a75-aa3b-ca4fe3156653"
           },
           "status": 200,
           "response": {
-            "conversation_id": "62c8eb85-56f6-4750-a3b1-9298eb0b863b",
+            "conversation_id": "523150f3-8c99-4a75-aa3b-ca4fe3156653",
             "messages": [
               {
                 "user": "Quiero disputar un cargo de 50.00 en Cafe."
@@ -563,11 +563,11 @@
                 "user": "s\u00ed"
               }
             ],
-            "conversation_id": "62c8eb85-56f6-4750-a3b1-9298eb0b863b"
+            "conversation_id": "523150f3-8c99-4a75-aa3b-ca4fe3156653"
           },
           "status": 200,
           "response": {
-            "conversation_id": "62c8eb85-56f6-4750-a3b1-9298eb0b863b",
+            "conversation_id": "523150f3-8c99-4a75-aa3b-ca4fe3156653",
             "messages": [
               {
                 "user": "Quiero disputar un cargo de 50.00 en Cafe."
@@ -591,7 +591,7 @@
                 "user": "s\u00ed"
               },
               {
-                "agent": "Listo: abr\u00ed el reclamo DSP-817e5a16a277 (regla D09-eligible). Te avisaremos del avance. \u00bfNecesitas algo m\u00e1s sobre este caso?"
+                "agent": "Listo: abr\u00ed el reclamo DSP-bca719c3e1e6 (regla D09-eligible). Te avisaremos del avance. \u00bfNecesitas algo m\u00e1s sobre este caso?"
               }
             ]
           }
@@ -605,7 +605,7 @@
           "args_digest": "98c7136ba343154a",
           "outcome": "ok",
           "reason": null,
-          "at": "2026-10-02 14:32:01.487924+00:00"
+          "at": "2026-10-02 14:33:43.829614+00:00"
         },
         {
           "tool": "get_transactions",
@@ -614,7 +614,7 @@
           "args_digest": "a03a6bf0bf032aa0",
           "outcome": "ok",
           "reason": null,
-          "at": "2026-10-02 14:32:01.488960+00:00"
+          "at": "2026-10-02 14:33:43.830655+00:00"
         },
         {
           "tool": "evaluate_dispute",
@@ -623,7 +623,7 @@
           "args_digest": "235be29a6c3e6cc9",
           "outcome": "ok",
           "reason": "D09-eligible",
-          "at": "2026-10-02 14:32:01.489724+00:00"
+          "at": "2026-10-02 14:33:43.831328+00:00"
         },
         {
           "tool": "open_dispute",
@@ -632,25 +632,25 @@
           "args_digest": "df63309dcba28221",
           "outcome": "ok",
           "reason": null,
-          "at": "2026-10-02 14:32:01.490186+00:00"
+          "at": "2026-10-02 14:33:43.831703+00:00"
         },
         {
           "tool": "get_dispute",
           "session_id": "test-session-0",
           "customer_id": "CLI-REGRESSION",
-          "args_digest": "1628fbc545160644",
+          "args_digest": "9d2546bf17cdec0b",
           "outcome": "ok",
           "reason": null,
-          "at": "2026-10-02 14:32:01.490196+00:00"
+          "at": "2026-10-02 14:33:43.831712+00:00"
         }
       ],
       "dispute": {
-        "dispute_id": "DSP-817e5a16a277",
+        "dispute_id": "DSP-bca719c3e1e6",
         "customer_id": "CLI-REGRESSION",
         "transaction_id": "TRX-REGRESSION",
         "reason": "unrecognized_charge",
         "status": "open",
-        "created_at": "2026-10-02 14:32:01.490172+00:00"
+        "created_at": "2026-10-02 14:33:43.831692+00:00"
       }
     }
   ]
