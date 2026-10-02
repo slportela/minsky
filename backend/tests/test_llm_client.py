@@ -1,11 +1,14 @@
 import asyncio
 import json
+import re
+from decimal import Decimal
 
 import httpx2
 import pytest
 from openai import AsyncOpenAI
 from pydantic import BaseModel, SecretStr, ValidationError
 
+from minsky_api.agent.extract import DisputeDetails
 from minsky_api.config import Settings
 from minsky_api.llm.client import LLM, LLMNotConfiguredError, ModelMismatchError, model_matches
 
@@ -98,6 +101,25 @@ def test_structured_output_is_parsed_into_the_schema():
     result = asyncio.run(llm.respond("Classify.", [{"role": "user", "content": "no reconozco"}], schema=Reason))
     assert result.parsed == Reason(reason="unrecognized", confident=True)
     assert sent[0]["text"]["format"]["type"] == "json_schema"
+
+
+def test_dispute_amount_schema_is_provider_compatible_and_preserves_cents():
+    sent: list[dict] = []
+    details = DisputeDetails(amount=Decimal("25.37"), merchant="Cafe")
+    llm = _llm(_response(details.model_dump_json()), sent)
+    result = asyncio.run(llm.respond("Extract.", [{"role": "user", "content": "Cafe 25.37"}], schema=DisputeDetails))
+    assert result.parsed is not None
+    assert result.parsed.amount == Decimal("25.37")
+    amount_schema = sent[0]["text"]["format"]["schema"]["properties"]["amount"]
+    assert "(?" not in json.dumps(amount_schema)
+    string_branch = next(branch for branch in amount_schema["anyOf"] if branch.get("type") == "string")
+    assert re.fullmatch(string_branch["pattern"], "25.37")
+    assert re.fullmatch(string_branch["pattern"], "25.00 USD") is None
+
+
+def test_dispute_amount_still_rejects_non_numeric_values():
+    with pytest.raises(ValidationError):
+        DisputeDetails.model_validate({"amount": "not-a-number"})
 
 
 @pytest.mark.parametrize("key", [None, "", "   "])

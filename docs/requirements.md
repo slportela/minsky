@@ -8,9 +8,9 @@ Status: ✅ done · 🟡 partial · ⬜ planned · ⚠️ risk or gap
 
 | ID | Requirement | Our answer | Where | Status |
 |---|---|---|---|---|
-| S1 | Working AI-first customer-service system, not a chatbot (PS, KO) | Dispute intake: understand → decide → act → verify → escalate | `solution.md`, `backend/agent`, `backend/api` | 🟡 orchestrator + HTTP API; integrated live smoke pending |
+| S1 | Working AI-first customer-service system, not a chatbot (PS, KO) | Dispute intake: understand → decide → act → verify → escalate | `solution.md`, `backend/agent`, `backend/api` | 🟡 local browser/model/PostgreSQL smoke verified; deployed smoke pending |
 | S2 | One coherent workflow; more workflows earn nothing (PS) | Transaction-dispute intake | ADR 0005 | ✅ |
-| S3 | Normal resolution path (PS, KO) | Rule D09: automatic intake with confirmation | `dispute_policy.md`, `backend/agent` | 🟡 D09 confirmation + verified open; live evaluation pending |
+| S3 | Normal resolution path (PS, KO) | Rule D09: automatic intake with confirmation | `dispute_policy.md`, `backend/agent` | 🟡 D09 verified in live dev L2 + local browser; held-out evaluation pending |
 | S4 | Ambiguous or unsupported request (PS, KO) | Several candidate transactions → clarify; out of scope → abstain | `solution.md`, `backend/agent` | 🟡 clarify with accumulated filters and out-of-scope handoff; live evaluation pending |
 | S5 | Case requiring a human (PS, KO) | D06 fraud, D07 above limit, D08 repeat complainer → structured handoff | `dispute_policy.md`, `backend/agent` | 🟡 fraud/agent handoff implemented; complete payload + console pending |
 | S6 | Interactions in Spanish **and Portuguese**; report language and data limitations (PS, KO) | es + pt suites; Portuguese is generated and labeled; limitation stated | `evals.md`, `known_issues.md` | ⚠️ Spanish replies only; Portuguese implementation pending; no pt source data |
@@ -27,7 +27,7 @@ Status: ✅ done · 🟡 partial · ⬜ planned · ⚠️ risk or gap
 | P1.1 | Analyze contact reasons, demand patterns, data quality, operational constraints | Data quality vs. the dictionary; dispute volume, backlog, resolution time, SLA breach and first-contact resolution | `known_issues.md`, `disputes_findings.md` | 🟡 quality and dispute evidence done; demand patterns pending |
 | P1.2 | Use the evidence to prioritize the workflow and define customer and business outcomes | Disputes are 40 % of complaints, 70 % still open, 15-16 days to resolve, ~20 % SLA breach; outcomes in `solution.md` | ADR 0005, `disputes_findings.md` | 🟡 evidence done; ADR 0005 to cite it |
 | P2.1 | Maintain conversational context | Orchestrator state per conversation (`ConversationStore` + phases) | `backend/agent` | 🟡 isolated state, serialized turns, recoverable retries; process-local only |
-| P2.2 | Clarify ambiguity | Clarify with customer-owned candidates (merchant, amount, date, transaction ref; no full card number) | `solution.md`, `backend/agent` | 🟡 filters retained after empty/multiple matches; new id/reset starts a search; live evaluation pending |
+| P2.2 | Clarify ambiguity | Clarify with customer-owned candidates (merchant, amount, date, transaction ref; no full card number) | `solution.md`, `backend/agent` | 🟡 filters retained after empty/multiple matches; live dev regressions 3/3 each; held-out evaluation pending |
 | P2.3 | Ground answers in permitted account, transaction or policy information | Read models in Postgres `bank.*`; tools scoped to the session; output grounding check | `read_models.md`, `backend/tools`, `guardrails` | 🟡 read models done |
 | P2.4 | Use tools when they serve the workflow; report only verified outcomes | Read-back after every write in orchestrator | AGENTS rule 2, `backend/agent` | 🟡 |
 | P3.1 | Define what it answers, what needs confirmation, when to abstain or transfer | Policy D01-D09; confirmation for dispute and card block | `dispute_policy.md` | 🟡 |
