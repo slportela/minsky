@@ -41,7 +41,7 @@ Status: ✅ done · 🟡 partial · ⬜ planned · ⚠️ risk or gap
 | P5.1 | Evaluate on held-out cases | Locked test split | `evals.md` | 🟡 harness partial |
 | P5.2 | Cover incorrect or missing data, expired sessions, unauthorized access, prompt injection, tool failures, multilingual ambiguity | Red-team and failure suites; fault injection in cases | `evals/schema.py` | 🟡 schema supports it |
 | P5.3 | Report successes, unsafe outcomes, handoff behavior, latency and cost, with sample sizes and limitations | Metrics module; report template | `evals/metrics.py` | 🟡 |
-| P6.1 | Tracing, bounded retries, safe fallback, reproducible setup | OpenTelemetry + trace/audit tables (ADR 0007); retries with jitter; degraded mode = handoff; `make up` | `architecture.md`, `backend/agent`, `backend/api` | 🟡 turn/clarification limits and retry recovery; OTel + safe fallback pending |
+| P6.1 | Tracing, bounded retries, safe fallback, reproducible setup | OpenTelemetry + trace/audit tables (ADR 0007); retries with jitter; degraded mode = handoff; `make up` | `architecture.md`, `backend/agent`, `backend/api`, `backend/README.md` | 🟡 turn/clarification limits, retry recovery, explicit local dotenv loading; OTel + safe fallback pending |
 | P6.2 | Explain capacity limits, monitoring, access controls, data retention, remaining deployment work | Workload tiers derived from the dataset; Bedrock quotas as the binding limit; architecture and mapping docs | `architecture.md`, `poc_to_prod.md` | 🟡 design |
 | P6.3 | Explanations from sources, policy rules and execution records; not chain of thought | Rule ids + tool results + traces | `dispute_policy.md` | 🟡 |
 
