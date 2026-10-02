@@ -1,0 +1,133 @@
+{
+  "state": {
+    "dispute": null,
+    "card_block": null
+  },
+  "audit": [
+    {
+      "tool": "get_transaction",
+      "session_id": "test-session-3",
+      "customer_id": "CLI-LZ96YLC3QY99",
+      "args_digest": "4715fad109f8435d",
+      "outcome": "ok",
+      "reason": null,
+      "at": "2026-10-02T17:52:37.576602Z"
+    },
+    {
+      "tool": "evaluate_dispute",
+      "session_id": "test-session-3",
+      "customer_id": "CLI-LZ96YLC3QY99",
+      "args_digest": "3b226a099321433a",
+      "outcome": "ok",
+      "reason": "D09-eligible",
+      "at": "2026-10-02T17:52:58.316098Z"
+    },
+    {
+      "tool": "open_dispute",
+      "session_id": "test-session-3",
+      "customer_id": "CLI-LZ96YLC3QY99",
+      "args_digest": "39c93737ebdb8392",
+      "outcome": "ok",
+      "reason": null,
+      "at": "2026-10-02T17:53:02.886023Z"
+    },
+    {
+      "tool": "get_dispute",
+      "session_id": "test-session-3",
+      "customer_id": "CLI-LZ96YLC3QY99",
+      "args_digest": "4651744dc4c74c8b",
+      "outcome": "ok",
+      "reason": null,
+      "at": "2026-10-02T17:53:02.886106Z"
+    },
+    {
+      "tool": "get_transaction",
+      "session_id": "test-session-0",
+      "customer_id": "CLI-V4VLZU6VJNC3",
+      "args_digest": "99e1931c779241f8",
+      "outcome": "ok",
+      "reason": null,
+      "at": "2026-10-02T17:54:15.020407Z"
+    },
+    {
+      "tool": "evaluate_dispute",
+      "session_id": "test-session-0",
+      "customer_id": "CLI-V4VLZU6VJNC3",
+      "args_digest": "46910300437f5258",
+      "outcome": "ok",
+      "reason": "D07-above-auto-limit",
+      "at": "2026-10-02T17:54:31.652007Z"
+    },
+    {
+      "tool": "create_handoff",
+      "session_id": "test-session-0",
+      "customer_id": "CLI-V4VLZU6VJNC3",
+      "args_digest": "7233945834efd1fb",
+      "outcome": "ok",
+      "reason": null,
+      "at": "2026-10-02T17:54:31.652613Z"
+    },
+    {
+      "tool": "get_transaction",
+      "session_id": "test-session-7",
+      "customer_id": "CLI-LZ96YLC3QY99",
+      "args_digest": "1e8826fdc1b9d05d",
+      "outcome": "denied",
+      "reason": "not_owner",
+      "at": "2026-10-02T17:55:02.418814Z"
+    },
+    {
+      "tool": "get_transaction",
+      "session_id": "test-session-6",
+      "customer_id": "CLI-YZ9RYO1YFMRT",
+      "args_digest": "1e8826fdc1b9d05d",
+      "outcome": "ok",
+      "reason": null,
+      "at": "2026-10-02T17:56:23.042570Z"
+    },
+    {
+      "tool": "evaluate_dispute",
+      "session_id": "test-session-6",
+      "customer_id": "CLI-YZ9RYO1YFMRT",
+      "args_digest": "a611d3f514abd7e4",
+      "outcome": "ok",
+      "reason": "D06-possible-fraud",
+      "at": "2026-10-02T17:56:27.171249Z"
+    },
+    {
+      "tool": "create_handoff",
+      "session_id": "test-session-6",
+      "customer_id": "CLI-YZ9RYO1YFMRT",
+      "args_digest": "5a191b69f76a47e9",
+      "outcome": "ok",
+      "reason": null,
+      "at": "2026-10-02T17:56:37.266452Z"
+    }
+  ],
+  "handoffs": [
+    {
+      "handoff_id": "HO-76006f4351b8",
+      "customer_id": "CLI-YZ9RYO1YFMRT",
+      "reason": "possible_fraud_no_block",
+      "rule_id": "D06-possible-fraud",
+      "facts": {
+        "transaction_id": "TRX-3FGVLQL3A51PULS4SE8S",
+        "route": "escalate_fraud"
+      },
+      "actions": [],
+      "created_at": "2026-10-02T17:56:37.266204Z"
+    },
+    {
+      "handoff_id": "HO-88b41a577735",
+      "customer_id": "CLI-V4VLZU6VJNC3",
+      "reason": "policy_escalate_agent",
+      "rule_id": "D07-above-auto-limit",
+      "facts": {
+        "transaction_id": "TRX-0XVX8973SXVDQ0VM2IWB",
+        "route": "escalate_agent"
+      },
+      "actions": [],
+      "created_at": "2026-10-02T17:54:31.652183Z"
+    }
+  ]
+}

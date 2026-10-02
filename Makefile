@@ -7,7 +7,9 @@ PROFILE    := $(shell grep '^BRONZE_AWS_PROFILE=' .env 2>/dev/null | cut -d= -f2
 LAKE_URI   := $(patsubst %/bronze,%,$(BRONZE_URI))
 AWS        := AWS_PROFILE=$(PROFILE) aws
 
-.PHONY: help setup lock-check lint typecheck test llm-smoke frontend-check eval-check ci up down logs demo-plan demo-apply pipeline bronze mirror silver gold publish docs
+.PHONY: help setup lock-check lint typecheck test llm-smoke regression-smoke eval-smoke eval-live-estimate frontend-check eval-check ci up down logs demo-plan demo-apply pipeline bronze mirror silver gold publish docs
+
+EVAL_CAP_USD ?= 1
 
 # ---- Development ---------------------------------------------------------------------------
 
@@ -39,6 +41,12 @@ llm-smoke:  ## one real call to the configured model (MINSKY_LLM_* in .env): key
 eval-check:  ## validate every eval case and the case set (schema, leakage, coverage)
 	uv run python -m evals.checks evals/cases --prompts prompts
 
+eval-smoke:  ## partial offline dev smoke with durable evidence (scripted extraction)
+	uv run python -m evals.runner --include-drafts
+
+eval-live-estimate:  ## estimate real dev smoke; set EVAL_INPUT_RATE and EVAL_OUTPUT_RATE to pinned model rates
+	uv run python -m evals.runner --include-drafts --extractor real --trials 3 --max-cost-usd $(EVAL_CAP_USD) --input-usd-per-million $(EVAL_INPUT_RATE) --output-usd-per-million $(EVAL_OUTPUT_RATE) --estimate-only
+
 regression-smoke:  ## offline chat regressions (scripted extraction; no provider spend)
 	uv run python -m evals.regression_smoke --output evals/runs/pr24-regressions.json
 
@@ -47,7 +55,7 @@ lock-check:  ## lockfiles resolve only from public registries (a private mirror 
 		grep -nE '"resolved": "https://' frontend/package-lock.json | grep -v '"https://registry\.npmjs\.org/' ); \
 	if [ -n "$$bad" ]; then echo "$$bad" | head -5; echo "lockfile points at a non-public registry"; exit 1; fi
 
-ci: lock-check lint typecheck test eval-check regression-smoke frontend-check  ## everything a PR must pass (runs locally; no external CI service)
+ci: lock-check lint typecheck test eval-check regression-smoke eval-smoke frontend-check  ## everything a PR must pass (runs locally; no external CI service)
 
 # ---- Run the system (see infra/README.md) ------------------------------------------------------
 

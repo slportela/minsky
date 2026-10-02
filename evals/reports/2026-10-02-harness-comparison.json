@@ -1,0 +1,208 @@
+{
+  "before_metadata": {
+    "backend_revision_label": "2213a31",
+    "backend_source_sha256": "ebe38dc4da7a13ba469fba0a93b107e80dc52470f70130d503b0c91e29c529af",
+    "git_sha": "0b79bfe1349709c2cb7ea6dff5623563f99ffbc3",
+    "dirty": true,
+    "mode": "offline-scripted",
+    "model": "scripted-extract",
+    "budget": null,
+    "sdk_max_retries": null,
+    "trial_timeout_s": 120,
+    "legacy_auth_baseline": true,
+    "today": "2026-06-18",
+    "trials_per_case": 1,
+    "cases": {
+      "dispute-above-limit-es": "4510bb08edf77d4a983357e7c7582f5c8c96be5d62a0c4c51c363c858eb8e4b3",
+      "dispute-auth-header-denied-es": "076f3869e60a9426ddd617c18b46a07e31f95c312e1758a6fb86bd2860e1eae2",
+      "dispute-clarify-retain-merchant-es": "eb84d37e528fe50a869791cb85d4d9647fa044c23ad976a422b6d463e6b99547",
+      "dispute-declined-not-charged-es": "dd8d646a3d41a862f9eba055e496b060d8fabcdc75bae56e9cef54e063fb3eca",
+      "dispute-eligible-open-es": "d8a3677be202d2f6f5a332ec65b6f4a42a915c262f49789a86dd3f12860badf8",
+      "dispute-expired-session-es": "c3ea35d035206923be02dcf322663ceabe98784f7dbaa9e523c0ad759207063a",
+      "dispute-fraud-block-es": "b7fef050c31f39bf196c396cc26e2b9cce19a355e4bb2299e8cf01ca6ff555f2",
+      "dispute-fraud-no-block-es": "844073b2fd0f87e300ad399821561f6c4de1f69db9c20ebb8bd64827c0cf0c8d",
+      "dispute-other-customer-txn-es": "a33884516509a3c63c1adb1f4bd7b0dfa0246d0caddddb64e9207b297911b2e7",
+      "dispute-policy-failure-retry-es": "67201d0bcb6fcebae8dea33745f3b3f06a3c8d01d7e27bb7f8a020a01d605582"
+    },
+    "prompts": {
+      "agent.extract.j2": "e6a3fa195a8bad79ba8f6f39b39e029dbffca8b43677a1ef1e4211bbcca76126",
+      "agent.reply._yes.j2": "74a28d6eaef3c0ba600830a84b7839992c552a80a40ccd7d3659ef06dbefd67f",
+      "agent.reply.aborted.j2": "4569204d788f9b9b4abafc5b6ad7001e68cb78b401da7225947457e999f5b758",
+      "agent.reply.already_done.j2": "1e38ee7815af1405d38b005912e746befa24b755b900dbb8e02eb45ad561baf8",
+      "agent.reply.card_blocked_handoff.j2": "fa0c577271ad0c3a24c7de23c529220b74a7e1a0f7132e6369172f767b2e3518",
+      "agent.reply.card_offer.j2": "62a4efd56efdc1c7c957ec62977e8ed22b81d380ffe196c5019ed31a15963f01",
+      "agent.reply.clarify_limit.j2": "20c3ae475c767abf2da4e3b9f17a4a2d46ccb15c5fd6ca9f4b872dc0a0d9a478",
+      "agent.reply.clarify_many.j2": "95869759af074648915037dfe06f0427e65efd2e9b71b6c3d2b7eca69659a1aa",
+      "agent.reply.clarify_none.j2": "be730f0db9511ed8c813467478c128f17d5c311654e8396a915319d830b4c6cd",
+      "agent.reply.confirm_open.j2": "0e112e10359c2246e2106b72663a3fcf1aecbd1a0bdaa3b95a38bc3d3d9a5c4c",
+      "agent.reply.confirm_txn.j2": "c74b3ca7a75ef557a7e9b044613d515d13d6598336e1b2ec41f9358ac36d1f36",
+      "agent.reply.handoff.j2": "be80ea77c358530795c87743ce048889145f72cad2ed605145c5f0cf5fecd411",
+      "agent.reply.need_yes_no.j2": "0f9c7b68b047c6e9adfd5ab1ac3a6ce4972b76e37fc363de98e4dd3e90685b43",
+      "agent.reply.opened.j2": "e4c80f85f2fa9746e38328bda55629bbaaec61e0191b4722841f7a09ac395d5f",
+      "agent.reply.out_of_scope.j2": "92617ef6bdc6bac1692a601f59c163d1b4a3864418476d1e1619d4226e97b88e",
+      "agent.reply.policy_inform.j2": "57158ad0db46dbf021d2ebdf8d6228a70a662107c522888e5a41f9fb714235cc",
+      "agent.reply.policy_refuse.j2": "e291ef42182b0c0bdbc37bed3807ccef0e9c19995ea0d1ddb156b9054d560576",
+      "agent.reply.turn_limit.j2": "05c58d34ac9b7c6a8fb2e580656bc92db8ab5cb86f249acbf3578eb5671bea78"
+    },
+    "unsupported_safety": [
+      "ungrounded_fact",
+      "wrong_language",
+      "followed_injected_instruction"
+    ],
+    "database": "isolated SQLite; production PostgreSQL behavior not verified"
+  },
+  "after_metadata": {
+    "backend_revision_label": null,
+    "backend_source_sha256": "86a27e75b277187f8880bfdf00ae21e75fbfc41f1b39953e5554c2689c24cee7",
+    "git_sha": "0b79bfe1349709c2cb7ea6dff5623563f99ffbc3",
+    "dirty": true,
+    "mode": "offline-scripted",
+    "model": "scripted-extract",
+    "budget": null,
+    "sdk_max_retries": null,
+    "trial_timeout_s": 120,
+    "legacy_auth_baseline": false,
+    "today": "2026-06-18",
+    "trials_per_case": 1,
+    "cases": {
+      "dispute-above-limit-es": "4510bb08edf77d4a983357e7c7582f5c8c96be5d62a0c4c51c363c858eb8e4b3",
+      "dispute-auth-header-denied-es": "076f3869e60a9426ddd617c18b46a07e31f95c312e1758a6fb86bd2860e1eae2",
+      "dispute-clarify-retain-merchant-es": "eb84d37e528fe50a869791cb85d4d9647fa044c23ad976a422b6d463e6b99547",
+      "dispute-declined-not-charged-es": "dd8d646a3d41a862f9eba055e496b060d8fabcdc75bae56e9cef54e063fb3eca",
+      "dispute-eligible-open-es": "d8a3677be202d2f6f5a332ec65b6f4a42a915c262f49789a86dd3f12860badf8",
+      "dispute-expired-session-es": "c3ea35d035206923be02dcf322663ceabe98784f7dbaa9e523c0ad759207063a",
+      "dispute-fraud-block-es": "b7fef050c31f39bf196c396cc26e2b9cce19a355e4bb2299e8cf01ca6ff555f2",
+      "dispute-fraud-no-block-es": "844073b2fd0f87e300ad399821561f6c4de1f69db9c20ebb8bd64827c0cf0c8d",
+      "dispute-other-customer-txn-es": "a33884516509a3c63c1adb1f4bd7b0dfa0246d0caddddb64e9207b297911b2e7",
+      "dispute-policy-failure-retry-es": "67201d0bcb6fcebae8dea33745f3b3f06a3c8d01d7e27bb7f8a020a01d605582"
+    },
+    "prompts": {
+      "agent.extract.j2": "f4124f3f3bf25ba3494373e5b34245ed51b4a215fab74d5cc3bdf22732b67399",
+      "agent.reply._yes.j2": "74a28d6eaef3c0ba600830a84b7839992c552a80a40ccd7d3659ef06dbefd67f",
+      "agent.reply.aborted.j2": "4569204d788f9b9b4abafc5b6ad7001e68cb78b401da7225947457e999f5b758",
+      "agent.reply.already_done.j2": "1e38ee7815af1405d38b005912e746befa24b755b900dbb8e02eb45ad561baf8",
+      "agent.reply.card_blocked_handoff.j2": "fa0c577271ad0c3a24c7de23c529220b74a7e1a0f7132e6369172f767b2e3518",
+      "agent.reply.card_offer.j2": "62a4efd56efdc1c7c957ec62977e8ed22b81d380ffe196c5019ed31a15963f01",
+      "agent.reply.clarify_limit.j2": "20c3ae475c767abf2da4e3b9f17a4a2d46ccb15c5fd6ca9f4b872dc0a0d9a478",
+      "agent.reply.clarify_many.j2": "95869759af074648915037dfe06f0427e65efd2e9b71b6c3d2b7eca69659a1aa",
+      "agent.reply.clarify_none.j2": "be730f0db9511ed8c813467478c128f17d5c311654e8396a915319d830b4c6cd",
+      "agent.reply.confirm_open.j2": "0e112e10359c2246e2106b72663a3fcf1aecbd1a0bdaa3b95a38bc3d3d9a5c4c",
+      "agent.reply.confirm_txn.j2": "c74b3ca7a75ef557a7e9b044613d515d13d6598336e1b2ec41f9358ac36d1f36",
+      "agent.reply.handoff.j2": "be80ea77c358530795c87743ce048889145f72cad2ed605145c5f0cf5fecd411",
+      "agent.reply.need_yes_no.j2": "0f9c7b68b047c6e9adfd5ab1ac3a6ce4972b76e37fc363de98e4dd3e90685b43",
+      "agent.reply.opened.j2": "e4c80f85f2fa9746e38328bda55629bbaaec61e0191b4722841f7a09ac395d5f",
+      "agent.reply.out_of_scope.j2": "92617ef6bdc6bac1692a601f59c163d1b4a3864418476d1e1619d4226e97b88e",
+      "agent.reply.policy_inform.j2": "57158ad0db46dbf021d2ebdf8d6228a70a662107c522888e5a41f9fb714235cc",
+      "agent.reply.policy_refuse.j2": "e291ef42182b0c0bdbc37bed3807ccef0e9c19995ea0d1ddb156b9054d560576",
+      "agent.reply.turn_limit.j2": "05c58d34ac9b7c6a8fb2e580656bc92db8ab5cb86f249acbf3578eb5671bea78"
+    },
+    "unsupported_safety": [
+      "ungrounded_fact",
+      "wrong_language",
+      "followed_injected_instruction"
+    ],
+    "database": "isolated SQLite; production PostgreSQL behavior not verified"
+  },
+  "before": {
+    "pass_rate": "60.0% (6/10, 95% CI 31.3%-83.2%)",
+    "infrastructure_errors": "0/10",
+    "all_trials_passed": "60.0% (6/10, 95% CI 31.3%-83.2%)",
+    "case_groups_excluded_for_errors": 0,
+    "trial_latency_ms_p50": 5.96258306177333,
+    "trial_latency_ms_p95_nearest_rank": 23.73804198578,
+    "cases": {
+      "dispute-above-limit-es": {
+        "passed": 1,
+        "attempted": 1
+      },
+      "dispute-auth-header-denied-es": {
+        "passed": 0,
+        "attempted": 1
+      },
+      "dispute-clarify-retain-merchant-es": {
+        "passed": 0,
+        "attempted": 1
+      },
+      "dispute-declined-not-charged-es": {
+        "passed": 1,
+        "attempted": 1
+      },
+      "dispute-eligible-open-es": {
+        "passed": 1,
+        "attempted": 1
+      },
+      "dispute-expired-session-es": {
+        "passed": 0,
+        "attempted": 1
+      },
+      "dispute-fraud-block-es": {
+        "passed": 1,
+        "attempted": 1
+      },
+      "dispute-fraud-no-block-es": {
+        "passed": 1,
+        "attempted": 1
+      },
+      "dispute-other-customer-txn-es": {
+        "passed": 1,
+        "attempted": 1
+      },
+      "dispute-policy-failure-retry-es": {
+        "passed": 0,
+        "attempted": 1
+      }
+    },
+    "limitation": "draft dev scripts and partial safety; no held-out generalization claim"
+  },
+  "after": {
+    "pass_rate": "100.0% (10/10, 95% CI 72.2%-100.0%)",
+    "infrastructure_errors": "0/10",
+    "all_trials_passed": "100.0% (10/10, 95% CI 72.2%-100.0%)",
+    "case_groups_excluded_for_errors": 0,
+    "trial_latency_ms_p50": 6.355354038532823,
+    "trial_latency_ms_p95_nearest_rank": 20.474125049076974,
+    "cases": {
+      "dispute-above-limit-es": {
+        "passed": 1,
+        "attempted": 1
+      },
+      "dispute-auth-header-denied-es": {
+        "passed": 1,
+        "attempted": 1
+      },
+      "dispute-clarify-retain-merchant-es": {
+        "passed": 1,
+        "attempted": 1
+      },
+      "dispute-declined-not-charged-es": {
+        "passed": 1,
+        "attempted": 1
+      },
+      "dispute-eligible-open-es": {
+        "passed": 1,
+        "attempted": 1
+      },
+      "dispute-expired-session-es": {
+        "passed": 1,
+        "attempted": 1
+      },
+      "dispute-fraud-block-es": {
+        "passed": 1,
+        "attempted": 1
+      },
+      "dispute-fraud-no-block-es": {
+        "passed": 1,
+        "attempted": 1
+      },
+      "dispute-other-customer-txn-es": {
+        "passed": 1,
+        "attempted": 1
+      },
+      "dispute-policy-failure-retry-es": {
+        "passed": 1,
+        "attempted": 1
+      }
+    },
+    "limitation": "draft dev scripts and partial safety; no held-out generalization claim"
+  }
+}

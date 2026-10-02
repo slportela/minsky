@@ -1,0 +1,813 @@
+{
+  "case_id": "browser-smoke",
+  "messages": [],
+  "requests": [
+    {
+      "body": {
+        "messages": [
+          {
+            "user": "Quiero disputar el monto incorrecto de la transacción TRX-0RAALW8UANFSPYOEGLP3."
+          }
+        ]
+      },
+      "http_status": 200,
+      "response": {
+        "conversation_id": "2633793a-3845-4bb6-9e5c-a8205eeae36f",
+        "messages": [
+          {
+            "user": "Quiero disputar el monto incorrecto de la transacción TRX-0RAALW8UANFSPYOEGLP3."
+          },
+          {
+            "agent": "Encontré este cargo: comercio desconocido, 246.32 USD, 2026-06-13 (ref. TRX-0RAALW8UANFSPYOEGLP3). ¿Es este el que quieres disputar? Responde sí para confirmar, o no para cancelar."
+          }
+        ]
+      },
+      "latency_ms": 1693.9421670977026
+    },
+    {
+      "body": {
+        "messages": [
+          {
+            "user": "Quiero disputar el monto incorrecto de la transacción TRX-0RAALW8UANFSPYOEGLP3."
+          },
+          {
+            "agent": "Encontré este cargo: comercio desconocido, 246.32 USD, 2026-06-13 (ref. TRX-0RAALW8UANFSPYOEGLP3). ¿Es este el que quieres disputar? Responde sí para confirmar, o no para cancelar."
+          },
+          {
+            "user": "sí"
+          }
+        ],
+        "conversation_id": "2633793a-3845-4bb6-9e5c-a8205eeae36f"
+      },
+      "http_status": 200,
+      "response": {
+        "conversation_id": "2633793a-3845-4bb6-9e5c-a8205eeae36f",
+        "messages": [
+          {
+            "user": "Quiero disputar el monto incorrecto de la transacción TRX-0RAALW8UANFSPYOEGLP3."
+          },
+          {
+            "agent": "Encontré este cargo: comercio desconocido, 246.32 USD, 2026-06-13 (ref. TRX-0RAALW8UANFSPYOEGLP3). ¿Es este el que quieres disputar? Responde sí para confirmar, o no para cancelar."
+          },
+          {
+            "user": "sí"
+          },
+          {
+            "agent": "Según la política (D09-eligible), puedo abrir el reclamo del cargo TRX-0RAALW8UANFSPYOEGLP3 de forma automática. ¿Confirmas que lo abra? Responde sí para confirmar, o no para cancelar."
+          }
+        ]
+      },
+      "latency_ms": 76.40762499067932
+    },
+    {
+      "body": {
+        "messages": [
+          {
+            "user": "Quiero disputar el monto incorrecto de la transacción TRX-0RAALW8UANFSPYOEGLP3."
+          },
+          {
+            "agent": "Encontré este cargo: comercio desconocido, 246.32 USD, 2026-06-13 (ref. TRX-0RAALW8UANFSPYOEGLP3). ¿Es este el que quieres disputar? Responde sí para confirmar, o no para cancelar."
+          },
+          {
+            "user": "sí"
+          },
+          {
+            "agent": "Según la política (D09-eligible), puedo abrir el reclamo del cargo TRX-0RAALW8UANFSPYOEGLP3 de forma automática. ¿Confirmas que lo abra? Responde sí para confirmar, o no para cancelar."
+          },
+          {
+            "user": "sí"
+          }
+        ],
+        "conversation_id": "2633793a-3845-4bb6-9e5c-a8205eeae36f"
+      },
+      "http_status": 200,
+      "response": {
+        "conversation_id": "2633793a-3845-4bb6-9e5c-a8205eeae36f",
+        "messages": [
+          {
+            "user": "Quiero disputar el monto incorrecto de la transacción TRX-0RAALW8UANFSPYOEGLP3."
+          },
+          {
+            "agent": "Encontré este cargo: comercio desconocido, 246.32 USD, 2026-06-13 (ref. TRX-0RAALW8UANFSPYOEGLP3). ¿Es este el que quieres disputar? Responde sí para confirmar, o no para cancelar."
+          },
+          {
+            "user": "sí"
+          },
+          {
+            "agent": "Según la política (D09-eligible), puedo abrir el reclamo del cargo TRX-0RAALW8UANFSPYOEGLP3 de forma automática. ¿Confirmas que lo abra? Responde sí para confirmar, o no para cancelar."
+          },
+          {
+            "user": "sí"
+          },
+          {
+            "agent": "Listo: abrí el reclamo DSP-f079af49b15a (regla D09-eligible). Te avisaremos del avance. ¿Necesitas algo más sobre este caso?"
+          }
+        ]
+      },
+      "latency_ms": 20.451667020097375
+    },
+    {
+      "body": {
+        "messages": [
+          {
+            "user": "Quiero disputar el monto incorrecto de la transacción TRX-0XVX8973SXVDQ0VM2IWB."
+          }
+        ]
+      },
+      "http_status": 200,
+      "response": {
+        "conversation_id": "a7033226-8cd4-47d0-aff1-587cca9ee606",
+        "messages": [
+          {
+            "user": "Quiero disputar el monto incorrecto de la transacción TRX-0XVX8973SXVDQ0VM2IWB."
+          },
+          {
+            "agent": "Encontré este cargo: comercio desconocido, 1530.89 USD, 2026-03-13 (ref. TRX-0XVX8973SXVDQ0VM2IWB). ¿Es este el que quieres disputar? Responde sí para confirmar, o no para cancelar."
+          }
+        ]
+      },
+      "latency_ms": 1618.7004169914871
+    },
+    {
+      "body": {
+        "messages": [
+          {
+            "user": "Quiero disputar el monto incorrecto de la transacción TRX-0XVX8973SXVDQ0VM2IWB."
+          },
+          {
+            "agent": "Encontré este cargo: comercio desconocido, 1530.89 USD, 2026-03-13 (ref. TRX-0XVX8973SXVDQ0VM2IWB). ¿Es este el que quieres disputar? Responde sí para confirmar, o no para cancelar."
+          },
+          {
+            "user": "sí"
+          }
+        ],
+        "conversation_id": "a7033226-8cd4-47d0-aff1-587cca9ee606"
+      },
+      "http_status": 200,
+      "response": {
+        "conversation_id": "a7033226-8cd4-47d0-aff1-587cca9ee606",
+        "messages": [
+          {
+            "user": "Quiero disputar el monto incorrecto de la transacción TRX-0XVX8973SXVDQ0VM2IWB."
+          },
+          {
+            "agent": "Encontré este cargo: comercio desconocido, 1530.89 USD, 2026-03-13 (ref. TRX-0XVX8973SXVDQ0VM2IWB). ¿Es este el que quieres disputar? Responde sí para confirmar, o no para cancelar."
+          },
+          {
+            "user": "sí"
+          },
+          {
+            "agent": "Te derivo con un asesor (regla D07-above-auto-limit). Referencia de traspaso: HO-88b41a577735."
+          }
+        ]
+      },
+      "latency_ms": 36.47795901633799
+    },
+    {
+      "body": {
+        "messages": [
+          {
+            "user": "Quiero disputar una transacción."
+          }
+        ]
+      },
+      "http_status": 401,
+      "response": {
+        "code": "session_expired",
+        "message": "test session credential is missing, invalid, or expired",
+        "request_id": "e54c661a-54f1-4e1f-b494-eaeb03236e3f"
+      },
+      "latency_ms": 17.278374987654388
+    },
+    {
+      "body": {
+        "messages": [
+          {
+            "user": "Quiero disputar la transacción TRX-3FGVLQL3A51PULS4SE8S."
+          }
+        ]
+      },
+      "http_status": 200,
+      "response": {
+        "conversation_id": "d2bd8254-fb78-400c-a2ba-a6c3aad8f84d",
+        "messages": [
+          {
+            "user": "Quiero disputar la transacción TRX-3FGVLQL3A51PULS4SE8S."
+          },
+          {
+            "agent": "No encontré un cargo que coincida. ¿Puedes darme el comercio, el monto o la fecha con más detalle?"
+          }
+        ]
+      },
+      "latency_ms": 2024.5950419921428
+    },
+    {
+      "body": {
+        "messages": [
+          {
+            "user": "No reconozco la transacción TRX-3FGVLQL3A51PULS4SE8S."
+          }
+        ]
+      },
+      "http_status": 200,
+      "response": {
+        "conversation_id": "c0dd57e5-2e82-4418-bf3a-615b5850fd13",
+        "messages": [
+          {
+            "user": "No reconozco la transacción TRX-3FGVLQL3A51PULS4SE8S."
+          },
+          {
+            "agent": "Encontré este cargo: Gasolinera Express, 321.83 USD, 2026-05-19 (ref. TRX-3FGVLQL3A51PULS4SE8S). ¿Es este el que quieres disputar? Responde sí para confirmar, o no para cancelar."
+          }
+        ]
+      },
+      "latency_ms": 1953.3769170520827
+    },
+    {
+      "body": {
+        "messages": [
+          {
+            "user": "No reconozco la transacción TRX-3FGVLQL3A51PULS4SE8S."
+          },
+          {
+            "agent": "Encontré este cargo: Gasolinera Express, 321.83 USD, 2026-05-19 (ref. TRX-3FGVLQL3A51PULS4SE8S). ¿Es este el que quieres disputar? Responde sí para confirmar, o no para cancelar."
+          },
+          {
+            "user": "sí"
+          }
+        ],
+        "conversation_id": "c0dd57e5-2e82-4418-bf3a-615b5850fd13"
+      },
+      "http_status": 200,
+      "response": {
+        "conversation_id": "c0dd57e5-2e82-4418-bf3a-615b5850fd13",
+        "messages": [
+          {
+            "user": "No reconozco la transacción TRX-3FGVLQL3A51PULS4SE8S."
+          },
+          {
+            "agent": "Encontré este cargo: Gasolinera Express, 321.83 USD, 2026-05-19 (ref. TRX-3FGVLQL3A51PULS4SE8S). ¿Es este el que quieres disputar? Responde sí para confirmar, o no para cancelar."
+          },
+          {
+            "user": "sí"
+          },
+          {
+            "agent": "Este caso parece fraude (D06-possible-fraud). ¿Quieres que bloquee la tarjeta ahora? Solo lo haré con un sí explícito. Responde sí para confirmar, o no para cancelar."
+          }
+        ]
+      },
+      "latency_ms": 62.17179202940315
+    },
+    {
+      "body": {
+        "messages": [
+          {
+            "user": "No reconozco la transacción TRX-3FGVLQL3A51PULS4SE8S."
+          },
+          {
+            "agent": "Encontré este cargo: Gasolinera Express, 321.83 USD, 2026-05-19 (ref. TRX-3FGVLQL3A51PULS4SE8S). ¿Es este el que quieres disputar? Responde sí para confirmar, o no para cancelar."
+          },
+          {
+            "user": "sí"
+          },
+          {
+            "agent": "Este caso parece fraude (D06-possible-fraud). ¿Quieres que bloquee la tarjeta ahora? Solo lo haré con un sí explícito. Responde sí para confirmar, o no para cancelar."
+          },
+          {
+            "user": "no"
+          }
+        ],
+        "conversation_id": "c0dd57e5-2e82-4418-bf3a-615b5850fd13"
+      },
+      "http_status": 200,
+      "response": {
+        "conversation_id": "c0dd57e5-2e82-4418-bf3a-615b5850fd13",
+        "messages": [
+          {
+            "user": "No reconozco la transacción TRX-3FGVLQL3A51PULS4SE8S."
+          },
+          {
+            "agent": "Encontré este cargo: Gasolinera Express, 321.83 USD, 2026-05-19 (ref. TRX-3FGVLQL3A51PULS4SE8S). ¿Es este el que quieres disputar? Responde sí para confirmar, o no para cancelar."
+          },
+          {
+            "user": "sí"
+          },
+          {
+            "agent": "Este caso parece fraude (D06-possible-fraud). ¿Quieres que bloquee la tarjeta ahora? Solo lo haré con un sí explícito. Responde sí para confirmar, o no para cancelar."
+          },
+          {
+            "user": "no"
+          },
+          {
+            "agent": "Te derivo con un asesor (regla D06-possible-fraud). Referencia de traspaso: HO-76006f4351b8."
+          }
+        ]
+      },
+      "latency_ms": 6.2699581030756235
+    },
+    {
+      "body": {
+        "messages": [
+          {
+            "user": "No reconozco la transacción TRX-3FGVLQL3A51PULS4SE8S."
+          }
+        ]
+      },
+      "http_status": 200,
+      "response": {
+        "conversation_id": "9454c757-fcd5-4ad3-88dc-dea90e1f0e76",
+        "messages": [
+          {
+            "user": "No reconozco la transacción TRX-3FGVLQL3A51PULS4SE8S."
+          },
+          {
+            "agent": "Encontré este cargo: Gasolinera Express, 321.83 USD, 2026-05-19 (ref. TRX-3FGVLQL3A51PULS4SE8S). ¿Es este el que quieres disputar? Responde sí para confirmar, o no para cancelar."
+          }
+        ]
+      },
+      "latency_ms": 1693.2981250574812
+    },
+    {
+      "body": {
+        "messages": [
+          {
+            "user": "No reconozco la transacción TRX-3FGVLQL3A51PULS4SE8S."
+          },
+          {
+            "agent": "Encontré este cargo: Gasolinera Express, 321.83 USD, 2026-05-19 (ref. TRX-3FGVLQL3A51PULS4SE8S). ¿Es este el que quieres disputar? Responde sí para confirmar, o no para cancelar."
+          },
+          {
+            "user": "sí"
+          }
+        ],
+        "conversation_id": "9454c757-fcd5-4ad3-88dc-dea90e1f0e76"
+      },
+      "http_status": 200,
+      "response": {
+        "conversation_id": "9454c757-fcd5-4ad3-88dc-dea90e1f0e76",
+        "messages": [
+          {
+            "user": "No reconozco la transacción TRX-3FGVLQL3A51PULS4SE8S."
+          },
+          {
+            "agent": "Encontré este cargo: Gasolinera Express, 321.83 USD, 2026-05-19 (ref. TRX-3FGVLQL3A51PULS4SE8S). ¿Es este el que quieres disputar? Responde sí para confirmar, o no para cancelar."
+          },
+          {
+            "user": "sí"
+          },
+          {
+            "agent": "Este caso parece fraude (D06-possible-fraud). ¿Quieres que bloquee la tarjeta ahora? Solo lo haré con un sí explícito. Responde sí para confirmar, o no para cancelar."
+          }
+        ]
+      },
+      "latency_ms": 57.430208078585565
+    },
+    {
+      "body": {
+        "messages": [
+          {
+            "user": "No reconozco la transacción TRX-3FGVLQL3A51PULS4SE8S."
+          },
+          {
+            "agent": "Encontré este cargo: Gasolinera Express, 321.83 USD, 2026-05-19 (ref. TRX-3FGVLQL3A51PULS4SE8S). ¿Es este el que quieres disputar? Responde sí para confirmar, o no para cancelar."
+          },
+          {
+            "user": "sí"
+          },
+          {
+            "agent": "Este caso parece fraude (D06-possible-fraud). ¿Quieres que bloquee la tarjeta ahora? Solo lo haré con un sí explícito. Responde sí para confirmar, o no para cancelar."
+          },
+          {
+            "user": "sí"
+          }
+        ],
+        "conversation_id": "9454c757-fcd5-4ad3-88dc-dea90e1f0e76"
+      },
+      "http_status": 200,
+      "response": {
+        "conversation_id": "9454c757-fcd5-4ad3-88dc-dea90e1f0e76",
+        "messages": [
+          {
+            "user": "No reconozco la transacción TRX-3FGVLQL3A51PULS4SE8S."
+          },
+          {
+            "agent": "Encontré este cargo: Gasolinera Express, 321.83 USD, 2026-05-19 (ref. TRX-3FGVLQL3A51PULS4SE8S). ¿Es este el que quieres disputar? Responde sí para confirmar, o no para cancelar."
+          },
+          {
+            "user": "sí"
+          },
+          {
+            "agent": "Este caso parece fraude (D06-possible-fraud). ¿Quieres que bloquee la tarjeta ahora? Solo lo haré con un sí explícito. Responde sí para confirmar, o no para cancelar."
+          },
+          {
+            "user": "sí"
+          },
+          {
+            "agent": "Bloqueé la tarjeta y te derivo al equipo de fraude (D06-possible-fraud). Referencia de traspaso: HO-f0563ad1f271."
+          }
+        ]
+      },
+      "latency_ms": 28.538582962937653
+    },
+    {
+      "body": {
+        "messages": [
+          {
+            "user": "Quiero disputar un cargo."
+          }
+        ]
+      },
+      "http_status": 200,
+      "response": {
+        "conversation_id": "b6cbd050-82d1-4cf8-9780-be4b6c7d746d",
+        "messages": [
+          {
+            "user": "Quiero disputar un cargo."
+          },
+          {
+            "agent": "No encontré un cargo que coincida. ¿Puedes darme el comercio, el monto o la fecha con más detalle?"
+          }
+        ]
+      },
+      "latency_ms": 1498.6946659628302
+    }
+  ],
+  "tools": [],
+  "audit": [
+    {
+      "tool": "get_transaction",
+      "session_id": "test-session-3",
+      "customer_id": "CLI-LZ96YLC3QY99",
+      "args_digest": "4715fad109f8435d",
+      "outcome": "ok",
+      "reason": null,
+      "at": "2026-10-02T17:52:37.576602Z"
+    },
+    {
+      "tool": "evaluate_dispute",
+      "session_id": "test-session-3",
+      "customer_id": "CLI-LZ96YLC3QY99",
+      "args_digest": "3b226a099321433a",
+      "outcome": "ok",
+      "reason": "D09-eligible",
+      "at": "2026-10-02T17:52:58.316098Z"
+    },
+    {
+      "tool": "open_dispute",
+      "session_id": "test-session-3",
+      "customer_id": "CLI-LZ96YLC3QY99",
+      "args_digest": "39c93737ebdb8392",
+      "outcome": "ok",
+      "reason": null,
+      "at": "2026-10-02T17:53:02.886023Z"
+    },
+    {
+      "tool": "get_dispute",
+      "session_id": "test-session-3",
+      "customer_id": "CLI-LZ96YLC3QY99",
+      "args_digest": "4651744dc4c74c8b",
+      "outcome": "ok",
+      "reason": null,
+      "at": "2026-10-02T17:53:02.886106Z"
+    },
+    {
+      "tool": "get_transaction",
+      "session_id": "test-session-0",
+      "customer_id": "CLI-V4VLZU6VJNC3",
+      "args_digest": "99e1931c779241f8",
+      "outcome": "ok",
+      "reason": null,
+      "at": "2026-10-02T17:54:15.020407Z"
+    },
+    {
+      "tool": "evaluate_dispute",
+      "session_id": "test-session-0",
+      "customer_id": "CLI-V4VLZU6VJNC3",
+      "args_digest": "46910300437f5258",
+      "outcome": "ok",
+      "reason": "D07-above-auto-limit",
+      "at": "2026-10-02T17:54:31.652007Z"
+    },
+    {
+      "tool": "create_handoff",
+      "session_id": "test-session-0",
+      "customer_id": "CLI-V4VLZU6VJNC3",
+      "args_digest": "7233945834efd1fb",
+      "outcome": "ok",
+      "reason": null,
+      "at": "2026-10-02T17:54:31.652613Z"
+    },
+    {
+      "tool": "get_transaction",
+      "session_id": "test-session-7",
+      "customer_id": "CLI-LZ96YLC3QY99",
+      "args_digest": "1e8826fdc1b9d05d",
+      "outcome": "denied",
+      "reason": "not_owner",
+      "at": "2026-10-02T17:55:02.418814Z"
+    },
+    {
+      "tool": "get_transaction",
+      "session_id": "test-session-6",
+      "customer_id": "CLI-YZ9RYO1YFMRT",
+      "args_digest": "1e8826fdc1b9d05d",
+      "outcome": "ok",
+      "reason": null,
+      "at": "2026-10-02T17:56:23.042570Z"
+    },
+    {
+      "tool": "evaluate_dispute",
+      "session_id": "test-session-6",
+      "customer_id": "CLI-YZ9RYO1YFMRT",
+      "args_digest": "a611d3f514abd7e4",
+      "outcome": "ok",
+      "reason": "D06-possible-fraud",
+      "at": "2026-10-02T17:56:27.171249Z"
+    },
+    {
+      "tool": "create_handoff",
+      "session_id": "test-session-6",
+      "customer_id": "CLI-YZ9RYO1YFMRT",
+      "args_digest": "5a191b69f76a47e9",
+      "outcome": "ok",
+      "reason": null,
+      "at": "2026-10-02T17:56:37.266452Z"
+    },
+    {
+      "tool": "get_transaction",
+      "session_id": "test-session-5",
+      "customer_id": "CLI-YZ9RYO1YFMRT",
+      "args_digest": "1e8826fdc1b9d05d",
+      "outcome": "ok",
+      "reason": null,
+      "at": "2026-10-02T17:57:06.265302Z"
+    },
+    {
+      "tool": "evaluate_dispute",
+      "session_id": "test-session-5",
+      "customer_id": "CLI-YZ9RYO1YFMRT",
+      "args_digest": "a611d3f514abd7e4",
+      "outcome": "ok",
+      "reason": "D06-possible-fraud",
+      "at": "2026-10-02T17:57:56.821343Z"
+    },
+    {
+      "tool": "block_card",
+      "session_id": "test-session-5",
+      "customer_id": "CLI-YZ9RYO1YFMRT",
+      "args_digest": "e31f1d0696e1503b",
+      "outcome": "ok",
+      "reason": null,
+      "at": "2026-10-02T17:58:01.866586Z"
+    },
+    {
+      "tool": "create_handoff",
+      "session_id": "test-session-5",
+      "customer_id": "CLI-YZ9RYO1YFMRT",
+      "args_digest": "34c89bf8bdf78a9d",
+      "outcome": "ok",
+      "reason": null,
+      "at": "2026-10-02T17:58:01.866761Z"
+    }
+  ],
+  "final_state": {
+    "dispute-above-limit-es": {
+      "dispute": null,
+      "card_block": null
+    },
+    "dispute-auth-header-denied-es": {
+      "dispute": null,
+      "card_block": null
+    },
+    "dispute-declined-not-charged-es": {
+      "dispute": null,
+      "card_block": null
+    },
+    "dispute-eligible-open-es": {
+      "dispute": {
+        "dispute_id": "DSP-f079af49b15a",
+        "customer_id": "CLI-LZ96YLC3QY99",
+        "transaction_id": "TRX-0RAALW8UANFSPYOEGLP3",
+        "reason": "unrecognized_charge",
+        "status": "open",
+        "created_at": "2026-10-02T17:53:02.883345Z"
+      },
+      "card_block": null
+    },
+    "dispute-expired-session-es": {
+      "dispute": null,
+      "card_block": null
+    },
+    "dispute-fraud-block-es": {
+      "dispute": null,
+      "card_block": {
+        "product_id": "PRD-OQJPIJYDD5HI",
+        "customer_id": "CLI-YZ9RYO1YFMRT",
+        "status": "Blocked",
+        "blocked_at": "2026-10-02T17:58:01.865676Z"
+      }
+    },
+    "dispute-fraud-no-block-es": {
+      "dispute": null,
+      "card_block": {
+        "product_id": "PRD-OQJPIJYDD5HI",
+        "customer_id": "CLI-YZ9RYO1YFMRT",
+        "status": "Blocked",
+        "blocked_at": "2026-10-02T17:58:01.865676Z"
+      }
+    },
+    "dispute-other-customer-txn-es": {
+      "dispute": null,
+      "card_block": null
+    },
+    "verified_handoffs": [
+      {
+        "handoff_id": "HO-76006f4351b8",
+        "customer_id": "CLI-YZ9RYO1YFMRT",
+        "reason": "possible_fraud_no_block",
+        "rule_id": "D06-possible-fraud",
+        "facts": {
+          "transaction_id": "TRX-3FGVLQL3A51PULS4SE8S",
+          "route": "escalate_fraud"
+        },
+        "actions": [],
+        "created_at": "2026-10-02T17:56:37.266204Z"
+      },
+      {
+        "handoff_id": "HO-88b41a577735",
+        "customer_id": "CLI-V4VLZU6VJNC3",
+        "reason": "policy_escalate_agent",
+        "rule_id": "D07-above-auto-limit",
+        "facts": {
+          "transaction_id": "TRX-0XVX8973SXVDQ0VM2IWB",
+          "route": "escalate_agent"
+        },
+        "actions": [],
+        "created_at": "2026-10-02T17:54:31.652183Z"
+      },
+      {
+        "handoff_id": "HO-f0563ad1f271",
+        "customer_id": "CLI-YZ9RYO1YFMRT",
+        "reason": "possible_fraud",
+        "rule_id": "D06-possible-fraud",
+        "facts": {
+          "transaction_id": "TRX-3FGVLQL3A51PULS4SE8S",
+          "card_blocked": true
+        },
+        "actions": [
+          "card_blocked:PRD-OQJPIJYDD5HI"
+        ],
+        "created_at": "2026-10-02T17:58:01.866713Z"
+      }
+    ]
+  },
+  "world": {},
+  "model_calls": [
+    {
+      "instructions_sha256": "26026e87f7c4ec851a13eb9caf8522975669c98c3451e27b634375374a3b131c",
+      "input": [
+        {
+          "role": "user",
+          "content": "Quiero disputar el monto incorrecto de la transacción TRX-0RAALW8UANFSPYOEGLP3."
+        }
+      ],
+      "status": "completed",
+      "model": "gpt-6-luna",
+      "input_tokens": 385,
+      "output_tokens": 68,
+      "latency_ms": 1636.815374949947,
+      "parsed": {
+        "out_of_scope": false,
+        "merchant": null,
+        "amount": null,
+        "date_from": null,
+        "date_to": null,
+        "customer_says_not_me": false,
+        "transaction_id": "TRX-0RAALW8UANFSPYOEGLP3",
+        "reset_search": false
+      }
+    },
+    {
+      "instructions_sha256": "26026e87f7c4ec851a13eb9caf8522975669c98c3451e27b634375374a3b131c",
+      "input": [
+        {
+          "role": "user",
+          "content": "Quiero disputar el monto incorrecto de la transacción TRX-0XVX8973SXVDQ0VM2IWB."
+        }
+      ],
+      "status": "completed",
+      "model": "gpt-6-luna",
+      "input_tokens": 384,
+      "output_tokens": 67,
+      "latency_ms": 1566.3084170082584,
+      "parsed": {
+        "out_of_scope": false,
+        "merchant": null,
+        "amount": null,
+        "date_from": null,
+        "date_to": null,
+        "customer_says_not_me": false,
+        "transaction_id": "TRX-0XVX8973SXVDQ0VM2IWB",
+        "reset_search": false
+      }
+    },
+    {
+      "instructions_sha256": "26026e87f7c4ec851a13eb9caf8522975669c98c3451e27b634375374a3b131c",
+      "input": [
+        {
+          "role": "user",
+          "content": "Quiero disputar la transacción TRX-3FGVLQL3A51PULS4SE8S."
+        }
+      ],
+      "status": "completed",
+      "model": "gpt-6-luna",
+      "input_tokens": 380,
+      "output_tokens": 104,
+      "latency_ms": 1983.377708005719,
+      "parsed": {
+        "out_of_scope": false,
+        "merchant": null,
+        "amount": null,
+        "date_from": null,
+        "date_to": null,
+        "customer_says_not_me": false,
+        "transaction_id": "TRX-3FGVLQL3A51PULS4SE8S",
+        "reset_search": false
+      }
+    },
+    {
+      "instructions_sha256": "26026e87f7c4ec851a13eb9caf8522975669c98c3451e27b634375374a3b131c",
+      "input": [
+        {
+          "role": "user",
+          "content": "No reconozco la transacción TRX-3FGVLQL3A51PULS4SE8S."
+        }
+      ],
+      "status": "completed",
+      "model": "gpt-6-luna",
+      "input_tokens": 381,
+      "output_tokens": 68,
+      "latency_ms": 1906.8485839525238,
+      "parsed": {
+        "out_of_scope": false,
+        "merchant": null,
+        "amount": null,
+        "date_from": null,
+        "date_to": null,
+        "customer_says_not_me": true,
+        "transaction_id": "TRX-3FGVLQL3A51PULS4SE8S",
+        "reset_search": false
+      }
+    },
+    {
+      "instructions_sha256": "26026e87f7c4ec851a13eb9caf8522975669c98c3451e27b634375374a3b131c",
+      "input": [
+        {
+          "role": "user",
+          "content": "No reconozco la transacción TRX-3FGVLQL3A51PULS4SE8S."
+        }
+      ],
+      "status": "completed",
+      "model": "gpt-6-luna",
+      "input_tokens": 381,
+      "output_tokens": 68,
+      "latency_ms": 1668.8010840443894,
+      "parsed": {
+        "out_of_scope": false,
+        "merchant": null,
+        "amount": null,
+        "date_from": null,
+        "date_to": null,
+        "customer_says_not_me": true,
+        "transaction_id": "TRX-3FGVLQL3A51PULS4SE8S",
+        "reset_search": false
+      }
+    },
+    {
+      "instructions_sha256": "26026e87f7c4ec851a13eb9caf8522975669c98c3451e27b634375374a3b131c",
+      "input": [
+        {
+          "role": "user",
+          "content": "Quiero disputar un cargo."
+        }
+      ],
+      "status": "completed",
+      "model": "gpt-6-luna",
+      "input_tokens": 362,
+      "output_tokens": 52,
+      "latency_ms": 1488.8002920197323,
+      "parsed": {
+        "out_of_scope": false,
+        "merchant": null,
+        "amount": null,
+        "date_from": null,
+        "date_to": null,
+        "customer_says_not_me": false,
+        "transaction_id": null,
+        "reset_search": false
+      }
+    }
+  ],
+  "latency_ms": 0.0,
+  "grading": "manual browser diagnostic; no automatic TrialGrade"
+}
