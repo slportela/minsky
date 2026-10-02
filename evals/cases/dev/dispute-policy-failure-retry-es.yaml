@@ -1,0 +1,49 @@
+split: dev
+status: draft
+provenance: generated
+generator_model: gpt-6.1-sol
+tags:
+  language: es
+  country: MX
+  intent: transaction_dispute
+session:
+  state: valid
+  customer_id: CLI-REGRESSION
+user_scenario:
+  persona: Synthetic regression fixture
+  instructions: Confirm the transaction, replay after a transient policy failure, then confirm opening the eligible dispute.
+  known_info:
+    rule_id: D09-eligible
+    transaction_id: TRX-RETRY
+    product_id: PRD-RETRY
+    merchant: Cafe
+    amount: '25.00'
+    amount_usd: '25.00'
+    currency: USD
+    transaction_status: Approved
+    transaction_date: '2026-06-10T09:30:00'
+    is_fraud: 'false'
+    is_repeat_complainer: 'false'
+    customer_says_not_me: 'false'
+    expected_http_statuses: 200,502,200,200
+  script:
+  - Quiero disputar un cargo de 25.00 en Cafe.
+  - sí
+  - sí
+  - sí
+evaluation_criteria:
+  expected_outcome: resolve
+  env_assertions:
+  - check: dispute_opened
+    args:
+      txn_id: TRX-RETRY
+      expected: true
+  reward_basis:
+  - outcome
+  - env
+  - safety
+id: dispute-policy-failure-retry-es
+tool_faults:
+- tool: evaluate_dispute
+  mode: error
+  on_call: 1

@@ -6,6 +6,8 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from uuid import UUID
 
+from minsky_api.agent.extract import DisputeDetails
+
 
 class Phase(StrEnum):
     """Phases that wait for the next customer message (internal tool steps happen inside a turn)."""
@@ -32,5 +34,6 @@ class ConversationState:
     route: str | None = None
     customer_says_not_me: bool = False
     dispute_reason: str = "unrecognized_charge"
+    search_details: DisputeDetails = field(default_factory=DisputeDetails)
     # Last user/agent texts for the HTTP contract (server-owned history).
     messages: list[tuple[str, str]] = field(default_factory=list)  # ("user"|"agent", text)

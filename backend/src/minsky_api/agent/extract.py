@@ -21,6 +21,7 @@ class DisputeDetails(BaseModel):
     date_to: date | None = None
     customer_says_not_me: bool = False
     transaction_id: str | None = Field(default=None, max_length=64)
+    reset_search: bool = False
 
 
 async def extract_dispute_details(llm: LLM, text: str) -> DisputeDetails:

@@ -59,6 +59,18 @@ def _has_search_filters(details: DisputeDetails) -> bool:
     )
 
 
+def _merge_details(state: ConversationState, incoming: DisputeDetails) -> DisputeDetails:
+    # A new id identifies a different transaction; ranges replace together, other slots individually.
+    previous = DisputeDetails() if incoming.reset_search or incoming.transaction_id else state.search_details
+    updates = incoming.model_dump(exclude_none=True)
+    for flag in ("reset_search", "out_of_scope", "customer_says_not_me"):
+        updates.pop(flag, None)
+    if incoming.date_from is not None or incoming.date_to is not None:
+        updates.update(date_from=incoming.date_from, date_to=incoming.date_to)
+    state.search_details = previous.model_copy(update=updates)
+    return state.search_details
+
+
 async def _handoff(
     ctx: ToolContext,
     state: ConversationState,
@@ -71,6 +83,7 @@ async def _handoff(
     result = await create_handoff(
         ctx,
         CreateHandoffArgs(
+            idempotency_key=f"{state.conversation_id}:{state.turn_count}",
             reason=reason,
             rule_id=rule_id,
             facts={
@@ -131,6 +144,7 @@ async def _after_candidates(
             )
         state.phase = Phase.CLARIFY
         state.candidate_txn_ids = []
+        state.search_details = DisputeDetails()
         return replies.ask_clarify_none()
     if len(txns) > 1:
         state.clarify_count += 1
@@ -187,11 +201,17 @@ async def _phase_understand(ctx: ToolContext, state: ConversationState, text: st
     if details.out_of_scope:
         result = await create_handoff(
             ctx,
-            CreateHandoffArgs(reason="out_of_scope", rule_id=None, facts={}, actions=()),
+            CreateHandoffArgs(
+                idempotency_key=f"{state.conversation_id}:{state.turn_count}",
+                reason="out_of_scope",
+                rule_id=None,
+                facts={},
+                actions=(),
+            ),
         )
         state.phase = Phase.DONE
         return replies.out_of_scope_handoff(handoff_id=result.handoff.handoff_id)
-    txns = await _search(ctx, details)
+    txns = await _search(ctx, _merge_details(state, details))
     return await _after_candidates(ctx, state, txns)
 
 
@@ -214,7 +234,7 @@ async def _phase_clarify(ctx: ToolContext, state: ConversationState, text: str, 
     if details.transaction_id:
         txn = await _get_owned_txn(ctx, details.transaction_id)
         return await _after_candidates(ctx, state, [txn] if txn is not None else [])
-    txns = await _search(ctx, details)
+    txns = await _search(ctx, _merge_details(state, details))
     return await _after_candidates(ctx, state, txns)
 
 
@@ -226,6 +246,7 @@ async def _phase_confirm_txn(ctx: ToolContext, state: ConversationState, text: s
         state.selected_txn_id = None
         state.selected_product_id = None
         state.candidate_txn_ids = []
+        state.search_details = DisputeDetails()
         return replies.ask_clarify_none()
     return replies.need_yes_or_no()
 
@@ -268,6 +289,7 @@ async def _phase_card_offer(ctx: ToolContext, state: ConversationState, text: st
         result = await create_handoff(
             ctx,
             CreateHandoffArgs(
+                idempotency_key=f"{state.conversation_id}:{state.turn_count}",
                 reason="possible_fraud",
                 rule_id=state.rule_id,
                 facts={"transaction_id": state.selected_txn_id, "card_blocked": blocked_ok},
