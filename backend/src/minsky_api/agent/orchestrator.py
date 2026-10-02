@@ -144,7 +144,6 @@ async def _after_candidates(
             )
         state.phase = Phase.CLARIFY
         state.candidate_txn_ids = []
-        state.search_details = DisputeDetails()
         return replies.ask_clarify_none()
     if len(txns) > 1:
         state.clarify_count += 1
@@ -246,7 +245,6 @@ async def _phase_confirm_txn(ctx: ToolContext, state: ConversationState, text: s
         state.selected_txn_id = None
         state.selected_product_id = None
         state.candidate_txn_ids = []
-        state.search_details = DisputeDetails()
         return replies.ask_clarify_none()
     return replies.need_yes_or_no()
 

@@ -190,7 +190,12 @@ def main() -> int:
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     root = Path(__file__).parent / "cases" / "dev"
-    names = ("dispute-auth-header-denied-es", "dispute-clarify-retain-merchant-es", "dispute-policy-failure-retry-es")
+    names = (
+        "dispute-auth-header-denied-es",
+        "dispute-clarify-retain-merchant-es",
+        "dispute-policy-failure-retry-es",
+        "dispute-miss-retain-merchant-es",
+    )
     records = [asyncio.run(run_case(load_case(root / f"{name}.yaml"))) for name in names]
     args.output.parent.mkdir(parents=True, exist_ok=True)
     metadata = {
