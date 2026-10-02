@@ -1,0 +1,82 @@
+{
+  "runs": {
+    "2026-10-02-live-before": {
+      "cap_usd": "0.40",
+      "reserved_usd": "0.0333132",
+      "usage_cost_usd": "0",
+      "input_usd_per_million": "0.10",
+      "output_usd_per_million": "0.50",
+      "pricing_basis": "operator-supplied uncached token rates; not an invoice"
+    },
+    "2026-10-02-live-before-compatible": {
+      "cap_usd": "0.36",
+      "reserved_usd": "0.0443976",
+      "usage_cost_usd": "0.0033183",
+      "input_usd_per_million": "0.10",
+      "output_usd_per_million": "0.50",
+      "pricing_basis": "operator-supplied uncached token rates; not an invoice"
+    },
+    "2026-10-02-live-after": {
+      "cap_usd": "0.395",
+      "reserved_usd": "0.0370884",
+      "usage_cost_usd": "0.0024533",
+      "input_usd_per_million": "0.10",
+      "output_usd_per_million": "0.50",
+      "pricing_basis": "operator-supplied uncached token rates; not an invoice"
+    },
+    "2026-10-02-decimal-live-check": {
+      "cap_usd": "0.005",
+      "reserved_usd": "0.0010324",
+      "usage_cost_usd": "0.0000805",
+      "input_usd_per_million": "0.10",
+      "output_usd_per_million": "0.50",
+      "pricing_basis": "operator-supplied uncached token rates; not an invoice"
+    },
+    "2026-10-02-live-before-final-schema": {
+      "cap_usd": "0.27",
+      "reserved_usd": "0.0474126",
+      "usage_cost_usd": "0.0035029",
+      "input_usd_per_million": "0.10",
+      "output_usd_per_million": "0.50",
+      "pricing_basis": "operator-supplied uncached token rates; not an invoice"
+    },
+    "2026-10-02-live-after-final-schema": {
+      "cap_usd": "0.30",
+      "reserved_usd": "0.0370884",
+      "usage_cost_usd": "0.0025569",
+      "input_usd_per_million": "0.10",
+      "output_usd_per_million": "0.50",
+      "pricing_basis": "operator-supplied uncached token rates; not an invoice"
+    },
+    "provider-diagnostic": {
+      "cap_usd": "0.005",
+      "reserved_usd": "0.0010295",
+      "usage_cost_usd": "0",
+      "input_usd_per_million": "0.10",
+      "output_usd_per_million": "0.50",
+      "pricing_basis": "operator-supplied uncached token rates; not an invoice"
+    },
+    "2026-10-02-browser-live-final": {
+      "cap_usd": "0.20",
+      "reserved_usd": "0.0061880",
+      "usage_cost_usd": "0.0004408",
+      "input_usd_per_million": "0.10",
+      "output_usd_per_million": "0.50",
+      "pricing_basis": "operator-supplied uncached token rates; not an invoice"
+    },
+    "2026-10-02-browser-live-fault": {
+      "cap_usd": "0.01",
+      "reserved_usd": "0.0010335",
+      "usage_cost_usd": "0.0000725",
+      "input_usd_per_million": "0.10",
+      "output_usd_per_million": "0.50",
+      "pricing_basis": "operator-supplied uncached token rates; not an invoice"
+    }
+  },
+  "usage_cost_usd": "0.0124252",
+  "reserved_usd": "0.2085836",
+  "approved_total_usd": "1",
+  "failed_usage_unknown": true,
+  "pricing_source": "https://developers.openai.com/api/docs/models/gpt-6-luna",
+  "limitation": "Usage-priced estimate, not provider invoice; failed calls retain conservative reservations."
+}

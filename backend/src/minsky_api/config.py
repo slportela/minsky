@@ -1,7 +1,9 @@
 """Settings from environment variables (prefix MINSKY_). Nothing here is a secret by default."""
 
+import os
 from datetime import date
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic import NonNegativeInt, PositiveFloat, PositiveInt, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -36,4 +38,14 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings() -> Settings:
-    return Settings()
+    # Opt in through the process environment before opening a file; a dotenv cannot select itself.
+    env_file: Path | None = None
+    if os.environ.get("MINSKY_ENVIRONMENT") == "local":
+        configured_path = os.environ.get("MINSKY_ENV_FILE")
+        env_file = (
+            Path(configured_path).expanduser() if configured_path else Path(__file__).resolve().parents[3] / ".env"
+        )
+        if configured_path and not env_file.is_file():
+            raise FileNotFoundError("MINSKY_ENV_FILE must point to an existing local configuration file")
+    # Pydantic's synthesized signature omits these supported BaseSettings constructor options.
+    return Settings(_env_file=env_file, _env_file_encoding="utf-8")  # pyright: ignore[reportCallIssue]

@@ -34,7 +34,7 @@ frontend-check:  ## frontend type check
 	npm --prefix frontend run test:api
 
 llm-smoke:  ## one real call to the configured model (MINSKY_LLM_* in .env): key, endpoint, pinned model
-	uv run --env-file .env python -m minsky_api.llm.smoke
+	MINSKY_ENVIRONMENT=local uv run python -m minsky_api.llm.smoke
 
 eval-check:  ## validate every eval case and the case set (schema, leakage, coverage)
 	uv run python -m evals.checks evals/cases --prompts prompts
