@@ -11,6 +11,7 @@ import os
 import re
 import subprocess
 import time
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
@@ -79,8 +80,8 @@ def main(argv: list[str] | None = None) -> int:
         }
         credentials[case.id] = {"credential": token, "script": case.user_scenario.script}
     private = args.output / "test-credentials.json"
-    with private.open("x") as stream:
-        os.chmod(private, 0o600)
+    descriptor = os.open(private, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(descriptor, "w") as stream:
         json.dump(credentials, stream, indent=2, ensure_ascii=False)
     os.environ["MINSKY_TEST_SESSIONS"] = json.dumps(provisioned)
     get_settings.cache_clear()
@@ -112,8 +113,22 @@ def main(argv: list[str] | None = None) -> int:
 
         orchestrator.evaluate_dispute = policy_with_fault
     app = create_app()
+    original_lifespan = app.router.lifespan_context
+
+    @asynccontextmanager
+    async def smoke_lifespan(application):
+        try:
+            async with original_lifespan(application):
+                yield
+        finally:
+            private.unlink(missing_ok=True)
+            if budget:
+                await inner.client.close()  # type: ignore[attr-defined]
+
+    app.router.lifespan_context = smoke_lifespan
     metadata = {
         "git_sha": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
+        "dirty": bool(subprocess.check_output(["git", "diff", "HEAD", "--name-only"], text=True).strip()),
         "mode": "live-browser" if budget else "scripted-browser",
         "database": "gold PostgreSQL read-only; process-local case writes",
         "model": settings.llm_model if budget else "scripted-extract",
@@ -185,8 +200,6 @@ def main(argv: list[str] | None = None) -> int:
     try:
         uvicorn.run(app, host="127.0.0.1", port=args.port, access_log=False)
     finally:
-        if budget:
-            asyncio.run(inner.client.close())  # type: ignore[attr-defined]
         private.unlink(missing_ok=True)
     return 0
 

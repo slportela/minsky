@@ -94,3 +94,35 @@ async def test_trial_timeout_preserves_failing_request(monkeypatch):
     assert record.error_class == "TimeoutError"
     assert len(record.requests) == 1
     assert record.model_calls[0]["error_class"] == "CancelledError"
+
+
+def test_browser_lifespan_removes_private_credentials(tmp_path, monkeypatch):
+    import asyncio
+    from pathlib import Path
+
+    from evals import browser_smoke
+    from evals.schema import load_case
+    from minsky_api.api import chat
+    from minsky_api.config import get_settings
+
+    async def bound(_cases):
+        return [load_case(Path("evals/cases/dev/dispute-eligible-open-es.yaml"))]
+
+    output = tmp_path / "browser"
+    private = output / "test-credentials.json"
+
+    def serve(app, **kwargs):
+        async def lifecycle():
+            async with app.router.lifespan_context(app):
+                assert private.exists()
+                assert private.stat().st_mode & 0o777 == 0o600
+            assert not private.exists()
+
+        asyncio.run(lifecycle())
+
+    monkeypatch.setenv("MINSKY_TEST_SESSIONS", "")
+    monkeypatch.setattr(chat, "LLM", chat.LLM)
+    monkeypatch.setattr(browser_smoke, "bind_gold_cases", bound)
+    monkeypatch.setattr(browser_smoke.uvicorn, "run", serve)
+    assert browser_smoke.main(["--output", str(output)]) == 0
+    get_settings.cache_clear()

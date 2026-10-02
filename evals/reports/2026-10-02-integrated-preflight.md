@@ -52,7 +52,7 @@ identify manual grading.
 
 ## Verification and limits
 
-Full local `make ci`: **205 Python tests**, lint/format/types, case validation, three API regressions,
+Full local `make ci`: **206 Python tests**, lint/format/types, case validation, three API regressions,
 ten-case offline smoke and frontend types. Corrected #23 production frontend build also passed.
 
 Small selected draft workloads and one trial do not establish generalization or pass^k for k>1.
@@ -61,3 +61,5 @@ and language checks are not implemented. Portuguese remains pending. The gateway
 Live extraction and the Caddy/TLS/deployed-stack smoke remain open. Disputes/handoffs/audit are not PostgreSQL-persistent. The previous PR25 nine-case
 report remains the evidence for that earlier run; the new expired-bearer case increases this workload
 to ten and is not presented as a matched nine-case improvement.
+
+The final lifecycle regression verifies mode-0600 credential creation and removal during application shutdown, including the graceful lifecycle used on SIGTERM. Temporary smoke processes and credential files were cleaned up after the diagnostics.
