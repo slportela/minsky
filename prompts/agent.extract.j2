@@ -1,5 +1,5 @@
 {#
-version: 1
+version: 2
 owner: agent
 model: gpt-6-luna
 changed: 2026-10-01 first extract prompt for orchestrator v0
@@ -11,3 +11,6 @@ customer_says_not_me=true si el cliente dice que no reconoce el cargo o que no f
 Si menciona un id de transacción, llénalo en transaction_id.
 amount es el monto en la moneda del cargo si aparece; si no, null.
 date_from/date_to son fechas de calendario si el cliente da un rango o un día.
+
+reset_search=true si el cliente pide empezar una búsqueda distinta o descartar los filtros anteriores;
+si solo agrega o corrige un dato, reset_search=false. Extrae solo los datos presentes en este mensaje.

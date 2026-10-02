@@ -321,3 +321,31 @@ def test_d04_inform_includes_existing_dispute_ref():
 
     text = policy_inform(rule_id="D04-already-disputed", existing_dispute_id="DSP-abc")
     assert "DSP-abc" in text
+
+
+def test_clarification_keeps_merchant_and_replaces_amount():
+    from minsky_api.agent.orchestrator import _merge_details
+
+    state = _state()
+    _merge_details(state, _details(merchant="Cafe", amount=None))
+    merged = _merge_details(state, _details(merchant=None, amount=Decimal("25")))
+    assert merged.merchant == "Cafe"
+    assert merged.amount == Decimal("25")
+    merged = _merge_details(state, _details(merchant=None, amount=Decimal("30")))
+    assert merged.merchant == "Cafe" and merged.amount == Decimal("30")
+    merged = _merge_details(state, _details(merchant="Other", amount=None, reset_search=True))
+    assert merged.merchant == "Other" and merged.amount is None
+
+
+def test_copy_store_does_not_commit_failed_mutations():
+    from minsky_api.agent.memory import ConversationStore
+
+    store = ConversationStore()
+    state = _state()
+    store.put(state)
+    state.messages.append(("user", "external mutation"))
+    copy = store.get(state.conversation_id)
+    assert copy is not None and copy.messages == []
+    copy.messages.append(("user", "failed turn"))
+    unchanged = store.get(state.conversation_id)
+    assert unchanged is not None and unchanged.messages == []

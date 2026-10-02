@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     # Orchestrator budgets (docs/solution.md): stop runaway chats and clarify loops.
     max_turns: PositiveInt = 12
     max_clarify_attempts: PositiveInt = 2
+    test_sessions: SecretStr | None = None
     db_pool_size: PositiveInt = 5
     db_max_overflow: NonNegativeInt = 10
     db_pool_timeout: PositiveInt = 30
