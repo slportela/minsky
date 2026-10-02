@@ -74,7 +74,7 @@ uv run python -m evals.runner --include-drafts --database postgres --gold-cases 
 
 This runs eight scenarios through the real API and pooled PostgreSQL store using scripted extraction.
 It checks D01, D07, D09, both D06 block choices, cross-customer denial, legacy-header denial and expired
-bearer denial. The ten-case SQLite workload retains competing-filter and injected-fault controls.
+bearer denial. The eleven-case SQLite workload retains competing-filter and injected-fault controls.
 Neither workload silently substitutes for the other. A paid PostgreSQL run uses the same price/cap
 flags and needs an allocation within the total allowance; do not add another USD 1 run implicitly.
 

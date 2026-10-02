@@ -24,7 +24,7 @@ The five illustrative drafts stay unbound. Four more drafts are runnable: `dispu
 
 Run `uv run python -m evals.runner --include-drafts --output evals/runs/<new-run-id>`.
 The runner reads dev only, fails on an empty selection, and refuses to overwrite a run directory.
-The ten runnable drafts include the three PR-24 regressions both fraud card-block decisions, and an expired bearer. Policy fixtures are checked against
+The eleven runnable drafts include the three PR-24 regressions both fraud card-block decisions, and an expired bearer. Policy fixtures are checked against
 `decide()` and contradictory scripted not-me signals are rejected. The D09 case disputes an incorrect
 amount on a recognized charge; “no reconozco” routes to D06. Each trial executes the real read-store
 SQL in a fresh SQLite bank: predicates, order, and limits are not discarded. PostgreSQL-specific
@@ -58,7 +58,7 @@ for the current byte-tokenized compatible provider; validate it before switching
 
 `--database postgres --gold-cases` binds supported dev scripts to read-only gold rows, rechecks policy
 labels, and runs the actual pooled store. Fixture-specific filter/error scenarios remain in SQLite.
-Case writes are still process-local. An expired-bearer case extends the isolated smoke to ten cases;
+Case writes are still process-local. An expired-bearer case and empty-search clarification extend the isolated smoke to eleven cases;
 the gold-bound diagnostic contains eight. They are separate workloads, not interchangeable scores.
 
 `python -m evals.compare BEFORE AFTER --output NEW.json` rejects mismatched cases, model, clock, mode,
