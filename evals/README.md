@@ -24,7 +24,7 @@ The five illustrative drafts stay unbound. Four more drafts are runnable: `dispu
 
 Run `uv run python -m evals.runner --include-drafts --output evals/runs/<new-run-id>`.
 The runner reads dev only, fails on an empty selection, and refuses to overwrite a run directory.
-The nine runnable drafts include the three PR-24 regressions and both fraud card-block decisions. Policy fixtures are checked against
+The ten runnable drafts include the three PR-24 regressions both fraud card-block decisions, and an expired bearer. Policy fixtures are checked against
 `decide()` and contradictory scripted not-me signals are rejected. The D09 case disputes an incorrect
 amount on a recognized charge; “no reconozco” routes to D06. Each trial executes the real read-store
 SQL in a fresh SQLite bank: predicates, order, and limits are not discarded. PostgreSQL-specific
@@ -46,10 +46,33 @@ write fails confirmation grading. Grounding, reply-language, and injection-follo
 **unsupported**, not successful: a case requiring one fails explicitly. The illustrative cases keep
 their full safety requirements and are not silently promoted or scored by this partial runner.
 
-### Real extraction
+### Real extraction and integrated smoke
 
-`run_trial(case, extractor="real")` uses the configured production LLM and records its model and usage.
-The CLI intentionally refuses this mode until an integrated harness supplies a printed estimate,
-spend cap, and timeout. No model credentials were available for this correction; no live L2 result is
-claimed. Do not load `.env` through an agent or pass keys in commands/chat. Production-model validation,
-Portuguese, baselines beyond null controls, and headline held-out metrics remain pending.
+The paid CLI is now available with `--extractor real`, explicit uncached input/output token rates,
+`--max-cost-usd`, and a trial timeout. Use `--estimate-only` first. Every call reserves a conservative
+UTF-8 byte/schema allowance plus its output limit before dispatch; reservations are not refunded on
+provider errors. SDK retries are disabled for these diagnostics. Usage-priced cost is not an invoice;
+unknown charges on failed calls remain covered by reservations. Use the actual pinned model's rates
+or higher conservative rates, never rates for a cheaper model. The reservation assumption is intended
+for the current byte-tokenized compatible provider; validate it before switching tokenizers/providers.
+
+`--database postgres --gold-cases` binds supported dev scripts to read-only gold rows, rechecks policy
+labels, and runs the actual pooled store. Fixture-specific filter/error scenarios remain in SQLite.
+Case writes are still process-local. An expired-bearer case extends the isolated smoke to ten cases;
+the gold-bound diagnostic contains eight. They are separate workloads, not interchangeable scores.
+
+`python -m evals.compare BEFORE AFTER --output NEW.json` rejects mismatched cases, model, clock, mode,
+database or trial counts. For an archived pre-credential backend only, `--legacy-auth-baseline` sends
+its old legitimate caller identity on policy scenarios; auth-denial/expired cases still expect rejection.
+Record the archived revision with `--backend-revision`. Metadata hashes the actually imported backend
+source and runtime prompt files, separately from the eval-harness checkout SHA.
+
+`python -m evals.browser_smoke` starts a loopback-only diagnostic gateway to a separately running
+frontend and the real API/PostgreSQL. It writes ephemeral credentials separately with mode 0600 and
+removes them on shutdown. Requests, model calls, audit and verified process-local writes go to evidence;
+credentials and headers are excluded. Scripted mode is clearly labeled and never closes the live L2 gate.
+The gateway excludes Caddy/TLS; those require a final deployed-stack check.
+
+The exact sequence and remaining checks are in [`docs/integrated_smoke.md`](../docs/integrated_smoke.md).
+Model credentials must come from a securely configured inherited environment. Agents do not read `.env`.
+Portuguese, complete safety graders, held-out numbers, persistent writes and deployed smoke remain pending.

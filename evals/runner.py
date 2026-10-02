@@ -24,6 +24,7 @@ from uuid import UUID, uuid4
 
 from httpx import ASGITransport, AsyncClient
 
+from evals.budget import SpendBudget
 from evals.evidence import ToolEvidence, TrialRecord
 from evals.graders import TrialGrade, grade_trial
 from evals.metrics import Rate
@@ -38,6 +39,10 @@ from minsky_api.main import create_app
 from minsky_api.tools.errors import ToolDenied, ToolError
 
 SCRIPTED_MODEL = "scripted-extract"
+
+
+class HTTPContractFailure(RuntimeError):
+    """The system returned an observable response that violates the case contract."""
 
 
 class ScriptedLLM:
@@ -76,13 +81,27 @@ def _details_from_turn(text: str, facts: WorldFacts) -> DisputeDetails:
 
 
 class RecordedLLM:
-    def __init__(self, inner: Any, record: TrialRecord) -> None:
+    def __init__(self, inner: Any, record: TrialRecord, budget: SpendBudget | None = None) -> None:
         self.inner = inner
         self.record = record
+        self.budget = budget
 
     async def respond(self, instructions: str, messages: list[dict[str, str]], **kwargs: Any) -> Any:
-        result = await self.inner.respond(instructions, messages, **kwargs)
-        self.record.model_calls.append(
+        allowance = (
+            self.budget.reserve(instructions, messages, kwargs.get("max_output_tokens", 1024)) if self.budget else None
+        )
+        event: dict[str, Any] = {
+            "instructions_sha256": hashlib.sha256(instructions.encode()).hexdigest(),
+            "input": messages,
+            "status": "started",
+        }
+        self.record.model_calls.append(event)
+        try:
+            result = await self.inner.respond(instructions, messages, **kwargs)
+        except BaseException as error:
+            event.update(status="error", error_class=type(error).__name__)
+            raise
+        event.update(
             {
                 "instructions_sha256": hashlib.sha256(instructions.encode()).hexdigest(),
                 "input": messages,
@@ -91,20 +110,33 @@ class RecordedLLM:
                 "output_tokens": result.output_tokens,
                 "latency_ms": result.latency_ms,
                 "parsed": result.parsed.model_dump(mode="json") if result.parsed is not None else None,
+                "status": "completed",
             }
         )
+        if self.budget is not None and allowance is not None:
+            self.budget.account(result.input_tokens, result.output_tokens, allowance)
         return result
 
 
 @contextmanager
 def _patched(
-    bank: MemoryBank, facts: WorldFacts, record: TrialRecord, current: dict[str, Any], case: Case, extractor: str
+    bank: MemoryBank | None,
+    facts: WorldFacts,
+    record: TrialRecord,
+    current: dict[str, Any],
+    case: Case,
+    extractor: str,
+    budget: SpendBudget | None = None,
 ) -> Iterator[None]:
     @asynccontextmanager
     async def session() -> AsyncIterator[MemoryBank]:
+        assert bank is not None
         yield bank
 
-    inner = LLM() if extractor == "real" else ScriptedLLM(facts)
+    settings = get_settings().model_copy(update={"llm_max_retries": 0})
+    inner = LLM(settings=settings) if extractor == "real" else ScriptedLLM(facts)
+    if extractor == "real":
+        current["llm"] = inner
     calls: dict[str, int] = {}
 
     def instrument(tool: str, call: Callable[..., Awaitable[Any]]) -> Callable[..., Awaitable[Any]]:
@@ -142,8 +174,9 @@ def _patched(
         return wrapped
 
     with ExitStack() as stack:
-        stack.enter_context(patch.object(chat_api, "session", session))
-        stack.enter_context(patch.object(chat_api, "LLM", lambda: RecordedLLM(inner, record)))
+        if bank is not None:
+            stack.enter_context(patch.object(chat_api, "session", session))
+        stack.enter_context(patch.object(chat_api, "LLM", lambda: RecordedLLM(inner, record, budget)))
         for tool in (
             "get_transaction",
             "get_transactions",
@@ -162,12 +195,24 @@ def _patched(
                 current["llm"] = inner
 
 
-async def run_trial(case: Case, *, extractor: str = "scripted") -> TrialRecord:
+async def run_trial(
+    case: Case,
+    *,
+    extractor: str = "scripted",
+    budget: SpendBudget | None = None,
+    timeout_s: float = 120,
+    database: str = "sqlite",
+    legacy_auth_baseline: bool = False,
+) -> TrialRecord:
     record = TrialRecord(case_id=case.id)
     started = time.perf_counter()
     bank = None
     current: dict[str, Any] = {}
     try:
+        if extractor not in {"scripted", "real"} or database not in {"sqlite", "postgres"}:
+            raise ValueError("unknown extractor or database mode")
+        if extractor == "real" and budget is None:
+            raise ValueError("real extraction requires a shared spend budget")
         if case.split != Split.DEV:
             raise ValueError("this diagnostic runner only runs dev cases")
         if case.session.customer_id is None or not case.user_scenario.script:
@@ -182,7 +227,7 @@ async def run_trial(case: Case, *, extractor: str = "scripted") -> TrialRecord:
             raise ValueError("scripted not-me signal disagrees with fixture policy facts")
         if any(fault.mode != "error" for fault in case.tool_faults):
             raise ValueError("only explicit error faults are supported in this partial smoke")
-        bank = build_bank(case, facts)
+        bank = build_bank(case, facts) if database == "sqlite" else None
         record.world = asdict(facts)
         app = create_app()
         history: list[dict[str, str]] = []
@@ -206,8 +251,11 @@ async def run_trial(case: Case, *, extractor: str = "scripted") -> TrialRecord:
             get_settings.cache_clear()
             async with app.router.lifespan_context(app):
                 try:
-                    with _patched(bank, facts, record, current, case, extractor):
-                        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+                    with _patched(bank, facts, record, current, case, extractor, budget):
+                        async with (
+                            asyncio.timeout(timeout_s),
+                            AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client,
+                        ):
                             for index, turn in enumerate(case.user_scenario.script):
                                 current.update(
                                     index=index,
@@ -220,7 +268,7 @@ async def run_trial(case: Case, *, extractor: str = "scripted") -> TrialRecord:
                                 if conversation_id:
                                     body["conversation_id"] = conversation_id
                                 headers = {"Authorization": f"Bearer {token}"}
-                                if facts.label_source == "authentication":
+                                if legacy_auth_baseline or "legacy_header" in case.user_scenario.known_info:
                                     headers = {"X-Minsky-Customer-Id": case.session.customer_id}
                                 request_evidence: dict[str, Any] = {"turn": index, "body": body}
                                 record.requests.append(request_evidence)
@@ -235,7 +283,11 @@ async def run_trial(case: Case, *, extractor: str = "scripted") -> TrialRecord:
                                     else 200
                                 )
                                 if response.status_code != wanted:
-                                    raise RuntimeError(
+                                    if response.status_code >= 500 and any(
+                                        call.get("status") == "error" for call in record.model_calls
+                                    ):
+                                        raise RuntimeError("provider error during HTTP request")
+                                    raise HTTPContractFailure(
                                         f"turn {index + 1}: expected HTTP {wanted}, got {response.status_code}"
                                     )
                                 if response.status_code == 200:
@@ -264,6 +316,9 @@ async def run_trial(case: Case, *, extractor: str = "scripted") -> TrialRecord:
                             if event.tool == "create_handoff" and event.result is not None
                         ],
                     }
+    except HTTPContractFailure as error:
+        record.status = "failed"
+        record.grade = {"passed": False, "components": {"http_contract": False}, "reasons": [str(error)]}
     except Exception as error:
         record.status = "error"
         record.error_class = type(error).__name__
@@ -314,40 +369,104 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--output", type=Path, default=None)
     parser.add_argument("--extractor", choices=("scripted", "real"), default="scripted")
     parser.add_argument("--trials", type=int, default=1)
+    parser.add_argument("--max-cost-usd", type=Decimal)
+    parser.add_argument("--input-usd-per-million", type=Decimal)
+    parser.add_argument("--output-usd-per-million", type=Decimal)
+    parser.add_argument("--timeout-s", type=float, default=120)
+    parser.add_argument("--estimate-only", action="store_true")
+    parser.add_argument("--database", choices=("sqlite", "postgres"), default="sqlite")
+    parser.add_argument("--gold-cases", action="store_true")
+    parser.add_argument(
+        "--backend-revision", help="source revision label for an archived baseline; source files are hashed"
+    )
+    parser.add_argument(
+        "--legacy-auth-baseline", action="store_true", help="only for the unmodified pre-credential API"
+    )
     args = parser.parse_args(argv)
     ids = set(filter(None, args.ids.split(","))) or None
     root = args.cases / "dev" if (args.cases / "dev").is_dir() else args.cases
     chosen = _select(
         [load_case(path) for path in sorted(root.glob("*.yaml"))], include_drafts=args.include_drafts, ids=ids
     )
-    if not chosen or args.trials < 1:
+    if args.gold_cases:
+        if args.database != "postgres":
+            parser.error("--gold-cases requires --database postgres")
+        from evals.gold_smoke import bind_gold_cases
+
+        chosen = asyncio.run(bind_gold_cases(chosen))
+    elif args.database == "postgres":
+        parser.error("PostgreSQL mode requires data-bound --gold-cases")
+    if not chosen or args.trials < 1 or not 0 < args.timeout_s <= 600:
         parser.error("select at least one runnable dev case and a positive trial count")
+    budget = None
     if args.extractor == "real":
-        parser.error(
-            "real extraction requires a separately budgeted integrated run; "
-            "use run_trial(extractor='real') from that harness"
-        )
+        if any(value is None for value in (args.max_cost_usd, args.input_usd_per_million, args.output_usd_per_million)):
+            parser.error("real extraction requires --max-cost-usd and both explicit token-price flags")
+        try:
+            budget = SpendBudget(args.max_cost_usd, args.input_usd_per_million, args.output_usd_per_million)
+        except ValueError as error:
+            parser.error(str(error))
+        from minsky_api.agent.prompts import render
+
+        estimated = Decimal(0)
+        for case in chosen:
+            for turn in case.user_scenario.script or []:
+                estimated += budget.cost(len(render("agent.extract.j2").encode()) + len(turn.encode()) + 8256, 256)
+        estimated *= args.trials
+        print(f"Conservative estimate: USD {estimated}; cap: USD {budget.cap_usd}; SDK retries: 0", flush=True)
+        if estimated > budget.cap_usd:
+            parser.error("estimate exceeds cap; reduce the workload or explicitly set a larger cap")
+        if not args.estimate_only:
+            key = get_settings().llm_api_key
+            if key is None or not key.get_secret_value().strip():
+                parser.error("model credential is unavailable in the inherited environment")
+    if args.estimate_only:
+        return 0
     output = args.output or Path("evals/runs") / f"smoke-{uuid4().hex[:12]}"
     output.mkdir(parents=True, exist_ok=False)
+    from minsky_api.agent.prompts import _prompts_dir
+
+    backend_root = Path(chat_api.__file__).resolve().parents[1]
+    backend_hash = hashlib.sha256()
+    for source in sorted(backend_root.rglob("*.py")):
+        backend_hash.update(str(source.relative_to(backend_root)).encode())
+        backend_hash.update(source.read_bytes())
     metadata = {
+        "backend_revision_label": args.backend_revision,
+        "backend_source_sha256": backend_hash.hexdigest(),
         "git_sha": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
         "dirty": bool(subprocess.check_output(["git", "diff", "HEAD", "--name-only"], text=True).strip()),
-        "mode": "offline-scripted",
-        "model": SCRIPTED_MODEL,
+        "mode": "live-extraction" if args.extractor == "real" else "offline-scripted",
+        "model": get_settings().llm_model if args.extractor == "real" else SCRIPTED_MODEL,
+        "budget": budget.report() if budget else None,
+        "sdk_max_retries": 0 if budget else None,
+        "trial_timeout_s": args.timeout_s,
+        "legacy_auth_baseline": args.legacy_auth_baseline,
         "today": get_settings().today.isoformat(),
         "trials_per_case": args.trials,
         "cases": {case.id: hashlib.sha256(case.model_dump_json().encode()).hexdigest() for case in chosen},
         "prompts": {
-            p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(Path("prompts").glob("agent*.j2"))
+            p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(_prompts_dir().glob("agent*.j2"))
         },
         "unsupported_safety": ["ungrounded_fact", "wrong_language", "followed_injected_instruction"],
-        "database": "isolated SQLite; production PostgreSQL behavior not verified",
+        "database": "gold PostgreSQL, read-only; case writes process-local"
+        if args.database == "postgres"
+        else "isolated SQLite; production PostgreSQL behavior not verified",
     }
     (output / "metadata.json").write_text(json.dumps(metadata, indent=2))
     passed = errors = 0
     for case in chosen:
         for trial in range(args.trials):
-            record = asyncio.run(run_trial(case))
+            record = asyncio.run(
+                run_trial(
+                    case,
+                    extractor=args.extractor,
+                    budget=budget,
+                    timeout_s=args.timeout_s,
+                    database=args.database,
+                    legacy_auth_baseline=args.legacy_auth_baseline,
+                )
+            )
             (output / f"{case.id}-{trial}.json").write_text(record.model_dump_json(indent=2))
             filename = "errors.jsonl" if record.status == "error" else "results.jsonl"
             with (output / filename).open("a") as stream:
@@ -361,8 +480,9 @@ def main(argv: list[str] | None = None) -> int:
         "attempted": attempted,
         "errors": errors,
         "graded": attempted - errors,
-        "provider_cost_usd": 0,
-        "limitation": "scripted extraction and partial safety checks; not a headline result",
+        "provider_cost_usd": str(budget.observed_usd) if budget else 0,
+        "budget": budget.report() if budget else None,
+        "limitation": "partial safety checks and draft dev cases; not a headline result",
     }
     (output / "summary.json").write_text(json.dumps(summary, indent=2))
     print(
