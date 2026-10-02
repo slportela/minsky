@@ -9,8 +9,10 @@ blocks, handoffs and conversation state are still process-local and disappear on
 - Corrected #24 backend, #25 eval harness, and #23 frontend for browser tests. Keep source revisions
   separate and recorded; retarget stacked PRs only after their dependencies merge.
 - A pinned model, compatible endpoint and API key in the launching process's secure environment.
-  Agents must not read `.env`, print keys, or receive them in chat. Do not use the existing
-  `make llm-smoke` target from an agent: it explicitly loads `.env`.
+  Agents must not inspect `.env`, print keys, or receive them in chat. With the user's authorization,
+  the backend settings loader can read the local file at runtime: set `MINSKY_ENVIRONMENT=local`
+  in the process and, for a worktree, `MINSKY_ENV_FILE=/absolute/path/to/.env`. This populates only
+  backend settings and never exports organizer AWS credentials. See `backend/README.md`.
 - Explicit uncached input/output rates for that exact model, from the provider's billing configuration.
   The runner does not guess rates. Its accounting is usage-priced, not an invoice; failed-call spend
   may be unknown, so reservations are never refunded.
@@ -126,8 +128,14 @@ install/use the trusted local CA through the user's normal setup or use a valid 
 - Initial PostgreSQL diagnostic: 8/8, one scripted trial, no provider calls.
 - Browser diagnostic: D09 read-back, D07 handoff, both D06 block choices, ownership denial,
   ambiguity, double-click, draft/session resets, expired identity and injected-failure recovery observed.
-  Restart demonstrably loses case state; Caddy/TLS and live extraction remain pending.
-- Live-model delta is **pending**: the host and existing API container had no configured model key.
+  Restart demonstrably loses case state; Caddy/TLS remains pending.
+- Live-model dev delta is now recorded: baseline + amount-schema compatibility **21/36** versus
+  corrected **36/36**, twelve cases × three trials, no infrastructure errors in the matched final runs.
+  See `evals/reports/2026-10-02-live-l2.md`; earlier provider failures and the 35/36 first fix are retained.
+- Native browser → corrected API → gold PostgreSQL with live extraction and controlled failure/retry
+  is recorded in `evals/reports/2026-10-02-live-integrated.md`. Local dev gates are verified;
+  deployed-origin smoke remains pending. Reported usage-priced cost for all attempts is USD 0.0124252,
+  with conservative reservations of USD 0.2085836 against the approved USD 1.
 - Grounding, language and prompt-injection graders remain unsupported and cannot be called green.
   Spanish-only smoke does not close Portuguese coverage. Writes are not PostgreSQL-persistent.
 

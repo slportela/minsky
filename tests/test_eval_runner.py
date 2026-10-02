@@ -13,6 +13,7 @@ from minsky_api.store.cases_memory import InMemoryCasesBackend
 
 CASES = Path(__file__).resolve().parent.parent / "evals" / "cases"
 SCRIPTED = (
+    "dispute-decimal-amount-es",
     "dispute-miss-retain-merchant-es",
     "dispute-expired-session-es",
     "dispute-declined-not-charged-es",
