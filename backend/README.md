@@ -29,9 +29,10 @@ FastAPI service for dispute intake: the orchestrator, the policy, the mock bank 
 - `policy/` has no I/O and no model calls. It is tested rule by rule (`tests/test_policy_disputes.py`).
 - `tools/` never take a customer id from the model: they read it from the session. Every tool has a denial test. Plain async + Pydantic (no LangGraph); `open_dispute` / `block_card` require `confirmed=True`.
 - `store/` reads `bank.*` by entity key (async, pooled). Customer authorization is checked once in identity/tools, not on every store query. Postgres `cases.*` is not wired yet; tools write through `InMemoryCasesBackend`.
-- `identity/` exposes `ToolSession` + `require_customer` for tools; HTTP chat uses a POC header
-  `X-Minsky-Customer-Id` (spoofable; not real auth) until API-key + OTP exist. Conversations are
-  bound to that customer id; client history must match the server store.
+- `identity/` resolves a server-provisioned, expiring bearer credential to `ToolSession`; customer ids
+  from headers or conversation text do not authenticate (ADR 0009). OTP/Cognito are pending.
+  Conversations are customer-bound; history validation and state commit are serialized per conversation.
+  Failed turns leave prior history intact; writes use idempotency for safe read-back retries.
 - `llm/` talks to an OpenAI-compatible endpoint (ADR 0008). Model ids come from config.
 - `agent/` is a code-owned state machine (`run_turn`): extract → find/clarify → policy → confirm →
   open/block/handoff; never says an action is done before the tool result has been read back.
@@ -44,3 +45,20 @@ make up                                       # full stack with compose (see inf
 uv run --package minsky-api pytest backend/tests
 uv run --package minsky-api uvicorn minsky_api.main:app --reload   # api only, on :8000
 ```
+
+## Trusted test sessions
+
+Provision `MINSKY_TEST_SESSIONS` in the server environment as a JSON object mapping random bearer
+credentials to `{customer_id, expires_at}` (timezone-aware ISO datetime; optional `state`). Distribute
+each credential only to its synthetic test user; send it as `Authorization: Bearer <credential>`.
+Never send credentials to the model or put them in transcripts, git, or logs. Missing/invalid/expired
+credentials return 401; missing or malformed server configuration fails closed with 503. An id alone
+and the old `X-Minsky-Customer-Id` header do not authenticate. This is a trusted test-session adapter,
+not a real identity provider; rotate credentials, use HTTPS, and migrate to OTP/Cognito for production.
+
+## Offline regression delta
+
+`uv run python -m evals.regression_smoke --output evals/runs/pr24-regressions.json` exercises the real
+HTTP route, policy, tools, and SQL queries on an isolated SQLite fixture. Extraction is a scripted
+test double. This checks identity denial, multi-turn filters, and retry recovery, not production
+prompt/model quality or Postgres behavior. See `evals/reports/2026-10-02-pr24-regressions.md`.

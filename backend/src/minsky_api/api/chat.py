@@ -1,13 +1,13 @@
 """POST /api/chat/turn — POC chat endpoint over the dispute orchestrator.
 
-Identity is a temporary header (X-Minsky-Customer-Id) until API-key + OTP exist.
+Identity is resolved from a server-provisioned bearer credential; OTP/Cognito come later.
 Conversations are bound to that customer id; client history must match the server store.
 """
 
 from __future__ import annotations
 
 from typing import Annotated
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Header, Request
 from fastapi.responses import JSONResponse
@@ -23,7 +23,9 @@ from minsky_api.api.contracts import (
     ErrorResponse,
     UserMessage,
 )
-from minsky_api.identity.session import SessionState, ToolSession
+from minsky_api.identity.errors import PermissionDenied
+from minsky_api.identity.http import resolve_session
+from minsky_api.identity.session import ToolSession
 from minsky_api.llm.client import LLM, LLMNotConfiguredError
 from minsky_api.store.cases_memory import InMemoryCasesBackend
 from minsky_api.store.db import session
@@ -31,8 +33,6 @@ from minsky_api.tools.context import ToolContext
 from minsky_api.tools.errors import ToolDenied, ToolError
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
-
-CUSTOMER_HEADER = "X-Minsky-Customer-Id"
 
 
 def _error(code: ErrorCode, message: str, status_code: int) -> JSONResponse:
@@ -65,18 +65,31 @@ def _check_history(state: ConversationState, body: ChatRequest) -> ErrorCode | N
 async def chat_turn(
     body: ChatRequest,
     request: Request,
-    x_minsky_customer_id: Annotated[str | None, Header(alias=CUSTOMER_HEADER)] = None,
+    authorization: Annotated[str | None, Header()] = None,
 ) -> ChatResponse | JSONResponse:
-    """One customer turn. POC auth: require X-Minsky-Customer-Id (not real auth)."""
-    if not x_minsky_customer_id or not x_minsky_customer_id.strip():
-        return _error(ErrorCode.MISSING_CREDENTIALS, f"header {CUSTOMER_HEADER} is required", 401)
-    customer_id = x_minsky_customer_id.strip()
+    """One customer turn, authenticated with a server-provisioned test credential."""
+    try:
+        tool_session = resolve_session(authorization)
+    except PermissionDenied as exc:
+        return _error(ErrorCode(exc.reason), "test session credential is missing, invalid, or expired", 401)
+    except RuntimeError:
+        return _error(ErrorCode.SERVICE_UNAVAILABLE, "test session credentials are unavailable", 503)
+    conversations: ConversationStore = request.app.state.conversations
+    conversation_id = body.conversation_id or uuid4()
+    async with conversations.turn(conversation_id):
+        return await _authenticated_turn(body, request, tool_session, conversation_id)
 
+
+async def _authenticated_turn(
+    body: ChatRequest, request: Request, tool_session: ToolSession, conversation_id: UUID
+) -> ChatResponse | JSONResponse:
+    assert tool_session.customer_id is not None
+    customer_id = tool_session.customer_id
     conversations: ConversationStore = request.app.state.conversations
     cases: InMemoryCasesBackend = request.app.state.cases
 
     if body.conversation_id is None:
-        state = ConversationState(conversation_id=uuid4(), customer_id=customer_id)
+        state = ConversationState(conversation_id=conversation_id, customer_id=customer_id)
         if len(body.messages) != 1 or not isinstance(body.messages[0], UserMessage):
             return _error(ErrorCode.INVALID_PAYLOAD, "first turn must be a single user message", 400)
         user_text = body.messages[0].text
@@ -92,12 +105,6 @@ async def chat_turn(
         user_text = body.messages[-1].text if isinstance(body.messages[-1], UserMessage) else ""
         if not user_text:
             return _error(ErrorCode.FORGED_AGENT_TURN, "last message must be from the user", 400)
-
-    tool_session = ToolSession(
-        session_id=f"poc-{customer_id}",
-        state=SessionState.VALID,
-        customer_id=customer_id,
-    )
 
     try:
         llm = LLM()
@@ -117,8 +124,9 @@ async def chat_turn(
     except RuntimeError as exc:
         return _error(ErrorCode.SERVICE_UNAVAILABLE, str(exc), 503)
 
-    conversations.put(state)
     history: list[UserMessage | AgentMessage] = []
     for role, text in state.messages:
         history.append(UserMessage(user=text) if role == "user" else AgentMessage(agent=text))
-    return ChatResponse(conversation_id=state.conversation_id, messages=tuple(history))
+    response = ChatResponse(conversation_id=state.conversation_id, messages=tuple(history))
+    conversations.put(state)
+    return response
