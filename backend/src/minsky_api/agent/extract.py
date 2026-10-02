@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
+from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, WithJsonSchema
 
 from minsky_api.agent.prompts import render
 from minsky_api.llm.client import LLM
@@ -16,7 +17,17 @@ class DisputeDetails(BaseModel):
 
     out_of_scope: bool = False
     merchant: str | None = Field(default=None, max_length=100)
-    amount: Decimal | None = None
+    # Decimal's generated regex uses lookaround, which Structured Outputs rejects. Keep Decimal
+    # validation and precision locally while advertising supported number/string branches remotely.
+    amount: (
+        Annotated[
+            Decimal,
+            WithJsonSchema(
+                {"anyOf": [{"type": "number"}, {"type": "string", "pattern": r"^[+-]?[0-9]+([.][0-9]+)?$"}]}
+            ),
+        ]
+        | None
+    ) = None
     date_from: date | None = None
     date_to: date | None = None
     customer_says_not_me: bool = False

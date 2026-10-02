@@ -43,8 +43,20 @@ FastAPI service for dispute intake: the orchestrator, the policy, the mock bank 
 ```bash
 make up                                       # full stack with compose (see infra/README.md)
 uv run --package minsky-api pytest backend/tests
-uv run --package minsky-api uvicorn minsky_api.main:app --reload   # api only, on :8000
+MINSKY_ENVIRONMENT=local uv run --package minsky-api uvicorn minsky_api.main:app --reload
 ```
+
+Direct backend and eval runs load the repository-root `.env` only when the **process environment**
+explicitly sets `MINSKY_ENVIRONMENT=local`. Setting it inside `.env` alone does not enable loading.
+Existing process variables take priority. For a worktree, set `MINSKY_ENV_FILE` to the absolute path
+of your local file; an explicitly selected missing file fails at startup. Without the opt-in (including
+demo/production), settings come only from the process environment. Compose already reads `.env`
+and injects selected values, so it needs no additional loader.
+
+The loader populates backend `MINSKY_*` settings without exporting dotenv entries into `os.environ`.
+It does not activate `AWS_PROFILE` or the organizer's `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`.
+For direct AWS clients, select our account's profile in the process environment separately; local
+Compose injects `AWS_PROFILE` via `compose.local.yaml`. Never print or serialize resolved settings.
 
 ## Trusted test sessions
 
