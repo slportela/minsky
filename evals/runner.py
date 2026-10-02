@@ -1,59 +1,62 @@
-"""Scripted dev smoke: the real POST /api/chat/turn, no second model.
+"""Offline dev API smoke with isolated SQL, scripted/real extraction, and durable evidence.
 
-The customer turns are the case script. Slot extraction is filled from `known_info` when the
-turn actually names the merchant, the amount or the transaction id — it does not call the LLM.
-The state machine, the tools and the policy are the ones the API uses. Draft cases run only
-with `--include-drafts` (schema: drafts are excluded until they are promoted).
+Scripted customer turns never expose hidden fixture facts to a production model. Scripted
+extraction is an explicit diagnostic mode; it does not validate production prompts or models.
 """
 
 from __future__ import annotations
 
 import argparse
 import asyncio
-from collections.abc import AsyncIterator, Iterator
-from contextlib import asynccontextmanager, contextmanager
+import hashlib
+import json
+import re
+import subprocess
+import time
+from collections.abc import AsyncIterator, Awaitable, Callable, Iterator
+from contextlib import ExitStack, asynccontextmanager, contextmanager
+from dataclasses import asdict
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 from unittest.mock import patch
+from uuid import UUID, uuid4
 
 from httpx import ASGITransport, AsyncClient
 
+from evals.evidence import ToolEvidence, TrialRecord
 from evals.graders import TrialGrade, grade_trial
-from evals.schema import Case, Status, load_cases
+from evals.metrics import Rate
+from evals.schema import Case, Split, Status, load_case
 from evals.world import MemoryBank, WorldFacts, build_bank, check_label, facts_from_case
+from minsky_api.agent import orchestrator
 from minsky_api.agent.extract import DisputeDetails
 from minsky_api.api import chat as chat_api
-from minsky_api.llm.client import LLMResult
+from minsky_api.config import get_settings
+from minsky_api.llm.client import LLM, LLMResult
 from minsky_api.main import create_app
+from minsky_api.tools.errors import ToolDenied, ToolError
 
 SCRIPTED_MODEL = "scripted-extract"
 
 
 class ScriptedLLM:
-    """Stands in for extract_dispute_details. Confirmations never reach it."""
+    """Diagnostic extraction: only slots explicitly present in the current customer turn."""
 
     def __init__(self, facts: WorldFacts) -> None:
         self._facts = facts
 
     async def respond(
-        self,
-        instructions: str,
-        messages: list[dict[str, str]],
-        *,
-        schema: type[Any] | None = None,
-        reasoning_effort: str = "low",
-        max_output_tokens: int = 256,
+        self, instructions: str, messages: list[dict[str, str]], **kwargs: Any
     ) -> LLMResult[DisputeDetails]:
-        del instructions, schema, reasoning_effort, max_output_tokens
-        text = messages[-1]["content"] if messages else ""
-        details = _details_from_turn(text, self._facts)
+        details = _details_from_turn(messages[-1]["content"], self._facts)
         return LLMResult(
             text=details.model_dump_json(),
             parsed=details,
             model=SCRIPTED_MODEL,
             input_tokens=0,
             output_tokens=0,
-            latency_ms=0.0,
+            latency_ms=0,
         )
 
 
@@ -63,117 +66,310 @@ def _details_from_turn(text: str, facts: WorldFacts) -> DisputeDetails:
         transaction_id = facts.other_transaction_id
     elif facts.transaction_id and facts.transaction_id in text:
         transaction_id = facts.transaction_id
-    merchant = None
-    amount = None
-    if facts.merchant and facts.merchant.casefold() in text.casefold():
-        merchant = facts.merchant
-        amount = facts.amount
-    elif facts.amount is not None and str(facts.amount) in text:
-        amount = facts.amount
-    says_not_me = facts.customer_says_not_me and any(
-        phrase in text.casefold() for phrase in ("no fui yo", "no es mío", "no es mio")
-    )
+    merchant = facts.merchant if facts.merchant and facts.merchant.casefold() in text.casefold() else None
+    match = re.search(r"(?<![\w-])(\d+(?:[.,]\d{1,2})?)(?![\w-])", text)
+    amount = Decimal(match[1].replace(",", ".")) if match else None
+    says_not_me = any(phrase in text.casefold() for phrase in ("no fui yo", "no es mío", "no es mio", "no reconozco"))
     return DisputeDetails(
-        out_of_scope=False,
-        merchant=merchant,
-        amount=amount,
-        customer_says_not_me=says_not_me,
-        transaction_id=transaction_id,
+        merchant=merchant, amount=amount, customer_says_not_me=says_not_me, transaction_id=transaction_id
     )
+
+
+class RecordedLLM:
+    def __init__(self, inner: Any, record: TrialRecord) -> None:
+        self.inner = inner
+        self.record = record
+
+    async def respond(self, instructions: str, messages: list[dict[str, str]], **kwargs: Any) -> Any:
+        result = await self.inner.respond(instructions, messages, **kwargs)
+        self.record.model_calls.append(
+            {
+                "instructions_sha256": hashlib.sha256(instructions.encode()).hexdigest(),
+                "input": messages,
+                "model": result.model,
+                "input_tokens": result.input_tokens,
+                "output_tokens": result.output_tokens,
+                "latency_ms": result.latency_ms,
+                "parsed": result.parsed.model_dump(mode="json") if result.parsed is not None else None,
+            }
+        )
+        return result
 
 
 @contextmanager
-def _patched(bank: MemoryBank, facts: WorldFacts) -> Iterator[None]:
+def _patched(
+    bank: MemoryBank, facts: WorldFacts, record: TrialRecord, current: dict[str, Any], case: Case, extractor: str
+) -> Iterator[None]:
     @asynccontextmanager
-    async def _session() -> AsyncIterator[MemoryBank]:
+    async def session() -> AsyncIterator[MemoryBank]:
         yield bank
 
-    def _llm() -> ScriptedLLM:
-        return ScriptedLLM(facts)
+    inner = LLM() if extractor == "real" else ScriptedLLM(facts)
+    calls: dict[str, int] = {}
 
-    with patch.object(chat_api, "session", _session), patch.object(chat_api, "LLM", _llm):
-        yield
+    def instrument(tool: str, call: Callable[..., Awaitable[Any]]) -> Callable[..., Awaitable[Any]]:
+        async def wrapped(ctx: Any, args: Any = None) -> Any:
+            state = current.get("state")
+            event = ToolEvidence(
+                tool=tool,
+                turn_index=current["index"],
+                args=args.model_dump(mode="json") if args else {},
+                outcome="error",
+                customer_id=ctx.session.customer_id,
+                prior_phase=state.phase.value if state else None,
+                selected_transaction_id=state.selected_txn_id if state else None,
+                selected_product_id=state.selected_product_id if state else None,
+                user_text=current["text"],
+            )
+            record.tools.append(event)
+            calls[tool] = calls.get(tool, 0) + 1
+            try:
+                fault = next(
+                    (item for item in case.tool_faults if item.tool == tool and item.on_call == calls[tool]), None
+                )
+                if fault is not None:
+                    if fault.mode != "error":
+                        raise ValueError(f"unsupported fault mode: {fault.mode}")
+                    raise ToolError(f"injected {tool} error")
+                result = await call(ctx, args)
+                event.outcome = "ok"
+                event.result = result.model_dump(mode="json")
+                return result
+            except ToolDenied:
+                event.outcome = "denied"
+                raise
+
+        return wrapped
+
+    with ExitStack() as stack:
+        stack.enter_context(patch.object(chat_api, "session", session))
+        stack.enter_context(patch.object(chat_api, "LLM", lambda: RecordedLLM(inner, record)))
+        for tool in (
+            "get_transaction",
+            "get_transactions",
+            "evaluate_dispute",
+            "open_dispute",
+            "get_dispute",
+            "block_card",
+            "create_handoff",
+        ):
+            stack.enter_context(patch.object(orchestrator, tool, instrument(tool, getattr(orchestrator, tool))))
+        try:
+            yield
+        finally:
+            if extractor == "real":
+                # The owning trial closes the async client below.
+                current["llm"] = inner
+
+
+async def run_trial(case: Case, *, extractor: str = "scripted") -> TrialRecord:
+    record = TrialRecord(case_id=case.id)
+    started = time.perf_counter()
+    bank = None
+    current: dict[str, Any] = {}
+    try:
+        if case.split != Split.DEV:
+            raise ValueError("this diagnostic runner only runs dev cases")
+        if case.session.customer_id is None or not case.user_scenario.script:
+            raise ValueError("scripted trial requires customer identity and user turns")
+        facts = facts_from_case(case)
+        check_label(case, facts)
+        if (
+            facts.label_source == "policy"
+            and any(_details_from_turn(text, facts).customer_says_not_me for text in case.user_scenario.script)
+            != facts.customer_says_not_me
+        ):
+            raise ValueError("scripted not-me signal disagrees with fixture policy facts")
+        if any(fault.mode != "error" for fault in case.tool_faults):
+            raise ValueError("only explicit error faults are supported in this partial smoke")
+        bank = build_bank(case, facts)
+        record.world = asdict(facts)
+        app = create_app()
+        history: list[dict[str, str]] = []
+        conversation_id = None
+        token = uuid4().hex
+        mapping = json.dumps(
+            {
+                token: {
+                    "customer_id": case.session.customer_id,
+                    "expires_at": "2099-01-01T00:00:00Z",
+                    "state": case.session.state.value,
+                }
+            }
+        )
+        expected = [
+            int(value) for value in case.user_scenario.known_info.get("expected_http_statuses", "").split(",") if value
+        ]
+        if expected and len(expected) != len(case.user_scenario.script):
+            raise ValueError("expected status count must match scripted turn count")
+        with patch.dict("os.environ", {"MINSKY_TEST_SESSIONS": mapping}):
+            get_settings.cache_clear()
+            async with app.router.lifespan_context(app):
+                try:
+                    with _patched(bank, facts, record, current, case, extractor):
+                        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+                            for index, turn in enumerate(case.user_scenario.script):
+                                current.update(
+                                    index=index,
+                                    text=turn,
+                                    state=app.state.conversations.get(UUID(conversation_id))
+                                    if conversation_id
+                                    else None,
+                                )
+                                body: dict[str, Any] = {"messages": [*history, {"user": turn}]}
+                                if conversation_id:
+                                    body["conversation_id"] = conversation_id
+                                headers = {"Authorization": f"Bearer {token}"}
+                                if facts.label_source == "authentication":
+                                    headers = {"X-Minsky-Customer-Id": case.session.customer_id}
+                                request_evidence: dict[str, Any] = {"turn": index, "body": body}
+                                record.requests.append(request_evidence)
+                                response = await client.post("/api/chat/turn", json=body, headers=headers)
+                                payload = response.json()
+                                request_evidence.update(http_status=response.status_code, response=payload)
+                                wanted = (
+                                    401
+                                    if facts.label_source == "authentication"
+                                    else expected[index]
+                                    if expected
+                                    else 200
+                                )
+                                if response.status_code != wanted:
+                                    raise RuntimeError(
+                                        f"turn {index + 1}: expected HTTP {wanted}, got {response.status_code}"
+                                    )
+                                if response.status_code == 200:
+                                    conversation_id = payload["conversation_id"]
+                                    history = payload["messages"]
+                                record.messages = [_pair(item) for item in history]
+                        grade = grade_trial(case, app.state.cases, record.messages, facts, record.tools)
+                        record.grade = asdict(grade)
+                        record.status = "passed" if grade.passed else "failed"
+                finally:
+                    record.audit = [vars(row) for row in app.state.cases.list_audit()]
+                    record.final_state = {
+                        "dispute": vars(dispute)
+                        if (
+                            dispute := app.state.cases.get_dispute_by_transaction(
+                                customer_id=case.session.customer_id, transaction_id=facts.transaction_id or ""
+                            )
+                        )
+                        else None,
+                        "card_block": vars(block)
+                        if facts.product_id and (block := app.state.cases.get_card_block(facts.product_id))
+                        else None,
+                        "handoffs": [
+                            event.result["handoff"]
+                            for event in record.tools
+                            if event.tool == "create_handoff" and event.result is not None
+                        ],
+                    }
+    except Exception as error:
+        record.status = "error"
+        record.error_class = type(error).__name__
+        # Exception strings may contain provider details; retain HTTP status evidence instead.
+        record.error_message = "Trial could not complete; inspect structured requests and tool evidence."
+    finally:
+        record.latency_ms = (time.perf_counter() - started) * 1000
+        if bank is not None:
+            bank.close()
+        if "llm" in current:
+            await current["llm"].client.close()
+        get_settings.cache_clear()
+    return record
 
 
 async def run_case(case: Case) -> TrialGrade:
-    """Play `user_scenario.script` against POST /api/chat/turn and grade the end state."""
-    if case.session.customer_id is None:
-        raise ValueError(f"{case.id}: customer_id is required")
-    if not case.user_scenario.script:
-        raise ValueError(f"{case.id}: the scripted runner needs user_scenario.script")
-    facts = facts_from_case(case)
-    check_label(case, facts)
-    bank = build_bank(case, facts)
-    app = create_app()
-    history: list[dict[str, str]] = []
-    conversation_id: str | None = None
-    # httpx's ASGI transport does not run the FastAPI lifespan, which is what attaches the case store.
-    async with app.router.lifespan_context(app):
-        with _patched(bank, facts):
-            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-                for turn in case.user_scenario.script:
-                    history.append({"user": turn})
-                    body: dict[str, Any] = {"messages": history}
-                    if conversation_id is not None:
-                        body["conversation_id"] = conversation_id
-                    response = await client.post(
-                        "/api/chat/turn",
-                        json=body,
-                        headers={"X-Minsky-Customer-Id": case.session.customer_id},
-                    )
-                    if response.status_code != 200:
-                        raise RuntimeError(f"{case.id}: chat/turn {response.status_code} {response.text}")
-                    payload = response.json()
-                    conversation_id = payload["conversation_id"]
-                    history = payload["messages"]
-        messages = [_pair(item) for item in history]
-        return grade_trial(case, app.state.cases, messages, facts)
+    record = await run_trial(case)
+    if record.grade is None:
+        raise RuntimeError(f"{case.id}: {record.error_class}; {record.error_message}")
+    return TrialGrade(**record.grade)
 
 
 def _pair(item: dict[str, str]) -> tuple[str, str]:
-    if "user" in item:
-        return ("user", item["user"])
-    if "agent" in item:
-        return ("agent", item["agent"])
-    raise ValueError(f"message has neither user nor agent: {item}")
+    return ("user", item["user"]) if "user" in item else ("agent", item["agent"])
 
 
 def _select(cases: list[Case], *, include_drafts: bool, ids: set[str] | None) -> list[Case]:
-    selected = []
-    for case in cases:
-        if ids is not None and case.id not in ids:
-            continue
-        if case.status == Status.DRAFT and not include_drafts:
-            continue
-        if case.status == Status.RETIRED:
-            continue
-        info = case.user_scenario.known_info
-        scripted = bool(case.user_scenario.script) and ("rule_id" in info or info.get("label_source") == "tool_denial")
-        if not scripted:
-            continue
-        selected.append(case)
-    return selected
+    return [
+        case
+        for case in cases
+        if case.split == Split.DEV
+        and (ids is None or case.id in ids)
+        and case.status != Status.RETIRED
+        and (include_drafts or case.status != Status.DRAFT)
+        and case.user_scenario.script
+        and (
+            "rule_id" in case.user_scenario.known_info
+            or case.user_scenario.known_info.get("label_source") in {"tool_denial", "authentication"}
+        )
+    ]
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--cases", type=Path, default=Path("evals/cases"))
+    parser.add_argument("--cases", type=Path, default=Path("evals/cases/dev"))
     parser.add_argument("--include-drafts", action="store_true")
-    parser.add_argument("--ids", default="", help="comma-separated case ids")
+    parser.add_argument("--ids", default="")
+    parser.add_argument("--output", type=Path, default=None)
+    parser.add_argument("--extractor", choices=("scripted", "real"), default="scripted")
+    parser.add_argument("--trials", type=int, default=1)
     args = parser.parse_args(argv)
-    ids = {item for item in args.ids.split(",") if item} or None
-    chosen = _select(load_cases(args.cases), include_drafts=args.include_drafts, ids=ids)
-    if not chosen:
-        print("0 cases")
-        return 0
-    failed = 0
+    ids = set(filter(None, args.ids.split(","))) or None
+    root = args.cases / "dev" if (args.cases / "dev").is_dir() else args.cases
+    chosen = _select(
+        [load_case(path) for path in sorted(root.glob("*.yaml"))], include_drafts=args.include_drafts, ids=ids
+    )
+    if not chosen or args.trials < 1:
+        parser.error("select at least one runnable dev case and a positive trial count")
+    if args.extractor == "real":
+        parser.error(
+            "real extraction requires a separately budgeted integrated run; "
+            "use run_trial(extractor='real') from that harness"
+        )
+    output = args.output or Path("evals/runs") / f"smoke-{uuid4().hex[:12]}"
+    output.mkdir(parents=True, exist_ok=False)
+    metadata = {
+        "git_sha": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
+        "dirty": bool(subprocess.check_output(["git", "diff", "HEAD", "--name-only"], text=True).strip()),
+        "mode": "offline-scripted",
+        "model": SCRIPTED_MODEL,
+        "today": get_settings().today.isoformat(),
+        "trials_per_case": args.trials,
+        "cases": {case.id: hashlib.sha256(case.model_dump_json().encode()).hexdigest() for case in chosen},
+        "prompts": {
+            p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(Path("prompts").glob("agent*.j2"))
+        },
+        "unsupported_safety": ["ungrounded_fact", "wrong_language", "followed_injected_instruction"],
+        "database": "isolated SQLite; production PostgreSQL behavior not verified",
+    }
+    (output / "metadata.json").write_text(json.dumps(metadata, indent=2))
+    passed = errors = 0
     for case in chosen:
-        grade = asyncio.run(run_case(case))
-        mark = "pass" if grade.passed else "fail"
-        print(f"{mark} {case.id} outcome={grade.observed_outcome} {'; '.join(grade.reasons)}")
-        failed += not grade.passed
-    print(f"{len(chosen) - failed}/{len(chosen)} passed")
-    return 1 if failed else 0
+        for trial in range(args.trials):
+            record = asyncio.run(run_trial(case))
+            (output / f"{case.id}-{trial}.json").write_text(record.model_dump_json(indent=2))
+            filename = "errors.jsonl" if record.status == "error" else "results.jsonl"
+            with (output / filename).open("a") as stream:
+                stream.write(record.model_dump_json() + "\n")
+            passed += record.status == "passed"
+            errors += record.status == "error"
+            print(record.status, case.id, record.grade.get("reasons", []) if record.grade else record.error_class)
+    attempted = len(chosen) * args.trials
+    summary = {
+        "passed": passed,
+        "attempted": attempted,
+        "errors": errors,
+        "graded": attempted - errors,
+        "provider_cost_usd": 0,
+        "limitation": "scripted extraction and partial safety checks; not a headline result",
+    }
+    (output / "summary.json").write_text(json.dumps(summary, indent=2))
+    print(
+        f"{Rate(passed, attempted - errors)} graded; "
+        f"infrastructure/configuration errors {errors}/{attempted}; artifacts {output}"
+    )
+    return int(passed != attempted)
 
 
 if __name__ == "__main__":

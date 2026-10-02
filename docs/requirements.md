@@ -38,9 +38,9 @@ Status: ✅ done · 🟡 partial · ⬜ planned · ⚠️ risk or gap
 | P4.3 | If data is static, demonstrate update correctness with a labeled test fixture | Late and corrected partition fixture | — | ⬜ |
 | P4.4 | Evaluate at least one learned component against a baseline | Router ladder | `ml/README.md` | ⬜ |
 | P4.5 | Valid labels, no leakage, justified representations, metrics, thresholds, splits | Customer + time splits; leakage check; threshold on val | `ml/README.md`, `evals.md` | ⬜ |
-| P5.1 | Evaluate on held-out cases | Locked test split | `evals.md` | 🟡 harness partial |
-| P5.2 | Cover incorrect or missing data, expired sessions, unauthorized access, prompt injection, tool failures, multilingual ambiguity | Red-team and failure suites; fault injection in cases | `evals/schema.py` | 🟡 schema supports it |
-| P5.3 | Report successes, unsafe outcomes, handoff behavior, latency and cost, with sample sizes and limitations | Metrics module; report template | `evals/metrics.py` | 🟡 |
+| P5.1 | Evaluate on held-out cases | Locked test split | `evals.md` | 🟡 nine draft dev scenarios run offline; held-out/live evaluation pending |
+| P5.2 | Cover incorrect or missing data, expired sessions, unauthorized access, prompt injection, tool failures, multilingual ambiguity | Red-team and failure suites; fault injection in cases | `evals/schema.py` | 🟡 offline auth, ambiguity, tool-error and fraud controls; injection, multilingual and live suites pending |
+| P5.3 | Report successes, unsafe outcomes, handoff behavior, latency and cost, with sample sizes and limitations | Metrics module; report template | `evals/metrics.py`, `evals/reports/2026-10-02-pr25-smoke.md` | 🟡 durable offline trials + partial safety evidence; provider latency/cost and full graders pending |
 | P6.1 | Tracing, bounded retries, safe fallback, reproducible setup | OpenTelemetry + trace/audit tables (ADR 0007); retries with jitter; degraded mode = handoff; `make up` | `architecture.md`, `backend/agent`, `backend/api` | 🟡 turn/clarification limits and retry recovery; OTel + safe fallback pending |
 | P6.2 | Explain capacity limits, monitoring, access controls, data retention, remaining deployment work | Workload tiers derived from the dataset; Bedrock quotas as the binding limit; architecture and mapping docs | `architecture.md`, `poc_to_prod.md` | 🟡 design |
 | P6.3 | Explanations from sources, policy rules and execution records; not chain of thought | Rule ids + tool results + traces | `dispute_policy.md` | 🟡 |
@@ -53,7 +53,7 @@ Status: ✅ done · 🟡 partial · ⬜ planned · ⚠️ risk or gap
 | B2 | Label inputs as real, de-identified, synthetic or team-generated | `provenance` on every case; synthetic policy labeled | `evals/schema.py` | 🟡 |
 | B3 | No private records, credentials or restricted data in public submissions or external model requests | `.env` never committed; read models exclude documents, contact details, income and score; Bedrock in our account | AGENTS rules 6-7, `read_models.md` | 🟡 |
 | B4 | Sandbox services and mock tools allowed if contracts and limits are documented | Tool contracts in `tools/bank.py`; six session-scoped tools + denial tests | `backend/tools` | 🟡 |
-| B5 | Authentication with a trusted test session; an id alone is not identity | `ToolSession` for tools; API-key + simulated OTP later; Cognito in production | `backend/identity`, ADR 0009 | 🟡 server-provisioned expiring bearer sessions; OTP/Cognito pending |
+| B5 | Authentication with a trusted test session; an id alone is not identity | Server-provisioned expiring test credentials; simulated OTP later; Cognito in production | `backend/identity`, ADR 0009 | 🟡 server-provisioned expiring bearer sessions; OTP/Cognito pending |
 | B6 | Access and action permissions enforced in the service or tool layer | Session-scoped tools, denial tests (`test_tools_bank.py`) | `backend/identity`, `backend/tools` | 🟡 trusted HTTP identity + per-tool ownership checks; RLS pending |
 | B7 | Credit workflows: separate risk and policy; no invented rules | Not our workflow; the same principle applies to disputes | — | ✅ n/a |
 | B8 | No live lending decisions or money movement | The system never moves money or grants refunds | `dispute_policy.md` | ✅ by design |

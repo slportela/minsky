@@ -17,6 +17,11 @@ SCRIPTED = (
     "dispute-eligible-open-es",
     "dispute-above-limit-es",
     "dispute-other-customer-txn-es",
+    "dispute-auth-header-denied-es",
+    "dispute-clarify-retain-merchant-es",
+    "dispute-policy-failure-retry-es",
+    "dispute-fraud-block-es",
+    "dispute-fraud-no-block-es",
 )
 
 

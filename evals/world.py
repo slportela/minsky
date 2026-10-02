@@ -6,11 +6,12 @@ the trial refuses to start unless `policy.disputes.decide` returns the case's ru
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
-from typing import Any
 
+from evals.fixtures import FixtureBank
 from evals.schema import Case, Outcome
 from minsky_api.config import get_settings
 from minsky_api.policy.disputes import DisputeFacts, Route, TxnStatus, decide
@@ -49,8 +50,8 @@ class WorldFacts:
     other_transaction_id: str | None
 
 
-class MemoryBank:
-    """Enough of a DB session for the bank tools: get by id, list the session customer's rows."""
+class MemoryBank(FixtureBank):
+    """Per-trial SQL world honoring the real read-store predicates, ordering, and limits."""
 
     def __init__(
         self,
@@ -60,42 +61,18 @@ class MemoryBank:
         *,
         customer_id: str,
     ) -> None:
-        self._transactions = {row.transaction_id: row for row in transactions}
-        self._stats = stats
-        self._products = products
         self.customer_id = customer_id
-
-    async def get(self, model: type[Any], identity: Any) -> Any:
-        if model is Transaction:
-            return self._transactions.get(identity)
-        if model is CustomerComplaintStats:
-            return self._stats.get(identity)
-        if model is Product:
-            return self._products.get(identity)
-        return None
-
-    async def exec(self, statement: Any) -> _Rows:
-        del statement
-        owned = [row for row in self._transactions.values() if row.customer_id == self.customer_id]
-        return _Rows(owned)
-
-
-class _Rows:
-    def __init__(self, rows: list[Any]) -> None:
-        self._rows = rows
-
-    def all(self) -> list[Any]:
-        return list(self._rows)
+        super().__init__([*transactions, *stats.values(), *products.values()])
 
 
 def facts_from_case(case: Case) -> WorldFacts:
     info = case.user_scenario.known_info
     label_source = info.get("label_source", "policy")
-    if label_source not in {"policy", "tool_denial"}:
-        raise ValueError(f"{case.id}: label_source must be policy or tool_denial")
+    if label_source not in {"policy", "tool_denial", "authentication"}:
+        raise ValueError(f"{case.id}: label_source must be policy, tool_denial, or authentication")
     if label_source == "tool_denial":
         _require(info, "other_customer_id", "other_transaction_id")
-    else:
+    elif label_source == "policy":
         _require(
             info,
             "rule_id",
@@ -133,6 +110,10 @@ def facts_from_case(case: Case) -> WorldFacts:
 def check_label(case: Case, facts: WorldFacts) -> None:
     """The expected outcome has to be what the policy (or the ownership rule) says, not a guess."""
     expected = case.evaluation_criteria.expected_outcome
+    if facts.label_source == "authentication":
+        if expected != Outcome.REFUSE:
+            raise ValueError("authentication denial must expect refuse")
+        return
     if facts.label_source == "tool_denial":
         if expected != Outcome.CLARIFY:
             raise ValueError(f"{case.id}: a transaction the customer does not own must expect clarify, not {expected}")
@@ -175,7 +156,18 @@ def build_bank(case: Case, facts: WorldFacts) -> MemoryBank:
                 fraud_score=Decimal("1.00"),
             )
         )
-    if not transactions:
+    for extra in json.loads(case.user_scenario.known_info.get("extra_transactions", "[]")):
+        row = Transaction.model_validate(
+            {
+                **_transaction(customer_id, facts).model_dump(),
+                "transaction_id": extra["transaction_id"],
+                "merchant_name": extra["merchant"],
+                "amount": Decimal(extra["amount"]),
+                "amount_usd": Decimal(extra["amount"]),
+            }
+        )
+        transactions.append(row)
+    if not transactions and facts.label_source != "authentication":
         raise ValueError(f"{case.id}: known_info has no transaction to put in the world")
     return MemoryBank(transactions, stats, products, customer_id=customer_id)
 
