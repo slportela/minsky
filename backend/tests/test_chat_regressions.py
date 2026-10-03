@@ -87,6 +87,12 @@ def test_failed_policy_turn_can_be_retried(client, monkeypatch):
             transaction_id="T1", rule_id="D09-eligible", route="open_dispute", offer_card_block=False
         )
 
+    async def confirmed(llm: Any, text: str):
+        from minsky_api.agent.confirm import Confirmation
+
+        return Confirmation(decision="yes")
+
+    monkeypatch.setattr("minsky_api.agent.orchestrator.classify_confirmation", confirmed)
     monkeypatch.setattr("minsky_api.agent.orchestrator.evaluate_dispute", policy)
     body = {"conversation_id": str(state.conversation_id), "messages": [{"user": "sí"}]}
     headers = {"Authorization": "Bearer test-token", "X-Minsky-Customer-Id": "C1"}
@@ -122,6 +128,12 @@ def test_readback_failure_recovers_existing_dispute(client, monkeypatch):
             raise ToolError("readback failed after write")
         return await real_get(ctx, args)
 
+    async def confirmed(llm: Any, text: str):
+        from minsky_api.agent.confirm import Confirmation
+
+        return Confirmation(decision="yes")
+
+    monkeypatch.setattr("minsky_api.agent.orchestrator.classify_confirmation", confirmed)
     monkeypatch.setattr("minsky_api.agent.orchestrator.open_dispute", opened)
     monkeypatch.setattr("minsky_api.agent.orchestrator.get_dispute", readback)
     body = {"conversation_id": str(state.conversation_id), "messages": [{"user": "sí"}]}

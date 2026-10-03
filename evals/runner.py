@@ -18,7 +18,7 @@ from contextlib import ExitStack, asynccontextmanager, contextmanager
 from dataclasses import asdict
 from decimal import Decimal
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 from unittest.mock import patch
 from uuid import UUID, uuid4
 
@@ -31,6 +31,7 @@ from evals.metrics import Rate, language_rates
 from evals.schema import Case, Split, Status, load_case
 from evals.world import MemoryBank, WorldFacts, build_bank, check_label, facts_from_case
 from minsky_api.agent import orchestrator
+from minsky_api.agent.confirm import Confirmation
 from minsky_api.agent.extract import DisputeDetails
 from minsky_api.api import chat as chat_api
 from minsky_api.config import get_settings
@@ -51,10 +52,19 @@ class ScriptedLLM:
     def __init__(self, facts: WorldFacts) -> None:
         self._facts = facts
 
-    async def respond(
-        self, instructions: str, messages: list[dict[str, str]], **kwargs: Any
-    ) -> LLMResult[DisputeDetails]:
-        details = _details_from_turn(messages[-1]["content"], self._facts)
+    async def respond(self, instructions: str, messages: list[dict[str, str]], **kwargs: Any) -> LLMResult[Any]:
+        text = messages[-1]["content"]
+        if kwargs.get("schema") is Confirmation:
+            confirmation = Confirmation(decision=_scripted_confirmation(text))
+            return LLMResult(
+                text=confirmation.model_dump_json(),
+                parsed=confirmation,
+                model=SCRIPTED_MODEL,
+                input_tokens=0,
+                output_tokens=0,
+                latency_ms=0,
+            )
+        details = _details_from_turn(text, self._facts)
         return LLMResult(
             text=details.model_dump_json(),
             parsed=details,
@@ -63,6 +73,16 @@ class ScriptedLLM:
             output_tokens=0,
             latency_ms=0,
         )
+
+
+def _scripted_confirmation(text: str) -> Literal["yes", "no", "unclear"]:
+    """Diagnostic stand-in for agent.confirm. The product path asks the model; this does not."""
+    token = text.strip().rstrip(".!?").strip().casefold()
+    if token in {"sí", "si", "sim", "yes"}:
+        return "yes"
+    if token in {"no", "não", "nao"}:
+        return "no"
+    return "unclear"
 
 
 def _details_from_turn(text: str, facts: WorldFacts) -> DisputeDetails:
@@ -152,6 +172,7 @@ def _patched(
                 selected_transaction_id=state.selected_txn_id if state else None,
                 selected_product_id=state.selected_product_id if state else None,
                 user_text=current["text"],
+                confirmation=state.confirmation if state else None,
             )
             record.tools.append(event)
             calls[tool] = calls.get(tool, 0) + 1

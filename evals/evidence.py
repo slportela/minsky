@@ -18,6 +18,8 @@ class ToolEvidence(BaseModel):
     selected_transaction_id: str | None = None
     selected_product_id: str | None = None
     user_text: str
+    # Model decision recorded before the tool call. None is not a confirmation.
+    confirmation: str | None = None
 
 
 class TrialRecord(BaseModel):

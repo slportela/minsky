@@ -5,8 +5,9 @@ from __future__ import annotations
 import re
 
 from minsky_api.agent import replies
+from minsky_api.agent.confirm import classify_confirmation
 from minsky_api.agent.extract import DisputeDetails, extract_dispute_details
-from minsky_api.agent.language import LanguageDetector, default_language_detector, is_no, is_yes
+from minsky_api.agent.language import LanguageDetector, default_language_detector
 from minsky_api.agent.state import ConversationState, Phase
 from minsky_api.config import get_settings
 from minsky_api.identity.session import SessionState
@@ -34,7 +35,7 @@ from minsky_api.tools.schemas import (
     TransactionView,
 )
 
-# No lone "y": too easy to false-confirm on noisy input. Yes/no words live in the language catalog.
+# A bare number picks a candidate. Yes/no is a model decision, not a token list.
 _PICK = re.compile(r"^\s*(\d+)\s*$")
 
 
@@ -232,11 +233,19 @@ async def _phase_clarify(ctx: ToolContext, state: ConversationState, text: str, 
     return await _after_candidates(ctx, state, txns)
 
 
-async def _phase_confirm_txn(ctx: ToolContext, state: ConversationState, text: str) -> str:
+async def _remember_decision(state: ConversationState, text: str, llm: LLM) -> str:
+    """Store the model decision before any tool call. Only 'yes' may act."""
+    decision = (await classify_confirmation(llm, text)).decision
+    state.confirmation = decision
+    return decision
+
+
+async def _phase_confirm_txn(ctx: ToolContext, state: ConversationState, text: str, llm: LLM) -> str:
     language = _lang(state)
-    if is_yes(text, language):
+    decision = await _remember_decision(state, text, llm)
+    if decision == "yes":
         return await _apply_policy(ctx, state)
-    if is_no(text, language):
+    if decision == "no":
         state.phase = Phase.CLARIFY
         state.selected_txn_id = None
         state.selected_product_id = None
@@ -245,12 +254,13 @@ async def _phase_confirm_txn(ctx: ToolContext, state: ConversationState, text: s
     return replies.need_yes_or_no(language=language)
 
 
-async def _phase_confirm_act(ctx: ToolContext, state: ConversationState, text: str) -> str:
+async def _phase_confirm_act(ctx: ToolContext, state: ConversationState, text: str, llm: LLM) -> str:
     language = _lang(state)
-    if is_no(text, language):
+    decision = await _remember_decision(state, text, llm)
+    if decision == "no":
         state.phase = Phase.DONE
         return replies.aborted(language=language)
-    if not is_yes(text, language):
+    if decision != "yes":
         return replies.need_yes_or_no(language=language)
     assert state.selected_txn_id is not None
     opened = await open_dispute(
@@ -271,9 +281,9 @@ async def _phase_confirm_act(ctx: ToolContext, state: ConversationState, text: s
     )
 
 
-async def _phase_card_offer(ctx: ToolContext, state: ConversationState, text: str) -> str:
+async def _phase_card_offer(ctx: ToolContext, state: ConversationState, text: str, llm: LLM) -> str:
     language = _lang(state)
-    if is_yes(text, language):
+    if await _remember_decision(state, text, llm) == "yes":
         actions: list[str] = []
         blocked_ok = False
         if state.selected_product_id:
@@ -303,7 +313,7 @@ async def _phase_card_offer(ctx: ToolContext, state: ConversationState, text: st
             )
         # Never claim a block we did not verify.
         return replies.handoff_done(handoff_id=result.handoff.handoff_id, rule_id=state.rule_id, language=language)
-    if is_no(text, language):
+    if state.confirmation == "no":
         return await _handoff(ctx, state, reason="possible_fraud_no_block", rule_id=state.rule_id)
     return replies.need_yes_or_no(language=language)
 
@@ -344,11 +354,11 @@ async def run_turn(
     elif state.phase == Phase.CLARIFY:
         reply = await _phase_clarify(ctx, state, stripped, llm)
     elif state.phase == Phase.CONFIRM_TXN:
-        reply = await _phase_confirm_txn(ctx, state, stripped)
+        reply = await _phase_confirm_txn(ctx, state, stripped, llm)
     elif state.phase == Phase.CONFIRM_ACT:
-        reply = await _phase_confirm_act(ctx, state, stripped)
+        reply = await _phase_confirm_act(ctx, state, stripped, llm)
     elif state.phase == Phase.CARD_OFFER:
-        reply = await _phase_card_offer(ctx, state, stripped)
+        reply = await _phase_card_offer(ctx, state, stripped, llm)
     else:
         raise RuntimeError(f"unknown phase: {state.phase}")
 

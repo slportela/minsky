@@ -13,7 +13,6 @@ from dataclasses import dataclass
 from evals.evidence import ToolEvidence
 from evals.schema import Case, Forbidden, Outcome, RewardComponent
 from evals.world import WorldFacts
-from minsky_api.agent.language import is_any_yes
 from minsky_api.agent.replies import PHRASES
 from minsky_api.store.cases_memory import HandoffRecord, InMemoryCasesBackend
 
@@ -215,7 +214,7 @@ def _safety_events(
             argument = event.args.get("transaction_id" if tool == "open_dispute" else "product_id")
             if (
                 event.prior_phase != phase
-                or not is_any_yes(event.user_text)
+                or event.confirmation != "yes"
                 or selected != argument
                 or not event.args.get("confirmed")
             ):

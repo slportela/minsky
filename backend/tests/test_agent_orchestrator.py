@@ -46,10 +46,33 @@ class FakeSession:
 
 
 class FakeLLM:
-    def __init__(self, details: DisputeDetails | list[DisputeDetails]) -> None:
+    """Extract queue, plus an optional confirmation-decision queue.
+
+    A queued decision is what the model said. It is independent of the customer words, so a test
+    can prove the orchestrator follows the model.
+    """
+
+    def __init__(
+        self,
+        details: DisputeDetails | list[DisputeDetails],
+        *,
+        decisions: list[str | None] | None = None,
+    ) -> None:
         self._queue = details if isinstance(details, list) else [details]
+        self._decisions = list(decisions) if decisions is not None else None
 
     async def respond(self, *args: Any, schema: type | None = None, **kwargs: Any) -> LLMResult[Any]:
+        if schema is not None and schema.__name__ == "Confirmation":
+            decision = self._next_decision(args)
+            parsed = None if decision is None else schema(decision=decision)
+            return LLMResult(
+                text="" if parsed is None else parsed.model_dump_json(),
+                parsed=parsed,
+                model="gpt-6-luna",
+                input_tokens=1,
+                output_tokens=1,
+                latency_ms=1.0,
+            )
         details = self._queue.pop(0) if len(self._queue) > 1 else self._queue[0]
         return LLMResult(
             text=details.model_dump_json(),
@@ -59,6 +82,18 @@ class FakeLLM:
             output_tokens=1,
             latency_ms=1.0,
         )
+
+    def _next_decision(self, args: tuple[Any, ...]) -> str | None:
+        if self._decisions is not None:
+            if not self._decisions:
+                raise AssertionError("no confirmation decision queued")
+            return self._decisions.pop(0)
+        text = str(args[1][-1]["content"]).strip().rstrip(".!?").strip().casefold()
+        if text in {"sí", "si", "sim", "yes"}:
+            return "yes"
+        if text in {"no", "não", "nao"}:
+            return "no"
+        return "unclear"
 
 
 def _valid(customer_id: str = "C1") -> ToolSession:
@@ -276,6 +311,31 @@ def test_card_offer_without_product_does_not_claim_block():
     assert ctx.cases.get_card_block("P1") is None
     assert "bloqueé" not in reply.lower()
     assert any(a.tool == "create_handoff" and a.outcome == "ok" for a in ctx.cases.list_audit())
+
+
+def test_confirm_follows_the_model_when_the_word_says_otherwise():
+    """'no' used to cancel. If the model says yes, the charge is confirmed anyway."""
+    ctx = _ctx()
+    state = _state()
+    llm = FakeLLM(_details(), decisions=["yes"])
+    state, _ = asyncio.run(run_turn(state, "Cafe 25", ctx, llm))  # type: ignore[arg-type]
+    assert state.phase == Phase.CONFIRM_TXN
+    state, _ = asyncio.run(run_turn(state, "no", ctx, llm))  # type: ignore[arg-type]
+    assert state.phase == Phase.CONFIRM_ACT
+    assert state.confirmation == "yes"
+    assert not any(a.tool == "open_dispute" for a in ctx.cases.list_audit())
+
+
+def test_blank_confirmation_stays_in_phase_and_opens_nothing():
+    ctx = _ctx()
+    state = _state()
+    llm = FakeLLM(_details(), decisions=[None])
+    state, _ = asyncio.run(run_turn(state, "Cafe 25", ctx, llm))  # type: ignore[arg-type]
+    state, reply = asyncio.run(run_turn(state, "sí", ctx, llm))  # type: ignore[arg-type]
+    assert state.phase == Phase.CONFIRM_TXN
+    assert state.confirmation == "unclear"
+    assert "entendí" in reply.lower() or "sí" in reply.lower()
+    assert not any(a.tool == "open_dispute" for a in ctx.cases.list_audit())
 
 
 def test_lone_y_is_not_confirmation():

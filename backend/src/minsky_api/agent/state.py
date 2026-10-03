@@ -36,6 +36,8 @@ class ConversationState:
     dispute_reason: str = "unrecognized_charge"
     # Set from the first customer message; later turns reuse it.
     language: str | None = None
+    # Model decision for the confirm turn in progress (yes, no, unclear). Code acts only on yes.
+    confirmation: str | None = None
     search_details: DisputeDetails = field(default_factory=DisputeDetails)
     # Last user/agent texts for the HTTP contract (server-owned history).
     messages: list[tuple[str, str]] = field(default_factory=list)  # ("user"|"agent", text)
