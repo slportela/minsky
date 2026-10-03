@@ -100,6 +100,7 @@ async def _handoff(
         ),
     )
     state.phase = Phase.DONE
+    state.pending_question = None
     handoff_id = result.handoff.handoff_id
     language = _lang(state)
     if kind == "clarify_limit":
@@ -196,6 +197,7 @@ async def _apply_policy(ctx: ToolContext, state: ConversationState) -> str:
         return f"{text} {handoff_text}"
     # inform / abstain (include existing dispute ref when D04)
     state.phase = Phase.DONE
+    state.pending_question = None
     return replies.policy_inform(
         rule_id=decision.rule_id,
         existing_dispute_id=decision.existing_dispute_id,

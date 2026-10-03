@@ -282,6 +282,7 @@ def test_escalate_amount_handoff_without_opening():
     state, _ = asyncio.run(run_turn(state, "Cargo de 900", ctx, llm))  # type: ignore[arg-type]
     state, reply = asyncio.run(run_turn(state, "sí", ctx, llm))  # type: ignore[arg-type]
     assert state.phase == Phase.DONE
+    assert state.pending_question is None
     assert not any(a.tool == "open_dispute" and a.outcome == "ok" for a in ctx.cases.list_audit())
     assert any(a.tool == "create_handoff" and a.outcome == "ok" for a in ctx.cases.list_audit())
     assert "asesor" in reply.lower() or "derivo" in reply.lower()
