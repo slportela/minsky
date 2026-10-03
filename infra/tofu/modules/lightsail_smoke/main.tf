@@ -47,8 +47,7 @@ resource "aws_lightsail_distribution" "smoke" {
     default_ttl          = 0
     maximum_ttl          = 0
     forwarded_headers {
-      option             = "allow-list"
-      headers_allow_list = ["Authorization", "Origin", "Accept", "Accept-Language"]
+      option = "all"
     }
     forwarded_cookies { option = "all" }
     forwarded_query_strings { option = true }

@@ -147,8 +147,10 @@ when the required live-model and integrated gates are met; rerun a final smoke o
 Use `demo_url` from OpenTofu; AWS's public certificate should validate without importing
 Caddy's local CA. Deploy with `compose.demo.yaml`; browser TLS ends at CloudFront and
 Caddy origin HTTP is public. This does not close production end-to-end TLS.
-Repeat the browser checks above, explicitly verify Authorization forwarding, no cached
-customer/auth/error responses, and anonymous/expired HTTP 401. Inspect references against
+Repeat the browser checks above. Navigate from the home page to `/chat` and `/console`
+using the links without a full reload; verify the Next.js client-navigation responses.
+Send a JSON chat POST and verify successful parsing and Authorization forwarding.
+Check no cached customer/auth/error responses, and anonymous/expired HTTP 401. Inspect references against
 case read-back evidence before reporting actions as verified. The deployment and this gate
 remain pending until actual AWS plan/apply and the deployed browser run are recorded.
 

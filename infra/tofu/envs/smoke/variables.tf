@@ -16,10 +16,10 @@ variable "blueprint_id" {
   default = "ubuntu_22_04"
 }
 variable "ssh_cidrs" {
-  description = "Operator IPv4 CIDRs only; do not expose SSH to the entire internet."
+  description = "Operator IPv4 /32 addresses only."
   type        = set(string)
   validation {
-    condition     = length(var.ssh_cidrs) > 0 && alltrue([for cidr in var.ssh_cidrs : can(cidrnetmask(cidr)) && cidr != "0.0.0.0/0"])
-    error_message = "Supply restricted operator IPv4 CIDRs."
+    condition     = length(var.ssh_cidrs) > 0 && alltrue([for cidr in var.ssh_cidrs : can(cidrnetmask(cidr)) && can(regex("/32$", cidr))])
+    error_message = "Supply one or more valid operator IPv4 /32 addresses."
   }
 }

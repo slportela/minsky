@@ -1,6 +1,7 @@
 # infra
 
-How the system runs **for the hackathon**. Two environments: local development and the POC demo on AWS.
+How the system runs **for the hackathon**: local development, the retained EC2 demo,
+and a separate temporary Lightsail smoke.
 
 > **The POC demo (one EC2 + Docker Compose) is not the production architecture.** The target is [`docs/architecture.md`](../docs/architecture.md). How each POC piece maps to it, database included: [`docs/poc_to_prod.md`](../docs/poc_to_prod.md). The same container images run in both.
 
@@ -18,6 +19,39 @@ make up                  # build and start caddy, web, api, postgres → https:/
 make logs                # follow logs
 make down                # stop (data volumes are kept)
 ```
+
+## Retained EC2 demo (`envs/demo`)
+
+`make demo-plan` and `make demo-apply` still target this environment. It creates one
+EC2 in the default VPC, an Elastic IP and an instance role limited to SSM, our lake
+bucket and the configured Bedrock models. Only ports 80/443 are open; administration
+uses SSM, with IMDSv2 required. This path needs a DNS name pointing at the Elastic IP
+for Caddy's publicly trusted ACME certificate; it does not supply a free hostname.
+The confirmed `personal` account currently has zero standard EC2 vCPU quota too.
+Review quota, costs and the plan before apply; the temporary Lightsail budget does
+not authorize retaining this EC2 deployment through October 16.
+
+```bash
+cp infra/tofu/envs/demo/terraform.tfvars.example infra/tofu/envs/demo/terraform.tfvars
+# Fill in our lake bucket/model ARNs and approved ingress CIDRs.
+# Export the confirmed own-account AWS_PROFILE in the launching shell.
+make demo-plan
+make demo-apply
+aws ssm start-session --target <instance_id>
+```
+
+On EC2, deploy the reviewed repository revision and provision a minimal runtime env
+file securely, including a strong database password and expiring synthetic sessions.
+Set `DOMAIN` to the DNS name; load the gold read models with the pipeline loader and
+the instance role. Use `sudo docker compose up -d --build` with `compose.yaml` alone;
+do not use the Lightsail `compose.demo.yaml` or local AWS credential mounts. Bootstrap
+installs Docker/Compose; repository/data/runtime provisioning remain deployment steps.
+The EC2 instance role supports Bedrock; the interim model exception is ADR 0008.
+
+Verify browser TLS and all integrated paths before reporting D2 complete. The final
+demo must stay available through October 16 inclusive, with a separately approved
+budget and cleanup date. Single instance/AZ, manual deploy and local database remain
+POC limitations; application case writes are still in memory.
 
 ## Temporary remote smoke on Lightsail (ADR 0011)
 
@@ -44,8 +78,12 @@ tofu -chdir=infra/tofu/envs/smoke plan -out=smoke.tfplan
 ```
 
 Mocked plan tests make no AWS calls. They check the selected bundles, restricted SSH,
-HTTP-only host exposure, uncached POST and Authorization forwarding. The own-account API confirmed the 2 GB USD 12/month VM and USD 2.50/month CDN;
-the real plan contains five creates and no replacement/deletion. Apply was attempted on 2026-10-03 but blocked by the account Lightsail limit of zero.
+HTTP-only host exposure, all request methods/headers/cookies/queries and zero cache TTLs.
+These are configuration assertions, not proof of runtime caching or header behavior.
+The own-account API confirmed the 2 GB USD 12/month VM and USD 2.50/month CDN.
+The original real plan contained five creates and no replacement/deletion; apply was
+attempted on 2026-10-03 but blocked by the account Lightsail limit of zero.
+Review a fresh plan before any retry of this updated configuration.
 The briefly allocated static IP was deleted; deployed browser checks remain pending.
 See `evals/reports/2026-10-03-lightsail-deployment.md`. Review the saved plan: only one
 VM, static IP/attachment/firewall and CDN; no NAT, ALB, RDS, snapshots or IAM credentials.
@@ -70,7 +108,15 @@ runtime env file with strong PostgreSQL password, expiring synthetic sessions an
 settings (ADR 0008). Never upload the workstation `.env`, AWS profiles or organizer keys.
 Set `MINSKY_API_IMAGE` and `MINSKY_WEB_IMAGE` to the exact transferred image tags.
 
-On the host, use Compose **2.24.4 or newer**:
+Bootstrap pins **Compose 2.39.4** and verifies the official x86_64 asset SHA-256 before
+installation. It adds `ubuntu` to the Docker group and makes `/opt/minsky` writable by
+that user. Reconnect SSH after bootstrap so the group membership is active; verify
+`id -nG` includes `docker` and `docker compose version` reports the pinned release.
+Docker-group access grants host-level privileges; keep SSH limited to operator /32s.
+
+The override requires linux/amd64 for all four services. After loading app images,
+verify the tags with `docker image inspect --format '{{.Os}}/{{.Architecture}}' <tag>`
+before starting; both must report `linux/amd64`. On the host:
 
 ```bash
 docker compose -f compose.yaml -f compose.demo.yaml up -d --no-build
@@ -91,6 +137,10 @@ Follow `docs/integrated_smoke.md`: public certificate without bypass, frontend/h
 POST, history, D09 read-back, ambiguity, handoff, anonymous/expired 401 and cross-session
 isolation. Verify forwarding and cache/error behavior on the live CDN; mocked settings
 alone do not prove them. Record source/image revision and results before reporting success.
+
+**No automatic teardown or AWS hard spending cap is installed.** The operator must
+record apply time/deletion deadline, monitor usage and execute cleanup; disabled
+distributions or stopped VMs are not deletion. The six-hour/USD 5 limits are operational.
 
 Delete this **temporary** deployment within six hours. Preserve evidence, then review and
 apply `tofu plan -destroy -out=destroy.tfplan` / `tofu apply destroy.tfplan` in the smoke
