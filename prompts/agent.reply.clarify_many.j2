@@ -1,5 +1,0 @@
-{# version: 2 owner: agent #}
-{{ found_many }}
-{% for row in rows -%}
-{{ loop.index }}. {{ row.merchant }}, {{ row.amount_usd }} USD, {{ row.when }} ({{ row.transaction_id }})
-{% endfor -%}

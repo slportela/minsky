@@ -10,8 +10,34 @@ from fastapi.testclient import TestClient
 
 from minsky_api.agent.state import ConversationState, Phase
 from minsky_api.config import get_settings
+from minsky_api.llm.client import LLMResult
 from minsky_api.main import create_app
 from minsky_api.tools.errors import ToolError
+
+
+class _SpeechLLM:
+    """The chat regressions patch the confirm tool. Reply wording still goes through the model API."""
+
+    async def respond(self, instructions: str, messages: list[dict[str, str]], **kwargs: Any) -> LLMResult[Any]:
+        import json
+
+        schema = kwargs["schema"]
+        payload = json.loads(messages[-1]["content"])
+        facts = payload.get("facts") or {}
+        parts = [str(value) for value in facts.values() if not isinstance(value, bool)]
+        parsed = schema(
+            act=payload["allowed"][0],
+            text=" ".join(parts) or "es",
+            claims_card_blocked=facts.get("card_blocked") is True,
+        )
+        return LLMResult(
+            text=parsed.model_dump_json(),
+            parsed=parsed,
+            model="gpt-6-luna",
+            input_tokens=1,
+            output_tokens=1,
+            latency_ms=1.0,
+        )
 
 
 @pytest.fixture
@@ -26,7 +52,7 @@ def client(monkeypatch: pytest.MonkeyPatch):
         yield MagicMock()
 
     monkeypatch.setattr("minsky_api.api.chat.session", db)
-    monkeypatch.setattr("minsky_api.api.chat.LLM", MagicMock)
+    monkeypatch.setattr("minsky_api.api.chat.LLM", _SpeechLLM)
     with TestClient(create_app()) as http:
         yield http
     get_settings.cache_clear()
@@ -72,6 +98,7 @@ def test_failed_policy_turn_can_be_retried(client, monkeypatch):
         customer_id="C1",
         phase=Phase.CONFIRM_TXN,
         selected_txn_id="T1",
+        language="es",
         pending_question="¿Es este el cargo?",
     )
     client.app.state.conversations.put(state)
@@ -110,6 +137,7 @@ def test_readback_failure_recovers_existing_dispute(client, monkeypatch):
         customer_id="C1",
         phase=Phase.CONFIRM_ACT,
         selected_txn_id="T1",
+        language="es",
         rule_id="D09-eligible",
         pending_question="¿Es este el cargo?",
     )

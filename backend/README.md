@@ -14,7 +14,7 @@ FastAPI service for dispute intake: the orchestrator, the policy, the mock bank 
  agent/          orchestrator: the state machine (steps 1-8) for this conversation
    │  ├─▶ guardrails/  input checks (injection signals)
    │  ├─▶ router/      intent + dispute reason (learned); low confidence → llm/
-   │  ├─▶ llm/         extract details (structured output) · phrase replies · summarize handoffs
+   │  ├─▶ llm/         extract details (structured output) · choose the reply act and wording · summarize handoffs
    │  ├─▶ tools/       get_transactions · get_transaction · classify_reply · open_dispute ·
    │  │                get_dispute · block_card · create_handoff; each checks the session and writes an audit record
    │  ├─▶ policy/      decide(facts) → route + rule id (pure, no I/O)

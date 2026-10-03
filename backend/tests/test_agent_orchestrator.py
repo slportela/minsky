@@ -62,6 +62,26 @@ class FakeLLM:
         self._decisions = list(decisions) if decisions is not None else None
 
     async def respond(self, *args: Any, schema: type | None = None, **kwargs: Any) -> LLMResult[Any]:
+        if schema is not None and schema.__name__ == "Speech":
+            import json
+
+            payload = json.loads(str(args[1][-1]["content"]))
+            facts = payload.get("facts") or {}
+            parts = [str(value) for value in facts.values() if not isinstance(value, bool)]
+            language = str(payload.get("language") or "es")
+            parsed = schema(
+                act=payload["allowed"][0],
+                text=f"{language}: {' '.join(parts)}".strip(),
+                claims_card_blocked=facts.get("card_blocked") is True,
+            )
+            return LLMResult(
+                text=parsed.model_dump_json(),
+                parsed=parsed,
+                model="gpt-6-luna",
+                input_tokens=1,
+                output_tokens=1,
+                latency_ms=1.0,
+            )
         if schema is not None and schema.__name__ == "Confirmation":
             decision = self._next_decision(args)
             parsed = None if decision is None else schema(decision=decision)
@@ -173,7 +193,8 @@ def test_asking_for_confirmation_stores_the_question():
     assert state.phase == Phase.CONFIRM_TXN
     assert state.pending_question == reply
     assert state.confirmation is None
-    assert "?" in reply
+    assert state.acts[-1] == "confirm_txn"
+    assert "T1" in reply
 
 
 def test_d09_open_and_read_back():
@@ -187,7 +208,8 @@ def test_d09_open_and_read_back():
 
     state, reply = asyncio.run(run_turn(state, "sí", ctx, llm))  # type: ignore[arg-type]
     assert state.phase == Phase.CONFIRM_ACT
-    assert "abrir" in reply.lower()
+    assert state.acts[-1] == "confirm_open"
+    assert "T1" in reply
 
     state, reply = asyncio.run(run_turn(state, "sí", ctx, llm))  # type: ignore[arg-type]
     assert state.phase == Phase.DONE
@@ -205,7 +227,7 @@ def test_no_false_open_without_confirm():
     state, reply = asyncio.run(run_turn(state, "no", ctx, llm))  # type: ignore[arg-type]
     assert state.phase == Phase.DONE
     assert not any(a.tool == "open_dispute" and a.outcome == "ok" for a in ctx.cases.list_audit())
-    assert "cambio" in reply.lower() or "no haré" in reply.lower()
+    assert state.acts[-1] == "abort"
 
 
 def test_clarify_many_then_pick():
@@ -252,7 +274,7 @@ def test_max_turns_handoff(monkeypatch):
         state, reply = asyncio.run(run_turn(state, "tal vez", ctx, llm))  # type: ignore[arg-type]
         assert state.phase == Phase.DONE
         assert any(a.tool == "create_handoff" and a.outcome == "ok" for a in ctx.cases.list_audit())
-        assert "límite" in reply.lower() or "asesor" in reply.lower()
+        assert "HO-" in reply
     finally:
         monkeypatch.delenv("MINSKY_MAX_TURNS", raising=False)
         get_settings.cache_clear()
@@ -266,12 +288,13 @@ def test_fraud_card_block_then_handoff():
     state, _ = asyncio.run(run_turn(state, "No fui yo en Cafe", ctx, llm))  # type: ignore[arg-type]
     state, reply = asyncio.run(run_turn(state, "sí", ctx, llm))  # type: ignore[arg-type]
     assert state.phase == Phase.CARD_OFFER
-    assert "bloque" in reply.lower()
+    assert state.acts[-1] == "offer_block"
     state, reply = asyncio.run(run_turn(state, "sí", ctx, llm))  # type: ignore[arg-type]
     assert state.phase == Phase.DONE
     assert ctx.cases.get_card_block("P1") is not None
     assert any(a.tool == "create_handoff" and a.outcome == "ok" for a in ctx.cases.list_audit())
-    assert "fraude" in reply.lower() or "bloque" in reply.lower()
+    assert state.claims_card_blocked is True
+    assert "HO-" in reply
 
 
 def test_escalate_amount_handoff_without_opening():
@@ -285,7 +308,8 @@ def test_escalate_amount_handoff_without_opening():
     assert state.pending_question is None
     assert not any(a.tool == "open_dispute" and a.outcome == "ok" for a in ctx.cases.list_audit())
     assert any(a.tool == "create_handoff" and a.outcome == "ok" for a in ctx.cases.list_audit())
-    assert "asesor" in reply.lower() or "derivo" in reply.lower()
+    assert state.acts[-1] == "handoff"
+    assert "HO-" in reply
 
 
 def test_settings_defaults():
@@ -306,7 +330,7 @@ def test_empty_extract_does_not_list_latest_txns():
     assert state.phase == Phase.CLARIFY
     assert "T1" not in reply and "T2" not in reply
     assert ctx.db.exec_statements == []  # type: ignore[attr-defined]
-    assert "coincida" in reply.lower() or "detalle" in reply.lower()
+    assert state.acts[-1] == "clarify"
 
 
 def test_card_offer_without_product_does_not_claim_block():
@@ -361,7 +385,7 @@ def test_blank_confirmation_stays_in_phase_and_opens_nothing():
     state, reply = asyncio.run(run_turn(state, "sí", ctx, llm))  # type: ignore[arg-type]
     assert state.phase == Phase.CONFIRM_TXN
     assert state.confirmation == "unclear"
-    assert "entendí" in reply.lower() or "sí" in reply.lower()
+    assert state.acts[-1] == "ask_again"
     assert not any(a.tool == "open_dispute" for a in ctx.cases.list_audit())
 
 
@@ -382,7 +406,8 @@ def test_confirm_without_a_stored_question_does_not_act():
     assert "classify_reply" not in tools
     assert "open_dispute" not in tools
     assert "block_card" not in tools
-    assert reply == "No entendí. Responde sí para confirmar, o no para cancelar."
+    assert state.acts[-1] == "ask_again"
+    assert state.phase == Phase.CONFIRM_ACT
 
 
 def test_lone_y_is_not_confirmation():
@@ -393,7 +418,7 @@ def test_lone_y_is_not_confirmation():
     assert state.phase == Phase.CONFIRM_TXN
     state, reply = asyncio.run(run_turn(state, "y", ctx, llm))  # type: ignore[arg-type]
     assert state.phase == Phase.CONFIRM_TXN
-    assert "entendí" in reply.lower() or "sí" in reply.lower()
+    assert state.acts[-1] == "ask_again"
 
 
 def test_customer_mismatch_denied():
@@ -417,17 +442,20 @@ def test_clarify_exhausted_handoff(monkeypatch):
         state, reply = asyncio.run(run_turn(state, "sigue sin aparecer", ctx, llm))  # type: ignore[arg-type]
         assert state.phase == Phase.DONE
         assert any(a.tool == "create_handoff" and a.outcome == "ok" for a in ctx.cases.list_audit())
-        assert "asesor" in reply.lower() or "claridad" in reply.lower()
+        assert "HO-" in reply
     finally:
         monkeypatch.delenv("MINSKY_MAX_CLARIFY_ATTEMPTS", raising=False)
         get_settings.cache_clear()
 
 
 def test_d04_inform_includes_existing_dispute_ref():
-    from minsky_api.agent.replies import policy_inform
+    from evals.runner import _scripted_speech
 
-    text = policy_inform(rule_id="D04-already-disputed", existing_dispute_id="DSP-abc")
-    assert "DSP-abc" in text
+    speech = _scripted_speech(
+        '{"language":"es","allowed":["inform","handoff"],"facts":{"existing_dispute_id":"DSP-abc","rule_id":"D04-already-disputed"}}'
+    )
+    assert speech.act == "inform"
+    assert "DSP-abc" in speech.text
 
 
 def test_clarification_keeps_merchant_and_replaces_amount():
@@ -470,7 +498,7 @@ async def test_search_miss_keeps_filters_when_amount_is_corrected():
     llm = FakeLLM([first, _details(merchant=None, amount=Decimal("25"))])
     try:
         state, reply = await run_turn(state, "Cafe, 50", ctx, llm)  # type: ignore[arg-type]
-        assert "No encontré" in reply
+        assert state.acts[-1] == "clarify"
         assert state.search_details == first
         state, reply = await run_turn(state, "Era de 25", ctx, llm)  # type: ignore[arg-type]
         assert state.phase == Phase.CONFIRM_TXN
@@ -494,7 +522,7 @@ async def test_missing_merchant_does_not_select_another_merchant_on_amount_follo
         state, reply = await run_turn(state, "Era de 25", ctx, llm)  # type: ignore[arg-type]
         assert state.phase == Phase.CLARIFY
         assert state.selected_txn_id is None
-        assert "No encontré" in reply
+        assert state.acts[-1] == "clarify"
         assert all(row.tool != "open_dispute" for row in ctx.cases.list_audit())
     finally:
         bank.close()
@@ -518,12 +546,12 @@ def test_detector_runs_once_and_sim_keeps_portuguese():
     opening = "Quiero disputar un cargo en Cafe de 25"
     state, reply = asyncio.run(run_turn(state, opening, ctx, llm, detector=detector))  # type: ignore[arg-type]
     assert state.language == "pt"
-    assert "Encontrei esta cobrança" in reply
+    assert reply.startswith("pt:")
     assert detector.calls == [opening]
     state, reply = asyncio.run(run_turn(state, "sim", ctx, llm, detector=detector))  # type: ignore[arg-type]
     assert detector.calls == [opening]
     assert state.phase == Phase.CONFIRM_ACT
-    assert "Segundo a política" in reply
+    assert reply.startswith("pt:")
 
 
 def test_spanish_first_message_keeps_spanish_phrases():
@@ -532,7 +560,7 @@ def test_spanish_first_message_keeps_spanish_phrases():
     llm = FakeLLM(_details())
     state, reply = asyncio.run(run_turn(state, "Quiero disputar un cargo en Cafe de 25", ctx, llm))  # type: ignore[arg-type]
     assert state.language == "es"
-    assert "Encontré este cargo" in reply
+    assert reply.startswith("es:")
 
 
 def test_quero_opener_replies_in_portuguese_and_sim_confirms():
@@ -541,7 +569,7 @@ def test_quero_opener_replies_in_portuguese_and_sim_confirms():
     llm = FakeLLM(_details())
     state, reply = asyncio.run(run_turn(state, "Quero disputar uma cobrança de 25 dólares no Cafe", ctx, llm))  # type: ignore[arg-type]
     assert state.language == "pt"
-    assert "Encontrei esta cobrança" in reply
+    assert reply.startswith("pt:")
     state, reply = asyncio.run(run_turn(state, "sim", ctx, llm))  # type: ignore[arg-type]
     assert state.phase == Phase.CONFIRM_ACT
-    assert "Segundo a política" in reply
+    assert reply.startswith("pt:")

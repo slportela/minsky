@@ -33,6 +33,7 @@ from evals.world import MemoryBank, WorldFacts, build_bank, check_label, facts_f
 from minsky_api.agent import orchestrator
 from minsky_api.agent.confirm import Confirmation
 from minsky_api.agent.extract import DisputeDetails
+from minsky_api.agent.speak import Speech
 from minsky_api.api import chat as chat_api
 from minsky_api.config import get_settings
 from minsky_api.llm.client import LLM, LLMResult
@@ -54,6 +55,16 @@ class ScriptedLLM:
 
     async def respond(self, instructions: str, messages: list[dict[str, str]], **kwargs: Any) -> LLMResult[Any]:
         text = messages[-1]["content"]
+        if kwargs.get("schema") is Speech:
+            speech = _scripted_speech(text)
+            return LLMResult(
+                text=speech.model_dump_json(),
+                parsed=speech,
+                model=SCRIPTED_MODEL,
+                input_tokens=0,
+                output_tokens=0,
+                latency_ms=0,
+            )
         if kwargs.get("schema") is Confirmation:
             confirmation = Confirmation(decision=_scripted_confirmation(text))
             return LLMResult(
@@ -73,6 +84,15 @@ class ScriptedLLM:
             output_tokens=0,
             latency_ms=0,
         )
+
+
+def _scripted_speech(text: str) -> Speech:
+    """Diagnostic stand-in: the first allowed act, and the fact ids the customer must hear."""
+    payload = json.loads(text)
+    facts = payload.get("facts") or {}
+    parts = [str(value) for value in facts.values() if not isinstance(value, bool)]
+    body = " ".join(parts).strip() or str(payload.get("language") or "es")
+    return Speech(act=payload["allowed"][0], text=body, claims_card_blocked=facts.get("card_blocked") is True)
 
 
 def _scripted_confirmation(text: str) -> Literal["yes", "no", "unclear"]:
@@ -323,7 +343,19 @@ async def run_trial(
                                     conversation_id = payload["conversation_id"]
                                     history = payload["messages"]
                                 record.messages = [_pair(item) for item in history]
-                        grade = grade_trial(case, app.state.cases, record.messages, facts, record.tools)
+                        stored = (
+                            app.state.conversations.get(UUID(conversation_id)) if conversation_id is not None else None
+                        )
+                        grade = grade_trial(
+                            case,
+                            app.state.cases,
+                            record.messages,
+                            facts,
+                            record.tools,
+                            acts=list(stored.acts) if stored is not None else [],
+                            rule_id=stored.rule_id if stored is not None else None,
+                            claims_card_blocked=stored.claims_card_blocked if stored is not None else False,
+                        )
                         record.grade = asdict(grade)
                         record.status = "passed" if grade.passed else "failed"
                 finally:

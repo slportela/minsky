@@ -20,10 +20,11 @@ from unittest.mock import patch
 from httpx import ASGITransport, AsyncClient
 
 from evals.fixtures import FixtureBank
-from evals.runner import _scripted_confirmation
+from evals.runner import _scripted_confirmation, _scripted_speech
 from evals.schema import Case, load_case
 from minsky_api.agent.confirm import Confirmation
 from minsky_api.agent.extract import DisputeDetails
+from minsky_api.agent.speak import Speech
 from minsky_api.api import chat
 from minsky_api.config import get_settings
 from minsky_api.llm.client import LLMResult
@@ -36,6 +37,16 @@ from minsky_api.tools.errors import ToolError
 class ScriptedExtraction:
     async def respond(self, instructions: str, messages: list[dict[str, str]], **kwargs: Any) -> LLMResult[Any]:
         text = messages[-1]["content"]
+        if kwargs.get("schema") is Speech:
+            speech = _scripted_speech(text)
+            return LLMResult(
+                text=speech.model_dump_json(),
+                parsed=speech,
+                model="scripted-regression",
+                input_tokens=0,
+                output_tokens=0,
+                latency_ms=0,
+            )
         if kwargs.get("schema") is Confirmation:
             confirmation = Confirmation(decision=_scripted_confirmation(text))
             return LLMResult(
