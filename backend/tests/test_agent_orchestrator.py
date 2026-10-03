@@ -165,6 +165,17 @@ def _details(**kwargs: Any) -> DisputeDetails:
     return DisputeDetails(**base)
 
 
+def test_asking_for_confirmation_stores_the_question():
+    ctx = _ctx()
+    state = _state()
+    llm = FakeLLM(_details())
+    state, reply = asyncio.run(run_turn(state, "Cafe 25", ctx, llm))  # type: ignore[arg-type]
+    assert state.phase == Phase.CONFIRM_TXN
+    assert state.pending_question == reply
+    assert state.confirmation is None
+    assert "?" in reply
+
+
 def test_d09_open_and_read_back():
     ctx = _ctx()
     state = _state()
@@ -322,7 +333,7 @@ def test_confirm_follows_the_model_when_the_word_says_otherwise():
     assert state.phase == Phase.CONFIRM_TXN
     state, _ = asyncio.run(run_turn(state, "no", ctx, llm))  # type: ignore[arg-type]
     assert state.phase == Phase.CONFIRM_ACT
-    assert state.confirmation == "yes"
+    assert state.confirmation is None
     assert not any(a.tool == "open_dispute" for a in ctx.cases.list_audit())
 
 

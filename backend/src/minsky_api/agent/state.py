@@ -38,6 +38,8 @@ class ConversationState:
     language: str | None = None
     # Model decision for the confirm turn in progress (yes, no, unclear). Code acts only on yes.
     confirmation: str | None = None
+    # Text of the confirmation question already sent. None unless phase is a confirm phase.
+    pending_question: str | None = None
     search_details: DisputeDetails = field(default_factory=DisputeDetails)
     # Last user/agent texts for the HTTP contract (server-owned history).
     messages: list[tuple[str, str]] = field(default_factory=list)  # ("user"|"agent", text)

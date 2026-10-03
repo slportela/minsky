@@ -45,6 +45,14 @@ def _lang(state: ConversationState) -> str:
     return state.language
 
 
+def _ask(state: ConversationState, phase: Phase, text: str) -> str:
+    """Remember the question before the next customer message is classified."""
+    state.phase = phase
+    state.pending_question = text
+    state.confirmation = None
+    return text
+
+
 def _has_search_filters(details: DisputeDetails) -> bool:
     return any(
         (
@@ -153,8 +161,7 @@ async def _after_candidates(
     state.selected_txn_id = txn.transaction_id
     state.selected_product_id = txn.product_id
     state.candidate_txn_ids = [txn.transaction_id]
-    state.phase = Phase.CONFIRM_TXN
-    return replies.ask_confirm_txn(txn, language=_lang(state))
+    return _ask(state, Phase.CONFIRM_TXN, replies.ask_confirm_txn(txn, language=_lang(state)))
 
 
 async def _apply_policy(ctx: ToolContext, state: ConversationState) -> str:
@@ -170,11 +177,17 @@ async def _apply_policy(ctx: ToolContext, state: ConversationState) -> str:
     state.route = decision.route
     route = decision.route
     if route == Route.OPEN_DISPUTE.value:
-        state.phase = Phase.CONFIRM_ACT
-        return replies.ask_confirm_open(rule_id=decision.rule_id, txn_id=state.selected_txn_id, language=_lang(state))
+        return _ask(
+            state,
+            Phase.CONFIRM_ACT,
+            replies.ask_confirm_open(rule_id=decision.rule_id, txn_id=state.selected_txn_id, language=_lang(state)),
+        )
     if route == Route.ESCALATE_FRAUD.value:
-        state.phase = Phase.CARD_OFFER
-        return replies.ask_card_block(rule_id=decision.rule_id, language=_lang(state))
+        return _ask(
+            state,
+            Phase.CARD_OFFER,
+            replies.ask_card_block(rule_id=decision.rule_id, language=_lang(state)),
+        )
     if route == Route.ESCALATE_AGENT.value:
         return await _handoff(ctx, state, reason="policy_escalate_agent", rule_id=decision.rule_id)
     if route == Route.REFUSE.value:
@@ -220,8 +233,7 @@ async def _phase_clarify(ctx: ToolContext, state: ConversationState, text: str, 
                 return await _after_candidates(ctx, state, [])
             state.selected_txn_id = txn.transaction_id
             state.selected_product_id = txn.product_id
-            state.phase = Phase.CONFIRM_TXN
-            return replies.ask_confirm_txn(txn, language=_lang(state))
+            return _ask(state, Phase.CONFIRM_TXN, replies.ask_confirm_txn(txn, language=_lang(state)))
     details = await extract_dispute_details(llm, text)
     state.customer_says_not_me = state.customer_says_not_me or details.customer_says_not_me
     if details.out_of_scope:
@@ -247,6 +259,7 @@ async def _phase_confirm_txn(ctx: ToolContext, state: ConversationState, text: s
         return await _apply_policy(ctx, state)
     if decision == "no":
         state.phase = Phase.CLARIFY
+        state.pending_question = None
         state.selected_txn_id = None
         state.selected_product_id = None
         state.candidate_txn_ids = []
@@ -259,6 +272,7 @@ async def _phase_confirm_act(ctx: ToolContext, state: ConversationState, text: s
     decision = await _remember_decision(state, text, llm)
     if decision == "no":
         state.phase = Phase.DONE
+        state.pending_question = None
         return replies.aborted(language=language)
     if decision != "yes":
         return replies.need_yes_or_no(language=language)
@@ -274,6 +288,7 @@ async def _phase_confirm_act(ctx: ToolContext, state: ConversationState, text: s
     )
     verified = await get_dispute(ctx, GetDisputeArgs(dispute_id=opened.dispute.dispute_id))
     state.phase = Phase.DONE
+    state.pending_question = None
     return replies.opened_dispute(
         dispute_id=verified.dispute.dispute_id,
         rule_id=state.rule_id or "D09-eligible",
@@ -307,6 +322,7 @@ async def _phase_card_offer(ctx: ToolContext, state: ConversationState, text: st
             ),
         )
         state.phase = Phase.DONE
+        state.pending_question = None
         if blocked_ok:
             return replies.card_blocked_handoff(
                 handoff_id=result.handoff.handoff_id, rule_id=state.rule_id, language=language
@@ -314,6 +330,7 @@ async def _phase_card_offer(ctx: ToolContext, state: ConversationState, text: st
         # Never claim a block we did not verify.
         return replies.handoff_done(handoff_id=result.handoff.handoff_id, rule_id=state.rule_id, language=language)
     if state.confirmation == "no":
+        state.pending_question = None
         return await _handoff(ctx, state, reason="possible_fraud_no_block", rule_id=state.rule_id)
     return replies.need_yes_or_no(language=language)
 
