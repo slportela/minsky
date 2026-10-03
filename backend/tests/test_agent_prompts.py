@@ -15,3 +15,7 @@ def test_speak_prompt_states_the_premises():
     assert "facts" in text
     assert "language" in text
     assert "claims_card_blocked" in text
+    assert "merchant" in text
+    assert "amount_usd" in text
+    assert "when" in text
+    assert "candidates" in text

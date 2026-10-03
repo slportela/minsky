@@ -1,18 +1,50 @@
 """One model call chooses the next conversational step and writes the customer text.
 
-Code passes the allowed acts and the verified facts. An act outside that list, or a card-block
-claim without a verified block, is refused before anything is sent.
+Code passes the allowed acts and the verified facts. An act outside that list, a reply that
+drops a fact the customer must hear, or a completed-action sentence the facts do not support,
+is refused before anything is sent.
 """
 
 from __future__ import annotations
 
 import json
+import re
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from minsky_api.agent.prompts import render
 from minsky_api.llm.client import LLM
+
+# Completed actions only. Offers ("bloquee", "derivo", "abrir") stay out of these patterns.
+_CLAIM_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
+    (
+        "card_blocked",
+        re.compile(r"\bbloqueé\b|\bbloqueei\b|\btarjeta bloqueada\b|\bcartão bloqueado\b|\bcartao bloqueado\b"),
+    ),
+    (
+        "dispute_opened",
+        re.compile(
+            r"\b(?:abrí|abri)\b.{0,40}\b(?:reclamo|disputa|reclama)\b"
+            r"|\babiert[oa]\b.{0,30}\b(?:reclamo|disputa)\b"
+            r"|\b(?:reclamo|disputa|reclama)\b.{0,30}\babert"
+        ),
+    ),
+    (
+        "refund",
+        re.compile(r"\breembolsé\b|\breembolsei\b|\bdevolví\b|\bdevolvi\b"),
+    ),
+    (
+        "handoff",
+        re.compile(r"\bderivé\b|\bencaminhei\b"),
+    ),
+)
+_NEGATION = re.compile(r"(?:no|não|nao|sin|sem)\s+$")
+_ID_FACTS = ("transaction_id", "dispute_id", "handoff_id", "rule_id", "existing_dispute_id")
+_ACT_FACTS: dict[str, tuple[str, ...]] = {
+    "clarify": ("candidates",),
+    "confirm_txn": ("merchant", "amount_usd", "when"),
+}
 
 Act = Literal[
     "clarify",
@@ -35,6 +67,45 @@ class Speech(BaseModel):
     claims_card_blocked: bool = False
 
 
+def action_claims(text: str) -> frozenset[str]:
+    """Completed-action claims in the sentence. A nearby negation drops that match."""
+    folded = text.casefold()
+    found: set[str] = set()
+    for name, pattern in _CLAIM_PATTERNS:
+        for match in pattern.finditer(folded):
+            window = folded[max(0, match.start() - 16) : match.start()]
+            if _NEGATION.search(window):
+                continue
+            found.add(name)
+    return frozenset(found)
+
+
+def _dropped_fact(act: str, text: str, facts: dict[str, object]) -> str | None:
+    keys = _ID_FACTS + _ACT_FACTS.get(act, ())
+    for key in keys:
+        value = facts.get(key)
+        if not isinstance(value, str) or not value:
+            continue
+        if value not in text:
+            return key
+    return None
+
+
+def _unsupported_claim(text: str, facts: dict[str, object]) -> str | None:
+    claims = action_claims(text)
+    if "card_blocked" in claims and facts.get("card_blocked") is not True:
+        return "card_blocked"
+    dispute_id = facts.get("dispute_id")
+    if "dispute_opened" in claims and not (isinstance(dispute_id, str) and dispute_id in text):
+        return "dispute_opened"
+    handoff_id = facts.get("handoff_id")
+    if "handoff" in claims and not (isinstance(handoff_id, str) and handoff_id in text):
+        return "handoff"
+    if "refund" in claims:
+        return "refund"
+    return None
+
+
 async def compose_speech(
     llm: LLM,
     *,
@@ -42,7 +113,11 @@ async def compose_speech(
     allowed: tuple[str, ...],
     facts: dict[str, object],
 ) -> Speech:
-    """The model's act and wording. Raises when the act is not allowed or the block claim is unverified."""
+    """The model's act and wording.
+
+    Raises when the act is not allowed, a required fact is missing from the text, or the text
+    reports a block, an open, a refund, or a handoff the facts do not support.
+    """
     if not allowed:
         raise RuntimeError("compose_speech: no allowed act")
     payload = json.dumps(
@@ -63,6 +138,12 @@ async def compose_speech(
         raise RuntimeError("compose_speech: model returned no parsed schema")
     if parsed.act not in allowed:
         raise RuntimeError(f"compose_speech: act {parsed.act} is not allowed")
+    dropped = _dropped_fact(parsed.act, parsed.text, facts)
+    if dropped is not None:
+        raise RuntimeError(f"compose_speech: reply drops {dropped}")
+    unsupported = _unsupported_claim(parsed.text, facts)
+    if unsupported is not None:
+        raise RuntimeError(f"compose_speech: unverified {unsupported}")
     if parsed.claims_card_blocked and facts.get("card_blocked") is not True:
         raise RuntimeError("compose_speech: unverified card block")
     return parsed

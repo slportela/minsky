@@ -12,6 +12,7 @@ import pytest
 
 from minsky_api.agent.extract import DisputeDetails
 from minsky_api.agent.orchestrator import run_turn
+from minsky_api.agent.speak import Speech
 from minsky_api.agent.state import ConversationState, Phase
 from minsky_api.config import Settings, get_settings
 from minsky_api.identity import SessionState, ToolSession
@@ -116,6 +117,44 @@ class FakeLLM:
         return "unclear"
 
 
+class _NthSpeech(FakeLLM):
+    """One scripted speech on call `n` (1-based). Every other speech uses the fact stand-in."""
+
+    def __init__(self, details: DisputeDetails, *, n: int, speech: Speech, decisions: list[str | None] | None = None):
+        super().__init__(details, decisions=decisions)
+        self._n = 0
+        self._target = n
+        self._speech = speech
+
+    async def respond(self, *args: Any, schema: type | None = None, **kwargs: Any) -> LLMResult[Any]:
+        if schema is not None and schema.__name__ == "Speech":
+            self._n += 1
+            if self._n == self._target:
+                return LLMResult(
+                    text=self._speech.model_dump_json(),
+                    parsed=self._speech,
+                    model="gpt-6-luna",
+                    input_tokens=1,
+                    output_tokens=1,
+                    latency_ms=1.0,
+                )
+        return await super().respond(*args, schema=schema, **kwargs)
+
+
+class _RaiseOnSpeech(FakeLLM):
+    def __init__(self, details: DisputeDetails, *, fail_on: int) -> None:
+        super().__init__(details)
+        self._n = 0
+        self._fail_on = fail_on
+
+    async def respond(self, *args: Any, schema: type | None = None, **kwargs: Any) -> LLMResult[Any]:
+        if schema is not None and schema.__name__ == "Speech":
+            self._n += 1
+            if self._n == self._fail_on:
+                raise RuntimeError("compose_speech: bad act")
+        return await super().respond(*args, schema=schema, **kwargs)
+
+
 def _valid(customer_id: str = "C1") -> ToolSession:
     return ToolSession(session_id="s1", state=SessionState.VALID, customer_id=customer_id)
 
@@ -126,6 +165,7 @@ def _txn(
     amount_usd: str = "25.00",
     is_fraud: bool = False,
     merchant: str = "Cafe",
+    status: str = "Approved",
 ) -> Transaction:
     return Transaction(
         transaction_id=transaction_id,
@@ -137,7 +177,7 @@ def _txn(
         amount_usd_source="native_usd",
         transaction_date=datetime(2026, 6, 10, 9, 30),
         merchant_name=merchant,
-        transaction_status="Approved",
+        transaction_status=status,
         is_fraud=is_fraud,
         fraud_score=Decimal("95.00") if is_fraud else Decimal("10.00"),
     )
@@ -358,7 +398,8 @@ def test_confirm_follows_the_model_when_the_word_says_otherwise():
     assert state.phase == Phase.CONFIRM_TXN
     state, _ = asyncio.run(run_turn(state, "no", ctx, llm))  # type: ignore[arg-type]
     assert state.phase == Phase.CONFIRM_ACT
-    assert state.confirmation == "yes"
+    assert state.confirmation is None
+    assert state.pending_question
     assert not any(a.tool == "open_dispute" for a in ctx.cases.list_audit())
 
 
@@ -374,7 +415,8 @@ def test_confirm_turn_classifies_before_any_other_tool():
     assert tools[audit_len] == "classify_reply"
     assert "open_dispute" not in tools
     assert "block_card" not in tools
-    assert state.confirmation == "yes"
+    assert state.confirmation is None
+    assert state.pending_question
 
 
 def test_blank_confirmation_stays_in_phase_and_opens_nothing():
@@ -446,6 +488,64 @@ def test_clarify_exhausted_handoff(monkeypatch):
     finally:
         monkeypatch.delenv("MINSKY_MAX_CLARIFY_ATTEMPTS", raising=False)
         get_settings.cache_clear()
+
+
+def test_model_cannot_handoff_instead_of_confirming():
+    ctx = _ctx()
+    state = _state()
+    llm = _NthSpeech(_details(), n=1, speech=Speech(act="handoff", text="Quiero una persona."))
+    with pytest.raises(RuntimeError, match="not allowed"):
+        asyncio.run(run_turn(state, "Cafe 25", ctx, llm))  # type: ignore[arg-type]
+    assert not any(row.tool == "create_handoff" for row in ctx.cases.list_audit())
+
+
+def test_unverified_block_sentence_does_not_send_or_act():
+    ctx = _ctx()
+    state = _state()
+    llm = _NthSpeech(
+        _details(),
+        n=1,
+        speech=Speech(
+            act="confirm_txn",
+            text="Bloqueé la tarjeta. T1 Cafe 25.00 2026-06-10",
+            claims_card_blocked=False,
+        ),
+    )
+    with pytest.raises(RuntimeError, match="unverified"):
+        asyncio.run(run_turn(state, "Cafe 25", ctx, llm))  # type: ignore[arg-type]
+    tools = [row.tool for row in ctx.cases.list_audit()]
+    assert "open_dispute" not in tools
+    assert "block_card" not in tools
+    assert "create_handoff" not in tools
+
+
+def test_inform_route_does_not_let_the_model_create_a_handoff():
+    txn = _txn(status="Declined")
+    ctx = _ctx(txn, exec_rows=[txn])
+    state = _state()
+    llm = _NthSpeech(
+        _details(),
+        n=2,
+        speech=Speech(act="handoff", text="Quiero una persona."),
+        decisions=["yes"],
+    )
+    state, _ = asyncio.run(run_turn(state, "Cafe 25", ctx, llm))  # type: ignore[arg-type]
+    assert state.phase == Phase.CONFIRM_TXN
+    with pytest.raises(RuntimeError, match="not allowed"):
+        asyncio.run(run_turn(state, "sí", ctx, llm))  # type: ignore[arg-type]
+    assert not any(row.tool == "create_handoff" for row in ctx.cases.list_audit())
+
+
+def test_speech_failure_after_open_reports_the_dispute_id():
+    ctx = _ctx()
+    state = _state()
+    llm = _RaiseOnSpeech(_details(), fail_on=3)
+    state, _ = asyncio.run(run_turn(state, "Cafe 25", ctx, llm))  # type: ignore[arg-type]
+    state, _ = asyncio.run(run_turn(state, "sí", ctx, llm))  # type: ignore[arg-type]
+    state, reply = asyncio.run(run_turn(state, "sí", ctx, llm))  # type: ignore[arg-type]
+    assert state.phase == Phase.DONE
+    assert "DSP-" in reply
+    assert any(row.tool == "open_dispute" and row.outcome == "ok" for row in ctx.cases.list_audit())
 
 
 def test_d04_inform_includes_existing_dispute_ref():

@@ -36,4 +36,4 @@ evaluation_criteria:
     - {check: card_blocked, args: {product_id: PRD-FIXTURE-D09, expected: false}}
   communicate_info: ["TRX-FIXTURE-D09"]
   reward_basis: [outcome, env, communicate, safety]
-notes: Generated portuñol. There is no third reply language; the Portuguese marker on the first line selects the Portuguese phrase catalog.
+notes: Generated portuñol. There is no third reply language; lingua on the first message chooses Spanish or Portuguese, and the model writes the reply.
