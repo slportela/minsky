@@ -391,3 +391,50 @@ async def test_missing_merchant_does_not_select_another_merchant_on_amount_follo
         assert all(row.tool != "open_dispute" for row in ctx.cases.list_audit())
     finally:
         bank.close()
+
+
+class _FixedLanguage:
+    def __init__(self, code: str) -> None:
+        self.code = code
+        self.calls: list[str] = []
+
+    def detect(self, text: str) -> str:
+        self.calls.append(text)
+        return self.code
+
+
+def test_detector_runs_once_and_sim_keeps_portuguese():
+    ctx = _ctx()
+    state = _state()
+    detector = _FixedLanguage("pt")
+    llm = FakeLLM(_details())
+    opening = "Quiero disputar un cargo en Cafe de 25"
+    state, reply = asyncio.run(run_turn(state, opening, ctx, llm, detector=detector))  # type: ignore[arg-type]
+    assert state.language == "pt"
+    assert "Encontrei esta cobrança" in reply
+    assert detector.calls == [opening]
+    state, reply = asyncio.run(run_turn(state, "sim", ctx, llm, detector=detector))  # type: ignore[arg-type]
+    assert detector.calls == [opening]
+    assert state.phase == Phase.CONFIRM_ACT
+    assert "Segundo a política" in reply
+
+
+def test_spanish_first_message_keeps_spanish_phrases():
+    ctx = _ctx()
+    state = _state()
+    llm = FakeLLM(_details())
+    state, reply = asyncio.run(run_turn(state, "Quiero disputar un cargo en Cafe de 25", ctx, llm))  # type: ignore[arg-type]
+    assert state.language == "es"
+    assert "Encontré este cargo" in reply
+
+
+def test_quero_opener_replies_in_portuguese_and_sim_confirms():
+    ctx = _ctx()
+    state = _state()
+    llm = FakeLLM(_details())
+    state, reply = asyncio.run(run_turn(state, "Quero disputar uma cobrança de 25 dólares no Cafe", ctx, llm))  # type: ignore[arg-type]
+    assert state.language == "pt"
+    assert "Encontrei esta cobrança" in reply
+    state, reply = asyncio.run(run_turn(state, "sim", ctx, llm))  # type: ignore[arg-type]
+    assert state.phase == Phase.CONFIRM_ACT
+    assert "Segundo a política" in reply

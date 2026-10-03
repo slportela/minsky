@@ -13,7 +13,7 @@ Status: ✅ done · 🟡 partial · ⬜ planned · ⚠️ risk or gap
 | S3 | Normal resolution path (PS, KO) | Rule D09: automatic intake with confirmation | `dispute_policy.md`, `backend/agent` | 🟡 D09 verified in live dev L2 + local browser; held-out evaluation pending |
 | S4 | Ambiguous or unsupported request (PS, KO) | Several candidate transactions → clarify; out of scope → abstain | `solution.md`, `backend/agent` | 🟡 clarify with accumulated filters and out-of-scope handoff; live evaluation pending |
 | S5 | Case requiring a human (PS, KO) | D06 fraud, D07 above limit, D08 repeat complainer → structured handoff | `dispute_policy.md`, `backend/agent` | 🟡 fraud/agent handoff implemented; complete payload + console pending |
-| S6 | Interactions in Spanish **and Portuguese**; report language and data limitations (PS, KO) | es + pt suites; Portuguese is generated and labeled; limitation stated | `evals.md`, `known_issues.md` | ⚠️ Spanish replies only; Portuguese implementation pending; no pt source data |
+| S6 | Interactions in Spanish **and Portuguese**; report language and data limitations (PS, KO) | es + pt suites; Portuguese is generated and labeled; limitation stated | `evals.md`, `known_issues.md` | 🟡 generated pt and mixed dev drafts; replies follow the first message; no Portuguese source data |
 | S7 | Working prototype + evidence of production readiness + honest remaining work (PS) | POC on EC2; target architecture; POC → production map | `architecture.md`, `poc_to_prod.md` | 🟡 docs |
 | D1 | Public repo `factored-hackathon-2026-<team>` (KO) | Rename or new repo before submission; remove private links from history | — | ⚠️ history has a private link |
 | D2 | Link to the deployed tool (KO) | Demo on EC2, up until 2026-10-16 | `infra/README.md` | ⬜ |

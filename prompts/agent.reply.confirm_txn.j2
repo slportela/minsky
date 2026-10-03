@@ -1,6 +1,2 @@
-{#
-version: 1
-owner: agent
-changed: 2026-10-01 orchestrator v0 reply templates
-#}
-Encontré este cargo: {{ merchant }}, {{ amount_usd }} USD, {{ when }} (ref. {{ transaction_id }}). ¿Es este el que quieres disputar? {% include "agent.reply._yes.j2" %}
+{# version: 2 owner: agent #}
+{{ found_one }}: {{ merchant }}, {{ amount_usd }} USD, {{ when }} (ref. {{ transaction_id }}). {{ confirm_this }} {{ yes_hint }}

@@ -1,2 +1,2 @@
-{# version: 1 owner: agent #}
-Te derivo con un asesor{% if rule_id %} (regla {{ rule_id }}){% endif %}. Referencia de traspaso: {{ handoff_id }}.
+{# version: 2 owner: agent #}
+{{ handoff_intro }}{% if rule_id %} ({{ rule_word }} {{ rule_id }}){% endif %}. {{ handoff_ref }}: {{ handoff_id }}.

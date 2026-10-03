@@ -304,4 +304,4 @@ In `campaign_sends`, `open_device` and `open_country` are filled only when `was_
 
 All text (transcripts, complaints, survey comments) is Spanish (`call_transcripts.detected_language` is always `es`). The brief requires Spanish **and Portuguese** interactions; there is no Portuguese data to ground answers or to evaluate on.
 
-**Handling:** to be decided with the workflow (e.g. a labeled, team-generated Portuguese test set), and reported as a limitation.
+**Handling:** the bank text stays Spanish. The reply language is chosen once from the first customer message by lingua, restricted to Spanish and Portuguese; if lingua cannot decide, the reply stays Spanish. Generated dev drafts (`dispute-eligible-open-pt`, `dispute-above-limit-pt`, `dispute-eligible-open-mixed`) reuse the Spanish policy fixtures; the wording does not change the label. Portuguese replies are phrase-catalog translations. There is still no Portuguese source text, and these drafts are not a held-out result.

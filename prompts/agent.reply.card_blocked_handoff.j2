@@ -1,2 +1,2 @@
-{# version: 1 owner: agent #}
-Bloqueé la tarjeta y te derivo al equipo de fraude{% if rule_id %} ({{ rule_id }}){% endif %}. Referencia de traspaso: {{ handoff_id }}.
+{# version: 2 owner: agent #}
+{{ card_blocked }}{% if rule_id %} ({{ rule_id }}){% endif %}. {{ handoff_ref }}: {{ handoff_id }}.

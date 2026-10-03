@@ -34,6 +34,8 @@ class ConversationState:
     route: str | None = None
     customer_says_not_me: bool = False
     dispute_reason: str = "unrecognized_charge"
+    # Set from the first customer message; later turns reuse it.
+    language: str | None = None
     search_details: DisputeDetails = field(default_factory=DisputeDetails)
     # Last user/agent texts for the HTTP contract (server-owned history).
     messages: list[tuple[str, str]] = field(default_factory=list)  # ("user"|"agent", text)

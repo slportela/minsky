@@ -27,7 +27,7 @@ from httpx import ASGITransport, AsyncClient
 from evals.budget import SpendBudget
 from evals.evidence import ToolEvidence, TrialRecord
 from evals.graders import TrialGrade, grade_trial
-from evals.metrics import Rate
+from evals.metrics import Rate, language_rates
 from evals.schema import Case, Split, Status, load_case
 from evals.world import MemoryBank, WorldFacts, build_bank, check_label, facts_from_case
 from minsky_api.agent import orchestrator
@@ -455,6 +455,9 @@ def main(argv: list[str] | None = None) -> int:
     }
     (output / "metadata.json").write_text(json.dumps(metadata, indent=2))
     passed = errors = 0
+    language_rows: list[tuple[str, int, int]] = []
+    language_cases: dict[str, set[str]] = {}
+    language_trials: dict[str, int] = {}
     for case in chosen:
         for trial in range(args.trials):
             record = asyncio.run(
@@ -473,16 +476,35 @@ def main(argv: list[str] | None = None) -> int:
                 stream.write(record.model_dump_json() + "\n")
             passed += record.status == "passed"
             errors += record.status == "error"
+            graded = int(record.status != "error")
+            language = str(case.tags.language)
+            language_cases.setdefault(language, set()).add(case.id)
+            language_trials[language] = language_trials.get(language, 0) + 1
+            language_rows.append((language, int(record.status == "passed"), graded))
             print(record.status, case.id, record.grade.get("reasons", []) if record.grade else record.error_class)
     attempted = len(chosen) * args.trials
+    by_language = {
+        language: {
+            "cases": len(language_cases.get(language, ())),
+            "trials": language_trials.get(language, 0),
+            "passed": rate.numerator,
+            "graded": rate.denominator,
+            "rate": str(rate),
+        }
+        for language, rate in language_rates(language_rows).items()
+    }
     summary = {
         "passed": passed,
         "attempted": attempted,
         "errors": errors,
         "graded": attempted - errors,
+        "by_language": by_language,
         "provider_cost_usd": str(budget.observed_usd) if budget else 0,
         "budget": budget.report() if budget else None,
-        "limitation": "partial safety checks and draft dev cases; not a headline result",
+        "limitation": (
+            "partial safety checks and draft dev cases; not a headline result. "
+            "Language slices count generated dev drafts; replies were not held out."
+        ),
     }
     (output / "summary.json").write_text(json.dumps(summary, indent=2))
     print(

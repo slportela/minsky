@@ -6,6 +6,7 @@ import re
 
 from minsky_api.agent import replies
 from minsky_api.agent.extract import DisputeDetails, extract_dispute_details
+from minsky_api.agent.language import LanguageDetector, default_language_detector, is_no, is_yes
 from minsky_api.agent.state import ConversationState, Phase
 from minsky_api.config import get_settings
 from minsky_api.identity.session import SessionState
@@ -33,18 +34,14 @@ from minsky_api.tools.schemas import (
     TransactionView,
 )
 
-# No lone "y": too easy to false-confirm on noisy input.
-_YES = re.compile(r"^\s*(sí|si|yes|ok|vale|confirmo|confirm[oa])\s*[.!?]?\s*$", re.IGNORECASE)
-_NO = re.compile(r"^\s*(no|n|cancel[oa]?|negativo)\s*[.!?]?\s*$", re.IGNORECASE)
+# No lone "y": too easy to false-confirm on noisy input. Yes/no words live in the language catalog.
 _PICK = re.compile(r"^\s*(\d+)\s*$")
 
 
-def _is_yes(text: str) -> bool:
-    return _YES.match(text) is not None
-
-
-def _is_no(text: str) -> bool:
-    return _NO.match(text) is not None
+def _lang(state: ConversationState) -> str:
+    if not state.language:
+        raise RuntimeError("reply language is unset")
+    return state.language
 
 
 def _has_search_filters(details: DisputeDetails) -> bool:
@@ -78,7 +75,7 @@ async def _handoff(
     reason: str,
     rule_id: str | None = None,
     actions: tuple[str, ...] = (),
-    reply: str | None = None,
+    kind: str = "handoff",
 ) -> str:
     result = await create_handoff(
         ctx,
@@ -94,9 +91,13 @@ async def _handoff(
         ),
     )
     state.phase = Phase.DONE
-    if reply is not None:
-        return reply.format(handoff_id=result.handoff.handoff_id)
-    return replies.handoff_done(handoff_id=result.handoff.handoff_id, rule_id=rule_id)
+    handoff_id = result.handoff.handoff_id
+    language = _lang(state)
+    if kind == "clarify_limit":
+        return replies.clarify_limit(handoff_id=handoff_id, language=language)
+    if kind == "turn_limit":
+        return replies.turn_limit(handoff_id=handoff_id, language=language)
+    return replies.handoff_done(handoff_id=handoff_id, rule_id=rule_id, language=language)
 
 
 async def _get_owned_txn(ctx: ToolContext, transaction_id: str) -> TransactionView | None:
@@ -136,33 +137,23 @@ async def _after_candidates(
     if len(txns) == 0:
         state.clarify_count += 1
         if state.clarify_count > get_settings().max_clarify_attempts:
-            return await _handoff(
-                ctx,
-                state,
-                reason="clarify_exhausted",
-                reply=replies.clarify_limit() + " Referencia de traspaso: {handoff_id}.",
-            )
+            return await _handoff(ctx, state, reason="clarify_exhausted", kind="clarify_limit")
         state.phase = Phase.CLARIFY
         state.candidate_txn_ids = []
-        return replies.ask_clarify_none()
+        return replies.ask_clarify_none(language=_lang(state))
     if len(txns) > 1:
         state.clarify_count += 1
         if state.clarify_count > get_settings().max_clarify_attempts:
-            return await _handoff(
-                ctx,
-                state,
-                reason="clarify_exhausted",
-                reply=replies.clarify_limit() + " Referencia de traspaso: {handoff_id}.",
-            )
+            return await _handoff(ctx, state, reason="clarify_exhausted", kind="clarify_limit")
         state.phase = Phase.CLARIFY
         state.candidate_txn_ids = [t.transaction_id for t in txns]
-        return replies.ask_clarify_many(txns)
+        return replies.ask_clarify_many(txns, language=_lang(state))
     txn = txns[0]
     state.selected_txn_id = txn.transaction_id
     state.selected_product_id = txn.product_id
     state.candidate_txn_ids = [txn.transaction_id]
     state.phase = Phase.CONFIRM_TXN
-    return replies.ask_confirm_txn(txn)
+    return replies.ask_confirm_txn(txn, language=_lang(state))
 
 
 async def _apply_policy(ctx: ToolContext, state: ConversationState) -> str:
@@ -179,19 +170,23 @@ async def _apply_policy(ctx: ToolContext, state: ConversationState) -> str:
     route = decision.route
     if route == Route.OPEN_DISPUTE.value:
         state.phase = Phase.CONFIRM_ACT
-        return replies.ask_confirm_open(rule_id=decision.rule_id, txn_id=state.selected_txn_id)
+        return replies.ask_confirm_open(rule_id=decision.rule_id, txn_id=state.selected_txn_id, language=_lang(state))
     if route == Route.ESCALATE_FRAUD.value:
         state.phase = Phase.CARD_OFFER
-        return replies.ask_card_block(rule_id=decision.rule_id)
+        return replies.ask_card_block(rule_id=decision.rule_id, language=_lang(state))
     if route == Route.ESCALATE_AGENT.value:
         return await _handoff(ctx, state, reason="policy_escalate_agent", rule_id=decision.rule_id)
     if route == Route.REFUSE.value:
-        text = replies.policy_refuse(rule_id=decision.rule_id)
+        text = replies.policy_refuse(rule_id=decision.rule_id, language=_lang(state))
         handoff_text = await _handoff(ctx, state, reason="policy_refuse", rule_id=decision.rule_id)
         return f"{text} {handoff_text}"
     # inform / abstain (include existing dispute ref when D04)
     state.phase = Phase.DONE
-    return replies.policy_inform(rule_id=decision.rule_id, existing_dispute_id=decision.existing_dispute_id)
+    return replies.policy_inform(
+        rule_id=decision.rule_id,
+        existing_dispute_id=decision.existing_dispute_id,
+        language=_lang(state),
+    )
 
 
 async def _phase_understand(ctx: ToolContext, state: ConversationState, text: str, llm: LLM) -> str:
@@ -209,7 +204,7 @@ async def _phase_understand(ctx: ToolContext, state: ConversationState, text: st
             ),
         )
         state.phase = Phase.DONE
-        return replies.out_of_scope_handoff(handoff_id=result.handoff.handoff_id)
+        return replies.out_of_scope_handoff(handoff_id=result.handoff.handoff_id, language=_lang(state))
     txns = await _search(ctx, _merge_details(state, details))
     return await _after_candidates(ctx, state, txns)
 
@@ -225,7 +220,7 @@ async def _phase_clarify(ctx: ToolContext, state: ConversationState, text: str, 
             state.selected_txn_id = txn.transaction_id
             state.selected_product_id = txn.product_id
             state.phase = Phase.CONFIRM_TXN
-            return replies.ask_confirm_txn(txn)
+            return replies.ask_confirm_txn(txn, language=_lang(state))
     details = await extract_dispute_details(llm, text)
     state.customer_says_not_me = state.customer_says_not_me or details.customer_says_not_me
     if details.out_of_scope:
@@ -238,23 +233,25 @@ async def _phase_clarify(ctx: ToolContext, state: ConversationState, text: str, 
 
 
 async def _phase_confirm_txn(ctx: ToolContext, state: ConversationState, text: str) -> str:
-    if _is_yes(text):
+    language = _lang(state)
+    if is_yes(text, language):
         return await _apply_policy(ctx, state)
-    if _is_no(text):
+    if is_no(text, language):
         state.phase = Phase.CLARIFY
         state.selected_txn_id = None
         state.selected_product_id = None
         state.candidate_txn_ids = []
-        return replies.ask_clarify_none()
-    return replies.need_yes_or_no()
+        return replies.ask_clarify_none(language=language)
+    return replies.need_yes_or_no(language=language)
 
 
 async def _phase_confirm_act(ctx: ToolContext, state: ConversationState, text: str) -> str:
-    if _is_no(text):
+    language = _lang(state)
+    if is_no(text, language):
         state.phase = Phase.DONE
-        return replies.aborted()
-    if not _is_yes(text):
-        return replies.need_yes_or_no()
+        return replies.aborted(language=language)
+    if not is_yes(text, language):
+        return replies.need_yes_or_no(language=language)
     assert state.selected_txn_id is not None
     opened = await open_dispute(
         ctx,
@@ -267,11 +264,16 @@ async def _phase_confirm_act(ctx: ToolContext, state: ConversationState, text: s
     )
     verified = await get_dispute(ctx, GetDisputeArgs(dispute_id=opened.dispute.dispute_id))
     state.phase = Phase.DONE
-    return replies.opened_dispute(dispute_id=verified.dispute.dispute_id, rule_id=state.rule_id or "D09-eligible")
+    return replies.opened_dispute(
+        dispute_id=verified.dispute.dispute_id,
+        rule_id=state.rule_id or "D09-eligible",
+        language=_lang(state),
+    )
 
 
 async def _phase_card_offer(ctx: ToolContext, state: ConversationState, text: str) -> str:
-    if _is_yes(text):
+    language = _lang(state)
+    if is_yes(text, language):
         actions: list[str] = []
         blocked_ok = False
         if state.selected_product_id:
@@ -296,12 +298,14 @@ async def _phase_card_offer(ctx: ToolContext, state: ConversationState, text: st
         )
         state.phase = Phase.DONE
         if blocked_ok:
-            return replies.card_blocked_handoff(handoff_id=result.handoff.handoff_id, rule_id=state.rule_id)
+            return replies.card_blocked_handoff(
+                handoff_id=result.handoff.handoff_id, rule_id=state.rule_id, language=language
+            )
         # Never claim a block we did not verify.
-        return replies.handoff_done(handoff_id=result.handoff.handoff_id, rule_id=state.rule_id)
-    if _is_no(text):
+        return replies.handoff_done(handoff_id=result.handoff.handoff_id, rule_id=state.rule_id, language=language)
+    if is_no(text, language):
         return await _handoff(ctx, state, reason="possible_fraud_no_block", rule_id=state.rule_id)
-    return replies.need_yes_or_no()
+    return replies.need_yes_or_no(language=language)
 
 
 async def run_turn(
@@ -309,6 +313,7 @@ async def run_turn(
     text: str,
     ctx: ToolContext,
     llm: LLM,
+    detector: LanguageDetector | None = None,
 ) -> tuple[ConversationState, str]:
     """One customer message → updated state + agent reply. Never reports a write before tool read-back."""
     if ctx.session.state != SessionState.VALID:
@@ -321,19 +326,16 @@ async def run_turn(
 
     state.turn_count += 1
     state.messages.append(("user", stripped))
+    if state.language is None:
+        state.language = (detector or default_language_detector()).detect(stripped)
 
     if state.phase == Phase.DONE:
-        reply = replies.already_done()
+        reply = replies.already_done(language=_lang(state))
         state.messages.append(("agent", reply))
         return state, reply
 
     if state.turn_count > get_settings().max_turns:
-        reply = await _handoff(
-            ctx,
-            state,
-            reason="max_turns",
-            reply=replies.turn_limit() + " Referencia de traspaso: {handoff_id}.",
-        )
+        reply = await _handoff(ctx, state, reason="max_turns", kind="turn_limit")
         state.messages.append(("agent", reply))
         return state, reply
 

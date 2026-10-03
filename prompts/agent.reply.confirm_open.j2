@@ -1,2 +1,2 @@
-{# version: 1 owner: agent #}
-Según la política ({{ rule_id }}), puedo abrir el reclamo del cargo {{ txn_id }} de forma automática. ¿Confirmas que lo abra? {% include "agent.reply._yes.j2" %}
+{# version: 2 owner: agent #}
+{{ policy_label }} ({{ rule_id }}), {{ can_open }} {{ txn_id }} {{ can_open_tail }} {{ confirm_open }} {{ yes_hint }}
