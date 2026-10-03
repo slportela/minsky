@@ -249,12 +249,7 @@ async def _phase_clarify(ctx: ToolContext, state: ConversationState, text: str, 
 
 async def _remember_decision(state: ConversationState, text: str, llm: LLM) -> str:
     """Store the model decision before any tool call. Only 'yes' may act."""
-    try:
-        decision = (await classify_confirmation(llm, question=text, text=text)).decision
-    except TypeError as error:
-        if "question" not in str(error):
-            raise
-        decision = (await classify_confirmation(llm, text)).decision  # type: ignore[call-arg]
+    decision = (await classify_confirmation(llm, question=text, text=text)).decision
     state.confirmation = decision
     return decision
 
