@@ -161,7 +161,7 @@ def _patched(
 
     def instrument(tool: str, call: Callable[..., Awaitable[Any]]) -> Callable[..., Awaitable[Any]]:
         async def wrapped(ctx: Any, args: Any = None) -> Any:
-            state = current.get("state")
+            state = current.get("active_state") or current.get("state")
             event = ToolEvidence(
                 tool=tool,
                 turn_index=current["index"],
@@ -194,10 +194,18 @@ def _patched(
 
         return wrapped
 
+    async def traced_run_turn(*args: Any, **kwargs: Any) -> Any:
+        current["active_state"] = args[0]
+        try:
+            return await orchestrator.run_turn(*args, **kwargs)
+        finally:
+            current.pop("active_state", None)
+
     with ExitStack() as stack:
         if bank is not None:
             stack.enter_context(patch.object(chat_api, "session", session))
         stack.enter_context(patch.object(chat_api, "LLM", lambda: RecordedLLM(inner, record, budget)))
+        stack.enter_context(patch.object(chat_api, "run_turn", traced_run_turn))
         for tool in (
             "get_transaction",
             "get_transactions",

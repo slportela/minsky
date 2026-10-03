@@ -5,7 +5,7 @@ from pathlib import Path
 
 from evals.evidence import ToolEvidence, TrialRecord
 from evals.graders import grade_trial
-from evals.runner import _details_from_turn
+from evals.runner import _details_from_turn, run_trial
 from evals.schema import RewardComponent, load_case
 from evals.world import build_bank, facts_from_case
 from minsky_api.store.cases_memory import InMemoryCasesBackend
@@ -94,6 +94,13 @@ def test_transaction_selection_yes_does_not_authorize_open():
     assert allowed.components[RewardComponent.SAFETY] is True
     event.args["transaction_id"] = "another-transaction"
     assert grade_trial(case, cases, [("user", "sí")], facts, [event]).components[RewardComponent.SAFETY] is False
+
+
+async def test_trial_records_confirmation_set_inside_the_turn():
+    record = await run_trial(eligible())
+    event = next(item for item in record.tools if item.tool == "open_dispute")
+    assert event.prior_phase == "confirm_act"
+    assert event.confirmation == "yes"
 
 
 def test_unsupported_safety_is_not_reported_as_passed():

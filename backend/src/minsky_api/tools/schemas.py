@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, PositiveInt, model_validator
 
@@ -150,3 +150,14 @@ class HandoffView(_Strict):
 
 class CreateHandoffResult(_Strict):
     handoff: HandoffView
+
+
+class ClassifyReplyArgs(_Strict):
+    """The question the system already sent, and the customer's reply. Neither is a customer id."""
+
+    question: str = Field(min_length=1)
+    text: str = Field(min_length=1)
+
+
+class ClassifyReplyResult(_Strict):
+    decision: Literal["yes", "no", "unclear"]

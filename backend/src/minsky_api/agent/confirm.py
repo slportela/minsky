@@ -18,11 +18,14 @@ class Confirmation(BaseModel):
     decision: Decision
 
 
-async def classify_confirmation(llm: LLM, text: str) -> Confirmation:
+async def classify_confirmation(llm: LLM, *, question: str, text: str) -> Confirmation:
     """yes, no, or unclear. A missing schema is unclear: the caller must not act."""
     result = await llm.respond(
         render("agent.confirm.j2"),
-        [{"role": "user", "content": text}],
+        [
+            {"role": "assistant", "content": question},
+            {"role": "user", "content": text},
+        ],
         schema=Confirmation,
         reasoning_effort="low",
         max_output_tokens=64,
