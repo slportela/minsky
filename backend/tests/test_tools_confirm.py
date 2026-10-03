@@ -35,6 +35,15 @@ class RecordingLLM:
         )
 
 
+class FailingRecordingLLM:
+    def __init__(self) -> None:
+        self.messages: list[dict[str, str]] | None = None
+
+    async def respond(self, instructions: str, messages: list[dict[str, str]], **kwargs: Any) -> LLMResult[Any]:
+        self.messages = messages
+        raise RuntimeError("confirm api outage")
+
+
 def _ctx(*, valid: bool = True) -> ToolContext:
     session = ToolSession(
         session_id="s1",
@@ -52,6 +61,18 @@ def test_invalid_session_is_denied_and_the_api_is_not_called():
         asyncio.run(classify_reply(ctx, args, llm))  # type: ignore[arg-type]
     assert llm.messages is None
     assert any(row.tool == "classify_reply" and row.outcome == "denied" for row in ctx.cases.list_audit())
+
+
+def test_api_error_propagates_and_does_not_authorize():
+    ctx = _ctx()
+    llm = FailingRecordingLLM()
+    with pytest.raises(RuntimeError, match="confirm api outage"):
+        asyncio.run(classify_reply(ctx, ClassifyReplyArgs(question="¿Es este?", text="sí"), llm))  # type: ignore[arg-type]
+    assert llm.messages == [
+        {"role": "assistant", "content": "¿Es este?"},
+        {"role": "user", "content": "sí"},
+    ]
+    assert not any(row.tool == "classify_reply" and row.outcome == "ok" for row in ctx.cases.list_audit())
 
 
 def test_reply_is_classified_against_the_stored_question():

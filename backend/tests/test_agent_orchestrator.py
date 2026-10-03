@@ -365,6 +365,26 @@ def test_blank_confirmation_stays_in_phase_and_opens_nothing():
     assert not any(a.tool == "open_dispute" for a in ctx.cases.list_audit())
 
 
+def test_confirm_without_a_stored_question_does_not_act():
+    ctx = _ctx()
+    state = _state()
+    state.phase = Phase.CONFIRM_ACT
+    state.language = "es"
+    state.pending_question = None
+    state.selected_txn_id = "T1"
+    state.selected_product_id = "P1"
+    state.rule_id = "D09-eligible"
+    state.route = "open_dispute"
+    llm = FakeLLM(_details(), decisions=["yes"])
+    state, reply = asyncio.run(run_turn(state, "sí", ctx, llm))  # type: ignore[arg-type]
+    tools = [row.tool for row in ctx.cases.list_audit()]
+    assert state.confirmation == "unclear"
+    assert "classify_reply" not in tools
+    assert "open_dispute" not in tools
+    assert "block_card" not in tools
+    assert reply == "No entendí. Responde sí para confirmar, o no para cancelar."
+
+
 def test_lone_y_is_not_confirmation():
     ctx = _ctx()
     state = _state()
