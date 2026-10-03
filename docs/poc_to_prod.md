@@ -2,6 +2,10 @@
 
 > The hackathon POC runs on **one EC2 host with Docker Compose**. It is a demo environment, **not the final architecture**. The target is [`architecture.md`](architecture.md). This page says, for each piece, what the POC uses, what production uses, which best practices apply, and what changes in our code (ideally only configuration).
 
+The separate six-hour Lightsail smoke (ADR 0011) reuses Compose images, but has public
+HTTP origin and SSH administration. It does not replace the retained final demo or
+prove the production network/IAM design. Lightsail CDN must be replaced for an ALB origin.
+
 ## At a glance
 
 ```
@@ -28,7 +32,7 @@
 
 | Component | POC | Production | Best practices | Code change |
 |---|---|---|---|---|
-| Entry / TLS | CloudFront default certificate → private HTTP Caddy (ADR 0010); direct-host mode retained | CloudFront + WAF + ALB (ACM certificates), Route 53 | WAF managed rules + rate limiting; TLS 1.2+; HSTS; ALB access logs to S3 | None |
+| Entry / TLS | Temporary Lightsail CDN certificate → public HTTP Caddy (ADR 0011); EC2 direct-host mode retained | CloudFront + WAF + ALB (ACM certificates), Route 53 | WAF managed rules + rate limiting; TLS 1.2+; HSTS; ALB access logs to S3 | None |
 | Web | `web` container | ECS service, same image | ≥2 tasks across AZs; health checks; static assets cached at CloudFront | None |
 | API | `api` container | ECS service, same image | Stateless; ≥2 tasks; autoscaling on requests/CPU; graceful shutdown; per-service task role | None (config) |
 | Async jobs | In-process | SQS + DLQ, `worker` service | Idempotent consumers; DLQ alarms; visibility timeout > job time | Queue adapter: in-process → SQS |
@@ -37,7 +41,7 @@
 | ML tracking | Committed training reports (`ml/reports/`) | Same reports; MLflow on ECS (RDS + S3) if experiments grow | Every served model traced to its report (git SHA, data snapshot, metrics) | None, or the tracking URI |
 | Identity | Test sessions + simulated OTP | Cognito (customers: MFA/step-up; staff: federation to the bank IdP) | Short-lived tokens; step-up before sensitive actions; no identity from conversation text | Identity adapter: mock → Cognito |
 | Secrets | `.env` on the host | Secrets Manager (rotation) + KMS; SSM for config | Nothing secret in images, env files or logs | Read from the environment as today; injected by ECS |
-| Network | CloudFront mode: dedicated VPC, private instance, CloudFront-only port 80, NAT egress; single AZ | Dedicated VPC, 3 AZs; public (ALB, NAT), private (tasks), isolated (database) subnets | Security groups by role; no public IPs on tasks or database; VPC endpoints; flow logs | None |
+| Network | Temporary smoke: Lightsail public HTTP origin, restricted SSH, single AZ; no NAT | Dedicated VPC, 3 AZs; public (ALB, NAT), private (tasks), isolated (database) subnets | Security groups by role; no public IPs on tasks or database; VPC endpoints; flow logs | None |
 | Models | Bedrock via the instance role, over the internet (TLS) | Bedrock via a VPC endpoint; IAM limited to the allowed models; inference profiles | Quota monitoring; circuit breaker + fallback model; invocation logging disabled or redacted | None (config) |
 | Lake | Our S3 bucket (bronze/silver) | Same bucket design, per-environment buckets | SSE-KMS, versioning, lifecycle, Block Public Access, access logs; Glue catalog | None |
 | Pipeline | `make pipeline` on a laptop | EventBridge Scheduler → ECS task; freshness checks + alarms | Idempotent runs (already: manifest + verified copy); failures alarm; retries bounded | None (same code, scheduled) |

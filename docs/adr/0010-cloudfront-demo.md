@@ -1,6 +1,6 @@
 # 0010. A CloudFront hostname for the AWS demo
 
-- Status: accepted for the POC; deployment pending
+- Status: superseded by 0011
 - Date: 2026-10-02
 
 ## Context

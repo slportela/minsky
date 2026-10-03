@@ -1,0 +1,411 @@
+{
+  "time_utc": "2026-10-03T03:54:45.444373+00:00",
+  "mode": "local memory diagnostic; scripted extraction; no vendor calls",
+  "architecture": "aarch64",
+  "guest_mem_total_bytes": 2002415616,
+  "min_guest_available_bytes": 574656512,
+  "transactions": 4425008,
+  "concurrency_per_workload": 4,
+  "scenarios": 36,
+  "scenario_counts": {
+    "D07-above-auto-limit": 12,
+    "D09-eligible": 12,
+    "clarify-miss": 12
+  },
+  "api_turns": 84,
+  "frontend_direct_gets": 100,
+  "anonymous_http": 401,
+  "read_back": "D09 dispute and D07 handoff objects verified in isolated process-local app; bank unchanged",
+  "latency_ms_p50": 154.95416696649045,
+  "latency_ms_max": 237.1815840015188,
+  "elapsed_s": 3.9719620019895956,
+  "memory_samples": [
+    {
+      "MemTotal": 2002415616,
+      "MemAvailable": 607805440,
+      "at_s": 0.205
+    },
+    {
+      "MemTotal": 2002415616,
+      "MemAvailable": 603725824,
+      "at_s": 0.27
+    },
+    {
+      "MemTotal": 2002415616,
+      "MemAvailable": 603754496,
+      "at_s": 0.322
+    },
+    {
+      "MemTotal": 2002415616,
+      "MemAvailable": 603385856,
+      "at_s": 0.373
+    },
+    {
+      "MemTotal": 2002415616,
+      "MemAvailable": 601837568,
+      "at_s": 0.423
+    },
+    {
+      "MemTotal": 2002415616,
+      "MemAvailable": 599224320,
+      "at_s": 0.475
+    },
+    {
+      "MemTotal": 2002415616,
+      "MemAvailable": 598994944,
+      "at_s": 0.527
+    },
+    {
+      "MemTotal": 2002415616,
+      "MemAvailable": 598888448,
+      "at_s": 0.577
+    },
+    {
+      "MemTotal": 2002415616,
+      "MemAvailable": 598888448,
+      "at_s": 0.628
+    },
+    {
+      "MemTotal": 2002415616,
+      "MemAvailable": 598630400,
+      "at_s": 0.678
+    },
+    {
+      "MemTotal": 2002415616,
+      "MemAvailable": 598630400,
+      "at_s": 0.729
+    },
+    {
+      "MemTotal": 2002415616,
+      "MemAvailable": 598372352,
+      "at_s": 0.78
+    },
+    {
+      "MemTotal": 2002415616,
+      "MemAvailable": 596049920,
+      "at_s": 0.858
+    },
+    {
+      "MemTotal": 2002415616,
+      "MemAvailable": 595791872,
+      "at_s": 0.909
+    },
+    {
+      "MemTotal": 2002415616,
+      "MemAvailable": 593211392,
+      "at_s": 0.96
+    },
+    {
+      "MemTotal": 2002415616,
+      "MemAvailable": 591290368,
+      "at_s": 1.01
+    },
+    {
+      "MemTotal": 2002415616,
+      "MemAvailable": 586817536,
+      "at_s": 1.061
+    },
+    {
+      "MemTotal": 2002415616,
+      "MemAvailable": 586817536,
+      "at_s": 1.112
+    },
+    {
+      "MemTotal": 2002415616,
+      "MemAvailable": 586383360,
+      "at_s": 1.165
+    },
+    {
+      "MemTotal": 2002415616,
+      "MemAvailable": 587673600,
+      "at_s": 1.216
+    },
+    {
+      "MemTotal": 2002415616,
+      "MemAvailable": 587673600,
+      "at_s": 1.268
+    },
+    {
+      "MemTotal": 2002415616,
+      "MemAvailable": 587673600,
+      "at_s": 1.321
+    },
+    {
+      "MemTotal": 2002415616,
+      "MemAvailable": 587673600,
+      "at_s": 1.372
+    },
+    {
+      "MemTotal": 2002415616,
+      "MemAvailable": 587673600,
+      "at_s": 1.424
+    },
+    {
+      "MemTotal": 2002415616,
+      "MemAvailable": 587673600,
+      "at_s": 1.475
+    },
+    {
+      "MemTotal": 2002415616,
+      "MemAvailable": 587673600,
+      "at_s": 1.531
+    },
+    {
+      "MemTotal": 2002415616,
+      "MemAvailable": 587673600,
+      "at_s": 1.583
+    },
+    {
+      "MemTotal": 2002415616,
+      "MemAvailable": 587673600,
+      "at_s": 1.635
+    },
+    {
+      "MemTotal": 2002415616,
+      "MemAvailable": 587673600,
+      "at_s": 1.686
+    },
+    {
+      "MemTotal": 2002415616,
+      "MemAvailable": 587415552,
+      "at_s": 1.74
+    },
+    {
+      "MemTotal": 2002415616,
+      "MemAvailable": 587415552,
+      "at_s": 1.791
+    },
+    {
+      "MemTotal": 2002415616,
+      "MemAvailable": 587415552,
+      "at_s": 1.845
+    },
+    {
+      "MemTotal": 2002415616,
+      "MemAvailable": 587415552,
+      "at_s": 1.897
+    },
+    {
+      "MemTotal": 2002415616,
+      "MemAvailable": 587415552,
+      "at_s": 1.949
+    },
+    {
+      "MemTotal": 2002415616,
+      "MemAvailable": 587415552,
+      "at_s": 2.002
+    },
+    {
+      "MemTotal": 2002415616,
+      "MemAvailable": 587415552,
+      "at_s": 2.054
+    },
+    {
+      "MemTotal": 2002415616,
+      "MemAvailable": 579956736,
+      "at_s": 2.107
+    },
+    {
+      "MemTotal": 2002415616,
+      "MemAvailable": 575172608,
+      "at_s": 2.158
+    },
+    {
+      "MemTotal": 2002415616,
+      "MemAvailable": 574656512,
+      "at_s": 2.21
+    },
+    {
+      "MemTotal": 2002415616,
+      "MemAvailable": 585682944,
+      "at_s": 2.261
+    },
+    {
+      "MemTotal": 2002415616,
+      "MemAvailable": 585682944,
+      "at_s": 2.311
+    },
+    {
+      "MemTotal": 2002415616,
+      "MemAvailable": 585605120,
+      "at_s": 2.362
+    },
+    {
+      "MemTotal": 2002415616,
+      "MemAvailable": 585433088,
+      "at_s": 2.413
+    },
+    {
+      "MemTotal": 2002415616,
+      "MemAvailable": 584605696,
+      "at_s": 2.465
+    },
+    {
+      "MemTotal": 2002415616,
+      "MemAvailable": 584613888,
+      "at_s": 2.516
+    },
+    {
+      "MemTotal": 2002415616,
+      "MemAvailable": 584613888,
+      "at_s": 2.568
+    },
+    {
+      "MemTotal": 2002415616,
+      "MemAvailable": 584613888,
+      "at_s": 2.622
+    },
+    {
+      "MemTotal": 2002415616,
+      "MemAvailable": 584613888,
+      "at_s": 2.678
+    },
+    {
+      "MemTotal": 2002415616,
+      "MemAvailable": 583667712,
+      "at_s": 2.731
+    },
+    {
+      "MemTotal": 2002415616,
+      "MemAvailable": 583237632,
+      "at_s": 2.783
+    },
+    {
+      "MemTotal": 2002415616,
+      "MemAvailable": 583065600,
+      "at_s": 2.837
+    },
+    {
+      "MemTotal": 2002415616,
+      "MemAvailable": 583127040,
+      "at_s": 2.892
+    },
+    {
+      "MemTotal": 2002415616,
+      "MemAvailable": 583127040,
+      "at_s": 2.943
+    },
+    {
+      "MemTotal": 2002415616,
+      "MemAvailable": 583127040,
+      "at_s": 3.013
+    },
+    {
+      "MemTotal": 2002415616,
+      "MemAvailable": 583176192,
+      "at_s": 3.071
+    },
+    {
+      "MemTotal": 2002415616,
+      "MemAvailable": 583176192,
+      "at_s": 3.122
+    },
+    {
+      "MemTotal": 2002415616,
+      "MemAvailable": 583176192,
+      "at_s": 3.174
+    },
+    {
+      "MemTotal": 2002415616,
+      "MemAvailable": 583176192,
+      "at_s": 3.228
+    },
+    {
+      "MemTotal": 2002415616,
+      "MemAvailable": 583176192,
+      "at_s": 3.281
+    },
+    {
+      "MemTotal": 2002415616,
+      "MemAvailable": 583176192,
+      "at_s": 3.333
+    },
+    {
+      "MemTotal": 2002415616,
+      "MemAvailable": 583176192,
+      "at_s": 3.385
+    },
+    {
+      "MemTotal": 2002415616,
+      "MemAvailable": 583176192,
+      "at_s": 3.436
+    },
+    {
+      "MemTotal": 2002415616,
+      "MemAvailable": 583176192,
+      "at_s": 3.491
+    },
+    {
+      "MemTotal": 2002415616,
+      "MemAvailable": 583176192,
+      "at_s": 3.543
+    },
+    {
+      "MemTotal": 2002415616,
+      "MemAvailable": 583176192,
+      "at_s": 3.593
+    },
+    {
+      "MemTotal": 2002415616,
+      "MemAvailable": 583176192,
+      "at_s": 3.647
+    },
+    {
+      "MemTotal": 2002415616,
+      "MemAvailable": 583176192,
+      "at_s": 3.7
+    },
+    {
+      "MemTotal": 2002415616,
+      "MemAvailable": 583176192,
+      "at_s": 3.751
+    },
+    {
+      "MemTotal": 2002415616,
+      "MemAvailable": 583176192,
+      "at_s": 3.802
+    },
+    {
+      "MemTotal": 2002415616,
+      "MemAvailable": 583176192,
+      "at_s": 3.856
+    },
+    {
+      "MemTotal": 2002415616,
+      "MemAvailable": 583176192,
+      "at_s": 3.91
+    }
+  ],
+  "limitations": [
+    "API scenarios run via ASGI inside a second process in the existing API container, not the externally routed chat endpoint.",
+    "Frontend GETs use the actual Next.js container; host-driven HTTPS checks through Caddy are recorded separately.",
+    "Scripted extraction does not establish live model latency, peak real SDK usage or deployed Lightsail behavior.",
+    "ARM64 Docker guest differs from an x86_64 Lightsail instance; images were prebuilt.",
+    "Host/container filesystem cache, swap and OS reservations need interpretation; this is a short concurrency-4 smoke, not a capacity guarantee."
+  ],
+  "caddy_https_requests": 100,
+  "caddy_tls": "certificate/hostname validated with explicit CA; no system trust change",
+  "container_state_before": "/minsky-api-1 false 0\n/minsky-postgres-1 false 0\n/minsky-web-1 false 0\n/minsky-caddy-1 false 0\n",
+  "container_state_after": "/minsky-api-1 false 0\n/minsky-postgres-1 false 0\n/minsky-web-1 false 0\n/minsky-caddy-1 false 0\n",
+  "disk": {
+    "database_bytes": 1506457267,
+    "image_bytes": [
+      310470887,
+      241881551,
+      291065228,
+      60408431
+    ],
+    "limitation": "Runtime database and image sizes; excludes OS, Docker layers/cache, WAL growth, logs, snapshots and image rebuilds."
+  },
+  "swap_total_bytes_after": 0,
+  "api_cgroup_oom_events_after": {
+    "oom": 0,
+    "oom_kill": 0,
+    "oom_group_kill": 0
+  },
+  "source_api_image": "sha256:2846b4cb22b3af95490dd9e4363f2264009ea923c8d1da9e983bae5f50062919",
+  "source_web_image": "sha256:31feeaf562f5de0928926c53a786eaedf0277baf9cd83509a9ad037c6ce8bf60",
+  "setup_attempts": [
+    "Two initial diagnostic commands failed before scenarios because the production image uses httpx2 and excludes the dev-only httpx dependency. Used existing httpx2 without installing dependencies or changing app code."
+  ]
+}

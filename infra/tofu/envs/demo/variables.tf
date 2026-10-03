@@ -15,9 +15,3 @@ variable "allowed_cidrs" {
   type    = list(string)
   default = ["0.0.0.0/0"]
 }
-
-variable "enable_cloudfront" {
-  description = "Use CloudFront with private EC2; no purchased domain required"
-  type        = bool
-  default     = false
-}

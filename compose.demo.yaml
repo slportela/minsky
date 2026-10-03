@@ -1,5 +1,5 @@
-# CloudFront VPC-origin demo only: TLS terminates at CloudFront, port 80 is private.
-# Use with compose.yaml; do not add compose.local.yaml or publish the database.
+# Temporary Lightsail smoke (ADR 0011): public viewer TLS ends at the CDN.
+# Origin HTTP is public; do not use real banking identities/data. No local override.
 services:
   caddy:
     ports: !override
@@ -7,5 +7,10 @@ services:
     environment:
       DOMAIN: ":80"
   api:
+    build: !reset null
+    image: ${MINSKY_API_IMAGE:?Set the prebuilt linux/amd64 API image}
     environment:
       MINSKY_ENVIRONMENT: demo
+  web:
+    build: !reset null
+    image: ${MINSKY_WEB_IMAGE:?Set the prebuilt linux/amd64 web image}

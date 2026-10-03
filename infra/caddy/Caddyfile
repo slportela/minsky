@@ -1,4 +1,4 @@
-# localhost uses a local CA; a public domain uses ACME; :80 serves the private CloudFront origin.
+# localhost uses a local CA; a public domain uses ACME; :80 serves the Lightsail HTTP origin.
 {$DOMAIN} {
 	encode gzip
 	handle /api/* {

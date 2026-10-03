@@ -29,9 +29,3 @@ variable "lake_bucket" {
   description = "Our S3 bucket holding bronze/ and silver/"
   type        = string
 }
-
-variable "enable_cloudfront" {
-  description = "Private EC2 with a CloudFront hostname; replacing a direct demo requires a data backup"
-  type        = bool
-  default     = false
-}
