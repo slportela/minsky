@@ -5,7 +5,6 @@ from __future__ import annotations
 import re
 
 from minsky_api.agent import replies
-from minsky_api.agent.confirm import classify_confirmation
 from minsky_api.agent.extract import DisputeDetails, extract_dispute_details
 from minsky_api.agent.language import LanguageDetector, default_language_detector
 from minsky_api.agent.state import ConversationState, Phase
@@ -22,10 +21,12 @@ from minsky_api.tools.bank import (
     get_transactions,
     open_dispute,
 )
+from minsky_api.tools.confirm import classify_reply
 from minsky_api.tools.context import ToolContext
 from minsky_api.tools.errors import ToolDenied
 from minsky_api.tools.schemas import (
     BlockCardArgs,
+    ClassifyReplyArgs,
     CreateHandoffArgs,
     EvaluateDisputeArgs,
     GetDisputeArgs,
@@ -247,18 +248,27 @@ async def _phase_clarify(ctx: ToolContext, state: ConversationState, text: str, 
     return await _after_candidates(ctx, state, txns)
 
 
-async def _remember_decision(state: ConversationState, text: str, llm: LLM) -> str:
-    """Store the model decision before any tool call. Only 'yes' may act."""
-    decision = (await classify_confirmation(llm, question=text, text=text)).decision
-    state.confirmation = decision
-    return decision
+async def _remember_decision(ctx: ToolContext, state: ConversationState, text: str, llm: LLM) -> str:
+    """Classify through the tool before any other tool. Only 'yes' may act."""
+    if not state.pending_question:
+        state.confirmation = "unclear"
+        return "unclear"
+    result = await classify_reply(
+        ctx,
+        ClassifyReplyArgs(question=state.pending_question, text=text),
+        llm,
+    )
+    state.confirmation = result.decision
+    return result.decision
 
 
 async def _phase_confirm_txn(ctx: ToolContext, state: ConversationState, text: str, llm: LLM) -> str:
     language = _lang(state)
-    decision = await _remember_decision(state, text, llm)
+    decision = await _remember_decision(ctx, state, text, llm)
     if decision == "yes":
-        return await _apply_policy(ctx, state)
+        reply = await _apply_policy(ctx, state)
+        state.confirmation = decision
+        return reply
     if decision == "no":
         state.phase = Phase.CLARIFY
         state.pending_question = None
@@ -271,7 +281,7 @@ async def _phase_confirm_txn(ctx: ToolContext, state: ConversationState, text: s
 
 async def _phase_confirm_act(ctx: ToolContext, state: ConversationState, text: str, llm: LLM) -> str:
     language = _lang(state)
-    decision = await _remember_decision(state, text, llm)
+    decision = await _remember_decision(ctx, state, text, llm)
     if decision == "no":
         state.phase = Phase.DONE
         state.pending_question = None
@@ -300,7 +310,7 @@ async def _phase_confirm_act(ctx: ToolContext, state: ConversationState, text: s
 
 async def _phase_card_offer(ctx: ToolContext, state: ConversationState, text: str, llm: LLM) -> str:
     language = _lang(state)
-    if await _remember_decision(state, text, llm) == "yes":
+    if await _remember_decision(ctx, state, text, llm) == "yes":
         actions: list[str] = []
         blocked_ok = False
         if state.selected_product_id:

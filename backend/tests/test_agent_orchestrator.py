@@ -334,8 +334,23 @@ def test_confirm_follows_the_model_when_the_word_says_otherwise():
     assert state.phase == Phase.CONFIRM_TXN
     state, _ = asyncio.run(run_turn(state, "no", ctx, llm))  # type: ignore[arg-type]
     assert state.phase == Phase.CONFIRM_ACT
-    assert state.confirmation is None
+    assert state.confirmation == "yes"
     assert not any(a.tool == "open_dispute" for a in ctx.cases.list_audit())
+
+
+def test_confirm_turn_classifies_before_any_other_tool():
+    ctx = _ctx()
+    state = _state()
+    llm = FakeLLM(_details(), decisions=["yes"])
+    state, _ = asyncio.run(run_turn(state, "Cafe 25", ctx, llm))  # type: ignore[arg-type]
+    assert state.pending_question
+    audit_len = len(ctx.cases.list_audit())
+    state, _ = asyncio.run(run_turn(state, "no", ctx, llm))  # type: ignore[arg-type]
+    tools = [row.tool for row in ctx.cases.list_audit()]
+    assert tools[audit_len] == "classify_reply"
+    assert "open_dispute" not in tools
+    assert "block_card" not in tools
+    assert state.confirmation == "yes"
 
 
 def test_blank_confirmation_stays_in_phase_and_opens_nothing():
