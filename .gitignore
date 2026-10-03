@@ -23,3 +23,6 @@ frontend/tsconfig.tsbuildinfo
 .DS_Store
 # personal scratch notebook (Sebastián), kept out of the repo
 pipeline/notebooks/checks_sebas.ipynb
+
+# Saved infrastructure plans may contain sensitive provider values.
+infra/tofu/**/*.tfplan

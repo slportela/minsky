@@ -7,7 +7,7 @@
 ```
  POC (1 EC2, compose)                         PRODUCTION (proposed)
  ────────────────────                         ─────────────────────
- caddy ───────────────────────────────────▶   Route 53 + CloudFront + WAF + ALB + ACM
+ CloudFront + caddy ───────────────────────▶   Route 53 + CloudFront + WAF + ALB + ACM
  web container ───────── same image ──────▶   ECS Fargate service "web" (≥2 tasks, autoscaling)
  api container ───────── same image ──────▶   ECS Fargate service "api" (≥2 tasks, autoscaling)
  (in-process jobs) ───────────────────────▶   SQS + DLQ + ECS "worker" service
@@ -28,7 +28,7 @@
 
 | Component | POC | Production | Best practices | Code change |
 |---|---|---|---|---|
-| Entry / TLS | Caddy with Let's Encrypt on an Elastic IP | CloudFront + WAF + ALB (ACM certificates), Route 53 | WAF managed rules + rate limiting; TLS 1.2+; HSTS; ALB access logs to S3 | None |
+| Entry / TLS | CloudFront default certificate → private HTTP Caddy (ADR 0010); direct-host mode retained | CloudFront + WAF + ALB (ACM certificates), Route 53 | WAF managed rules + rate limiting; TLS 1.2+; HSTS; ALB access logs to S3 | None |
 | Web | `web` container | ECS service, same image | ≥2 tasks across AZs; health checks; static assets cached at CloudFront | None |
 | API | `api` container | ECS service, same image | Stateless; ≥2 tasks; autoscaling on requests/CPU; graceful shutdown; per-service task role | None (config) |
 | Async jobs | In-process | SQS + DLQ, `worker` service | Idempotent consumers; DLQ alarms; visibility timeout > job time | Queue adapter: in-process → SQS |
@@ -37,7 +37,7 @@
 | ML tracking | Committed training reports (`ml/reports/`) | Same reports; MLflow on ECS (RDS + S3) if experiments grow | Every served model traced to its report (git SHA, data snapshot, metrics) | None, or the tracking URI |
 | Identity | Test sessions + simulated OTP | Cognito (customers: MFA/step-up; staff: federation to the bank IdP) | Short-lived tokens; step-up before sensitive actions; no identity from conversation text | Identity adapter: mock → Cognito |
 | Secrets | `.env` on the host | Secrets Manager (rotation) + KMS; SSM for config | Nothing secret in images, env files or logs | Read from the environment as today; injected by ECS |
-| Network | Default VPC, public instance, ports 80/443 | Dedicated VPC, 3 AZs; public (ALB, NAT), private (tasks), isolated (database) subnets | Security groups by role; no public IPs on tasks or database; VPC endpoints; flow logs | None |
+| Network | CloudFront mode: dedicated VPC, private instance, CloudFront-only port 80, NAT egress; single AZ | Dedicated VPC, 3 AZs; public (ALB, NAT), private (tasks), isolated (database) subnets | Security groups by role; no public IPs on tasks or database; VPC endpoints; flow logs | None |
 | Models | Bedrock via the instance role, over the internet (TLS) | Bedrock via a VPC endpoint; IAM limited to the allowed models; inference profiles | Quota monitoring; circuit breaker + fallback model; invocation logging disabled or redacted | None (config) |
 | Lake | Our S3 bucket (bronze/silver) | Same bucket design, per-environment buckets | SSE-KMS, versioning, lifecycle, Block Public Access, access logs; Glue catalog | None |
 | Pipeline | `make pipeline` on a laptop | EventBridge Scheduler → ECS task; freshness checks + alarms | Idempotent runs (already: manifest + verified copy); failures alarm; retries bounded | None (same code, scheduled) |

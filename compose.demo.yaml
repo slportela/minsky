@@ -1,0 +1,11 @@
+# CloudFront VPC-origin demo only: TLS terminates at CloudFront, port 80 is private.
+# Use with compose.yaml; do not add compose.local.yaml or publish the database.
+services:
+  caddy:
+    ports: !override
+      - "80:80"
+    environment:
+      DOMAIN: ":80"
+  api:
+    environment:
+      MINSKY_ENVIRONMENT: demo

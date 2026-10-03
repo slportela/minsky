@@ -1,4 +1,4 @@
-# DOMAIN=localhost gives a local self-signed certificate; on the demo host, a real domain gets Let's Encrypt.
+# localhost uses a local CA; a public domain uses ACME; :80 serves the private CloudFront origin.
 {$DOMAIN} {
 	encode gzip
 	handle /api/* {

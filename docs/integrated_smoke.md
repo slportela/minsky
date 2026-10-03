@@ -141,3 +141,13 @@ install/use the trusted local CA through the user's normal setup or use a valid 
 
 Attach matched evidence/report to the PRs and update requirements honestly. Merge #24 → #23 → #25 only
 when the required live-model and integrated gates are met; rerun a final smoke on their combined source.
+
+## CloudFront deployed-origin follow-up (ADR 0010)
+
+Use `demo_url` from OpenTofu; AWS's public certificate should validate without importing
+Caddy's local CA. Deploy with `compose.demo.yaml`; browser TLS ends at CloudFront and
+Caddy origin HTTP is private. This does not close production end-to-end TLS.
+Repeat the browser checks above, explicitly verify Authorization forwarding, no cached
+customer/auth/error responses, and anonymous/expired HTTP 401. Inspect references against
+case read-back evidence before reporting actions as verified. The deployment and this gate
+remain pending until actual AWS plan/apply and the deployed browser run are recorded.

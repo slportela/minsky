@@ -7,35 +7,43 @@ data "aws_ssm_parameter" "al2023" {
 }
 
 data "aws_vpc" "default" {
+  count   = var.enable_cloudfront ? 0 : 1
   default = true
 }
 
 data "aws_subnets" "default" {
+  count = var.enable_cloudfront ? 0 : 1
   filter {
     name   = "vpc-id"
-    values = [data.aws_vpc.default.id]
+    values = [data.aws_vpc.default[0].id]
   }
 }
 
 resource "aws_security_group" "demo" {
   name        = "${var.name}-demo"
-  description = "HTTP/HTTPS in; everything out"
-  vpc_id      = data.aws_vpc.default.id
+  description = var.enable_cloudfront ? "CloudFront-only private demo ingress" : "HTTP/HTTPS in; everything out"
+  vpc_id      = var.enable_cloudfront ? aws_vpc.demo[0].id : data.aws_vpc.default[0].id
 
-  ingress {
-    description = "HTTP (redirects to HTTPS)"
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = var.allowed_cidrs
+  dynamic "ingress" {
+    for_each = var.enable_cloudfront ? [] : [80, 443]
+    content {
+      description = ingress.value == 80 ? "HTTP (redirects to HTTPS)" : "HTTPS"
+      from_port   = ingress.value
+      to_port     = ingress.value
+      protocol    = "tcp"
+      cidr_blocks = var.allowed_cidrs
+    }
   }
 
-  ingress {
-    description = "HTTPS"
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = var.allowed_cidrs
+  dynamic "ingress" {
+    for_each = var.enable_cloudfront ? [1] : []
+    content {
+      description     = "CloudFront origin-facing traffic only"
+      from_port       = 80
+      to_port         = 80
+      protocol        = "tcp"
+      prefix_list_ids = [data.aws_ec2_managed_prefix_list.cloudfront[0].id]
+    }
   }
 
   egress {
@@ -89,10 +97,11 @@ resource "aws_iam_instance_profile" "demo" {
 resource "aws_instance" "demo" {
   ami                    = data.aws_ssm_parameter.al2023.value
   instance_type          = var.instance_type
-  subnet_id              = data.aws_subnets.default.ids[0]
+  subnet_id              = var.enable_cloudfront ? aws_subnet.private[0].id : data.aws_subnets.default[0].ids[0]
   vpc_security_group_ids = [aws_security_group.demo.id]
   iam_instance_profile   = aws_iam_instance_profile.demo.name
   user_data              = file("${path.module}/user_data.sh")
+  depends_on             = [aws_route_table_association.private, aws_route_table_association.public]
 
   metadata_options {
     http_tokens                 = "required" # IMDSv2 only
@@ -109,6 +118,13 @@ resource "aws_instance" "demo" {
 }
 
 resource "aws_eip" "demo" {
+  count    = var.enable_cloudfront ? 0 : 1
   instance = aws_instance.demo.id
   domain   = "vpc"
+}
+
+# Preserve the direct-demo Elastic IP address in existing state when adding the opt-in mode.
+moved {
+  from = aws_eip.demo
+  to   = aws_eip.demo[0]
 }
