@@ -2,7 +2,9 @@
 
 Prepared 2026-10-03. Approved infrastructure allowance: **USD 5 for at most six hours**,
 then delete resources. Model diagnostics have a separate cumulative USD 1 allowance.
-No resources have been created yet; the own-account profile and real plan are pending.
+The confirmed `personal` profile and real plan were verified. Apply was blocked by
+zero instance quota; the sole allocated static IP was deleted. No VM/CDN was created.
+Any brief unattached-IP charge requires billing verification.
 
 | Component | Published plan | Conservative six-hour estimate |
 |---|---|---|

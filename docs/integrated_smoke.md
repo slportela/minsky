@@ -156,3 +156,7 @@ The temporary smoke has a six-hour lifetime and USD 5 infrastructure allowance. 
 results before teardown; D2 needs a separately retained demo through October 16. Verify
 real CDN forwarding/cache behavior and amd64 capacity; local and mocked checks are not
 deployed evidence. Keep the independent cumulative model allowance at USD 1.
+
+On 2026-10-03 the Lightsail deployment attempt was blocked by instance quota zero in
+the confirmed own account; EC2 standard vCPU quota was also zero. The sole allocated
+static IP was deleted. No public smoke was performed; see the deployment report.

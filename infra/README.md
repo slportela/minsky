@@ -45,8 +45,9 @@ tofu -chdir=infra/tofu/envs/smoke plan -out=smoke.tfplan
 
 Mocked plan tests make no AWS calls. They check the selected bundles, restricted SSH,
 HTTP-only host exposure, uncached POST and Authorization forwarding. The own-account API confirmed the 2 GB USD 12/month VM and USD 2.50/month CDN;
-the real plan contains five creates and no replacement/deletion. Actual AWS apply,
-bootstrap and deployed browser checks remain pending. Review the saved plan: only one
+the real plan contains five creates and no replacement/deletion. Apply was attempted on 2026-10-03 but blocked by the account Lightsail limit of zero.
+The briefly allocated static IP was deleted; deployed browser checks remain pending.
+See `evals/reports/2026-10-03-lightsail-deployment.md`. Review the saved plan: only one
 VM, static IP/attachment/firewall and CDN; no NAT, ALB, RDS, snapshots or IAM credentials.
 State/plans are private and ignored. Confirm the USD 5/six-hour allowance against
 `demo_cost.md`; the cumulative model budget remains USD 1.
