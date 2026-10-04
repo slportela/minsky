@@ -42,46 +42,46 @@ Most of that work is **intake**: gathering facts that are already in the bank's 
 
 ## 2. What it looks like: three representative conversations
 
-The replies are the system's real templates (`prompts/agent.reply.*.j2`). The customers, merchants and ids are illustrative.
+The flow and the checks are the system's; the wording is illustrative. The model writes each reply from the step the code allows and the verified facts (`prompts/agent.speak.j2`), in the language of the customer's first message (Spanish or Portuguese). Rule ids stay internal: the customer hears the reason in plain words.
 
-### ✅ A normal case, resolved automatically (rule D09)
+### ✅ A normal case, opened automatically (rule D09)
 
 ```
 Customer  Me cobraron 25.37 USD en Farmacias del Ahorro y no corresponde.
-System    Encontré este cargo: Farmacias del Ahorro, 25.37 USD, 2026-06-10 (ref. TRX-…).
-          ¿Es este el que quieres disputar? Responde sí para confirmar, o no para cancelar.
+System    Lamento el inconveniente. Encontré este cargo: Farmacias del Ahorro, 25.37 USD,
+          10 de junio de 2026. ¿Es el que quieres reclamar?
 Customer  sí
-System    Según la política (D09-eligible), puedo abrir el reclamo del cargo TRX-… de forma
-          automática. ¿Confirmas que lo abra?
+System    El cargo cumple las condiciones para abrir el reclamo ahora mismo. ¿Lo abro?
 Customer  sí
-System    Listo: abrí el reclamo DSP-… (regla D09-eligible). Te avisaremos del avance.
+System    Listo, tu reclamo DSP-4feed87b3909 quedó abierto. Nuestro equipo lo revisará y te
+          avisaremos de cada avance.
 ```
-Behind the scenes: the search covers **only this customer's** transactions. The policy runs in code, the dispute is written, then **read back**. The system says "Listo" only after the read-back succeeds.
+Behind the scenes: the search covers **only this customer's** transactions. The policy runs in code, the dispute is written, then **read back**; the reply is sent only after the read-back, and it must contain the reference. The case joins the back-office queue (Low, due in 10 days).
 
 ### ❓ An ambiguous request: the system asks instead of guessing
 
 ```
-Customer  No reconozco un cargo en Amazon del mes pasado.
-System    Encontré varios cargos. Indica el número del que quieres disputar:
-          1. Amazon, 18.90 USD, 2026-05-03 (TRX-…)
-          2. Amazon, 64.00 USD, 2026-05-21 (TRX-…)
+Customer  No reconozco un cargo en Super Ahorro del mes pasado.
+System    Encontré varios cargos en Super Ahorro. ¿Cuál quieres reclamar?
+          1. Super Ahorro, 18.90 USD, 3 de mayo de 2026
+          2. Super Ahorro, 64.00 USD, 21 de mayo de 2026
 Customer  2
 ```
 With zero matches it asks for more detail, at most twice, then hands off to a human. It never picks a transaction for the customer.
 
-### 🧑‍💼 A case that needs a human: possible fraud (rule D06)
+### 🧑‍💼 A case that needs a human: possible fraud (rule D06), in Portuguese
 
 ```
-Customer  No reconozco un cargo de 25.00 USD en Cafe, yo no hice esa compra.
-System    Encontré este cargo: … ¿Es este el que quieres disputar?
-Customer  sí
-System    Este caso parece fraude (D06-possible-fraud). ¿Quieres que bloquee la tarjeta ahora?
-          Solo lo haré con un sí explícito.
-Customer  sí
-System    Bloqueé la tarjeta y te derivo al equipo de fraude (D06-possible-fraud).
-          Referencia de traspaso: HND-…
+Customer  Tenho uma cobrança de 25.00 USD no Cafe que eu não fiz.
+System    Encontrei esta cobrança: Cafe, 25.00 USD, 10 de junho de 2026. É essa?
+Customer  sim
+System    Se você não fez essa compra, alguém pode estar usando o seu cartão. Para proteger
+          o seu dinheiro, posso bloqueá-lo agora. Quer que eu faça isso?
+Customer  sim
+System    Seu cartão já está bloqueado. Um especialista da nossa equipe vai assumir o seu
+          caso. Sua referência é HO-91462747934b.
 ```
-The fraud team receives a **structured handoff**: the request, the verified facts, the actions taken ("card blocked, confirmed by the customer"), the rule that triggered it and the open questions. They don't need to read the transcript.
+The card block is offered only for a charge on one of the customer's cards, and only done after an explicit yes. The fraud team gets a **Critical** case due in 4 hours: the request in the customer's words, the verified facts from the bank's records, the actions taken ("card blocked, confirmed by the customer"), the rule and the open questions. They don't need to read the transcript.
 
 ### 🛡️ What it refuses to do
 
@@ -146,9 +146,10 @@ This split matters more than anything else in the design. The brief scores *cont
 | Find the transaction | **Code** (SQL over this customer's records) | Exact and auditable |
 | Disputable? Automatic, refuse, or human? | **Code** (policy rules D01-D09) | Rules must be testable and explainable by rule id |
 | Act: open dispute, block card, hand off | **Code** (tools), always after an explicit "sí" | Idempotent writes, each one read back before it is reported |
-| Reply to the customer | **Templates** filled with verified facts | No amount or date can be hallucinated |
+| Type of dispute (wrong amount, duplicate, not received, unrecognized) | **Learned classifier** (`ml/`), abstains below a threshold | Labels the case for the back office; never changes the route |
+| Reply to the customer | **LLM**, from the step code allows and the verified facts; checked before sending | References must appear verbatim, unverified action claims are refused, one bounded retry, then a code-written fallback |
 
-Today the LLM is used for **one step only: extraction**. Replies are templates, in Spanish only. A learned intent router and LLM-written handoff summaries are planned in [`docs/solution.md`](docs/solution.md) but not built yet.
+Every case the system opens or hands off goes to a **back-office queue** with a priority, a due time (fraud first, within 4 hours), the verified facts, what the customer said and the open questions. Agents work it in `/console` ([ADR 0013](docs/adr/0013-case-queue-and-console.md), triage rules in [`docs/dispute_policy.md`](docs/dispute_policy.md)).
 
 ### One turn, step by step
 
@@ -162,7 +163,8 @@ Today the LLM is used for **one step only: extraction**. Replies are templates, 
    ├─ 4 decide       policy on the verified facts → D06-possible-fraud            code
    │                    ◀ "¿Bloqueo la tarjeta? Solo con un sí explícito"  ▶ "sí"
    ├─ 5 act          block_card → read back → create_handoff (each call audited)  code
-   └─ 6 reply        "Bloqueé la tarjeta… Referencia HND-…" (after read-back)     template
+   ├─ 6 queue        case: Critical, fraud queue, due in 4 h, facts + open questions  code
+   └─ 7 reply        "Tu tarjeta ya está bloqueada… Tu referencia es HO-…"        LLM, checked
 ```
 
 ---
@@ -247,8 +249,19 @@ must_not:          [disclose_other_customer, action_without_confirmation, unveri
 ```
 
 - **Splits:** `dev` to iterate, `val` to choose, `test` **locked** (never tuned on).
-- **Baselines** on the same cases: "always escalate" (today's human process), a keyword bot, and our system.
-- **Latest result (dev, not held-out):** 36/36 trials (12 cases × 3), Wilson 95 % CI 90.4-100 %, against 21/36 before the fixes ([report](evals/reports/2026-10-02-live-l2.md)).
+- **Val** cases are generated from real customers and charges (`evals/generate_val_cases.py`); the policy code assigns each label.
+- **Baseline vs Minsky** on the same 24 val cases, offline ([report](evals/reports/2026-10-04-system-comparison-val.md)):
+
+| | Always send to an agent (today) | Minsky |
+|---|---|---|
+| Handled without an agent | 0/24 | 12/24 |
+| Correct outcome | 10/24 | 24/24 |
+| Unnecessary handoffs | 12/12 | 0/12 |
+| Missed handoffs | 0/12 | 0/12 |
+| Unsafe outcomes | 0/24 | 0/24 (up to 12 % not ruled out at n=24) |
+
+  Scripted understanding (offline), and failures found on val were fixed, so these are not test-split numbers. Earlier live dev run: 36/36 trials ([report](evals/reports/2026-10-02-live-l2.md)). Still to do: a live run, the locked test split (written by people), a keyword-bot baseline.
+- **Learned component:** the dispute-type classifier scores 81.8 % vs 57.3 % for keyword rules on 600 phrasings it never saw (generated text; [`ml/README.md`](ml/README.md)).
 
 Full strategy: [`docs/evals.md`](docs/evals.md).
 
@@ -281,7 +294,7 @@ frontend/       Next.js: /chat · /console
 pipeline/       organizer S3 → bronze → silver → gold → Postgres (dbt-duckdb)
 evals/          eval harness and cases/{dev,val,test}
 prompts/        versioned prompts and reply templates
-ml/             learned router (planned)
+ml/             learned dispute-type classifier: generator, training ladder, reports
 infra/          Caddy, OpenTofu (demo host)
 docs/           challenge · solution · architecture · policy · evals · ADRs
 ```
@@ -298,8 +311,11 @@ make setup             # dependencies + git hooks
 make ci                # lint, types, tests, eval-case checks (must pass before a PR)
 make up                # full stack → https://localhost   (health: /api/health)
 make pipeline          # load the data (needs make up)
+make demo-sessions     # demo customer + agent-console credentials for .env
 make help              # everything else
 ```
+
+**Full demo from an empty checkout** (data, credentials, chat and console): [`docs/demo.md`](docs/demo.md).
 
 - `make up` serves the web app and API through Caddy with a self-signed certificate, and exposes Postgres on `localhost:5433` (`POSTGRES_HOST_PORT`).
 - Optional trace viewer: `docker compose --profile observability up -d phoenix` → http://localhost:6006 (set `OTEL_EXPORTER_OTLP_ENDPOINT=http://phoenix:6006` in `.env`).
