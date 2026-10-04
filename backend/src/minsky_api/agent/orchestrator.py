@@ -8,7 +8,16 @@ from minsky_api.agent.extract import DisputeDetails, extract_dispute_details
 from minsky_api.agent.language import LanguageDetector, default_language_detector
 from minsky_api.agent.speak import Speech, compose_speech
 from minsky_api.agent.state import ConversationState, Phase
-from minsky_api.agent.wording import confirm_question, fallback_sentence, human_amount, human_date, policy_reason
+from minsky_api.agent.wording import (
+    confirm_question,
+    done_fallback,
+    fallback_sentence,
+    human_amount,
+    human_date,
+    inform_fallback,
+    policy_reason,
+    transaction_noun,
+)
 from minsky_api.config import get_settings
 from minsky_api.identity.session import SessionState
 from minsky_api.llm.client import LLM
@@ -64,6 +73,7 @@ def _public_facts(state: ConversationState, **extra: object) -> dict[str, object
 
 def _txn_facts(txn: TransactionView, language: str) -> dict[str, object]:
     return {
+        "kind": transaction_noun(txn.transaction_type, language),
         "merchant": txn.merchant_name,
         "amount": human_amount(txn.amount_usd),
         "when": human_date(txn.transaction_date.date(), language) if txn.transaction_date else None,
@@ -245,6 +255,7 @@ async def _after_candidates(
     txn = txns[0]
     state.selected_txn_id = txn.transaction_id
     state.selected_product_id = txn.product_id
+    state.selected_type = txn.transaction_type
     state.candidate_txn_ids = [txn.transaction_id]
     speech = await _speak(state, llm, ("confirm_txn",), **_txn_facts(txn, _lang(state)))
     return _ask(state, Phase.CONFIRM_TXN, _accept(state, speech))
@@ -264,7 +275,7 @@ async def _apply_policy(ctx: ToolContext, state: ConversationState, llm: LLM) ->
     route = decision.route
     if route == Route.OPEN_DISPUTE.value:
         speech = await _speak(state, llm, ("confirm_open",), rule_id=decision.rule_id)
-        question = f"{_accept(state, speech)} {confirm_question('confirm_open', _lang(state))}"
+        question = f"{_accept(state, speech)} {confirm_question('confirm_open', _lang(state), state.selected_type)}"
         return _ask(state, Phase.CONFIRM_ACT, question)
     if route == Route.ESCALATE_FRAUD.value and not decision.offer_card_block:
         # Not a card charge (e.g. a transfer): nothing to block, straight to the fraud team.
@@ -295,15 +306,21 @@ async def _apply_policy(ctx: ToolContext, state: ConversationState, llm: LLM) ->
             handoff_id=result.handoff.handoff_id,
             rule_id=decision.rule_id,
         )
-    speech = await _speak(
-        state,
-        llm,
-        ("inform",),
-        rule_id=decision.rule_id,
-        existing_dispute_id=decision.existing_dispute_id,
-    )
     state.phase = Phase.DONE
     state.pending_question = None
+    try:
+        speech = await _speak(
+            state,
+            llm,
+            ("inform",),
+            rule_id=decision.rule_id,
+            existing_dispute_id=decision.existing_dispute_id,
+            charge_reversed=decision.rule_id.startswith("D02") or None,  # the bank's reversal supports "it came back"
+        )
+    except RuntimeError:
+        # A refused or failed reply must not leave the customer without an answer (no 503): code says it.
+        state.acts.append("inform")
+        return inform_fallback(_lang(state), decision.rule_id, decision.existing_dispute_id)
     return _accept(state, speech)
 
 
@@ -345,6 +362,7 @@ async def _phase_clarify(ctx: ToolContext, state: ConversationState, text: str, 
                 return await _after_candidates(ctx, state, [], llm)
             state.selected_txn_id = txn.transaction_id
             state.selected_product_id = txn.product_id
+            state.selected_type = txn.transaction_type
             speech = await _speak(state, llm, ("confirm_txn",), **_txn_facts(txn, _lang(state)))
             return _ask(state, Phase.CONFIRM_TXN, _accept(state, speech))
     details = await extract_dispute_details(llm, text)
@@ -492,8 +510,12 @@ async def run_turn(
         state.language = (detector or default_language_detector()).detect(stripped)
 
     if state.phase == Phase.DONE:
-        speech = await _speak(state, llm, ("inform",))
-        reply = _accept(state, speech)
+        try:
+            reply = _accept(state, await _speak(state, llm, ("inform",)))
+        except RuntimeError:
+            # A follow-up after the case is settled ("¿cuándo se resuelve?") gets no invented dates: code answers.
+            state.acts.append("inform")
+            reply = done_fallback(_lang(state))
         state.messages.append(("agent", reply))
         return state, reply
 

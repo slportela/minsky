@@ -552,9 +552,11 @@ def test_inform_route_does_not_let_the_model_create_a_handoff():
     )
     state, _ = asyncio.run(run_turn(state, "Cafe 25", ctx, llm))  # type: ignore[arg-type]
     assert state.phase == Phase.CONFIRM_TXN
-    with pytest.raises(RuntimeError, match="not allowed"):
-        asyncio.run(run_turn(state, "sí", ctx, llm))  # type: ignore[arg-type]
+    state, reply = asyncio.run(run_turn(state, "sí", ctx, llm))  # type: ignore[arg-type]
+    # The model's handoff is refused; the customer still gets the code-written explanation, not a 503.
     assert not any(row.tool == "create_handoff" for row in ctx.cases.list_audit())
+    assert "Quiero una persona" not in reply and "rechazado" in reply
+    assert state.phase == Phase.DONE
 
 
 def test_speech_failure_after_open_reports_the_dispute_id():
@@ -794,3 +796,29 @@ def test_d04_already_disputed_answers_with_the_existing_reference():
     assert state.phase == Phase.DONE
     assert existing.dispute_id in reply and "reclamo abierto" in reply
     assert len([c for c in ctx.cases.list_cases()]) == 0  # nothing new was opened or queued
+
+
+def test_follow_up_after_the_case_gets_a_code_answer_when_the_model_invents_a_date():
+    """Review item 7: '¿cuándo se resuelve?' after the dispute is opened. An invented date is refused and
+    the customer gets the code-written answer instead of a 503."""
+    ctx = _ctx()
+    state = _state()
+    llm = FakeLLM(_details())
+    for text in ("Cafe 25", "sí", "sí"):
+        state, _ = asyncio.run(run_turn(state, text, ctx, llm))  # type: ignore[arg-type]
+    assert state.phase == Phase.DONE
+    invent = _NthSpeech(_details(), n=1, speech=Speech(act="inform", text="Se resolverá el 20 de junio de 2026."))
+    state, reply = asyncio.run(run_turn(state, "¿Cuándo se resuelve?", ctx, invent))  # type: ignore[arg-type]
+    assert "20 de junio" not in reply and "referencia" in reply
+
+
+def test_a_transfer_is_not_called_a_charge():
+    from minsky_api.agent.wording import confirm_question, transaction_noun
+
+    assert transaction_noun("Transfer", "es") == "transferencia"
+    assert transaction_noun("Withdrawal", "pt") == "saque"
+    assert (
+        confirm_question("confirm_open", "es", "Transfer")
+        == "¿Abro el reclamo por esta transferencia? Responde sí o no."
+    )
+    assert "cargo" in confirm_question("confirm_open", "es", None)

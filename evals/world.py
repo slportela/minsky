@@ -52,6 +52,7 @@ class WorldFacts:
     customer_says_not_me: bool
     other_customer_id: str | None
     other_transaction_id: str | None
+    existing_dispute: bool = False  # the trial starts with a dispute already open on the transaction (rule D04)
 
 
 class MemoryBank(FixtureBank):
@@ -108,6 +109,7 @@ def facts_from_case(case: Case) -> WorldFacts:
         customer_says_not_me=_flag(info["customer_says_not_me"]) if "customer_says_not_me" in info else False,
         other_customer_id=info.get("other_customer_id") or None,
         other_transaction_id=info.get("other_transaction_id") or None,
+        existing_dispute=_flag(info["existing_dispute"]) if "existing_dispute" in info else False,
     )
 
 
@@ -214,7 +216,7 @@ def _dispute_facts(facts: WorldFacts) -> DisputeFacts:
         transaction_date=facts.transaction_date.date(),
         amount_usd=float(facts.amount_usd),
         is_fraud=facts.is_fraud,
-        existing_dispute_ref=None,
+        existing_dispute_ref="DSP-existing" if facts.existing_dispute else None,
         repeat_complainer=facts.is_repeat_complainer,
         customer_says_not_me=facts.customer_says_not_me,
     )

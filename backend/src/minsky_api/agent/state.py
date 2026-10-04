@@ -30,6 +30,7 @@ class ConversationState:
     candidate_txn_ids: list[str] = field(default_factory=list)
     selected_txn_id: str | None = None
     selected_product_id: str | None = None
+    selected_type: str | None = None  # Purchase, Transfer, ...: how the customer names it
     rule_id: str | None = None
     route: str | None = None
     customer_says_not_me: bool = False

@@ -35,25 +35,46 @@ _CLAIM_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
         ),
     ),
     (
+        # The assistant says it opened a case now: only the dispute just written supports it.
         "dispute_opened",
         re.compile(
-            rf"\b(?:abrí|abri|abrimos|registré|registrei|registramos|ingresé|ingresamos|creé|criei)\b.{{0,40}}\b{_CASE}\b"
-            rf"|\b{_CASE}\b.{{0,40}}\b(?:abiert[oa]s?|abert[oa]s?|registrad[oa]s?|cread[oa]s?|criad[oa]s?"
-            r"|ingresad[oa]s?|en trámite|en proceso|em andamento|em análise)\b"
-            rf"|\b(?:se abrió|foi abert[oa]|se registró|foi registrad[oa])\b.{{0,30}}\b{_CASE}\b"
+            rf"\b(?:abrí|abri|abrimos|registré|registrei|registramos|ingresé|ingresamos|creé|criei|levanté"
+            rf"|levantamos)\b.{{0,40}}\b{_CASE}\b"
+            rf"|\b(?:he|hemos|ha|han|tenemos|tenho|temos)\s+(?:abierto|registrado|creado|ingresado|levantado|iniciado"
+            rf"|presentado|aberto|criado)\b.{{0,40}}\b{_CASE}\b"
+            rf"|\b(?:fiz|fizemos|realizei|realizamos|hice|hicimos)\s+(?:a|la|el|o)\s+(?:abertura|apertura|registro)\b"
+            rf"|\b(?:se abrió|se registró|foi abert[oa]|foi registrad[oa])\b.{{0,30}}\b{_CASE}\b"
+        ),
+    ),
+    (
+        # A case is open or in progress (a status): the dispute just opened or the one that existed (D04) supports it.
+        "dispute_exists",
+        re.compile(
+            rf"\b{_CASE}\b.{{0,40}}\b(?:abiert[oa]s?|abert[oa]s?|registrad[oa]s?|cread[oa]s?|criad[oa]s?"
+            r"|ingresad[oa]s?|en trámite|en proceso|en marcha|en curso|em andamento|em análise"
+            r"|siendo (?:revisad[oa]|analizad[oa]))\b"
+            rf"|\b(?:quedó|quedaron|está|están|fue|foi|ficou)\s+(?:registrad\w*|abiert\w*|abert\w*|cread\w*|ingresad\w*)"
+            rf"\b.{{0,30}}\b{_CASE}\b"
             rf"|\bnúmero de (?:{_CASE})\b"
         ),
     ),
     (
-        # Refunds done or promised: the system never refunds. "Ese cargo ya fue revertido" (rule D02) states a
-        # bank fact and stays out.
+        # Money returned or promised. The system never refunds, so this is only true when the bank already
+        # reversed the charge (rule D02, fact charge_reversed).
         "refund",
         re.compile(
-            r"\b(?:reembolsé|reembolsei|reembolsamos|devolví|devolvi|devolvimos|estornamos|estornei)\b"
-            r"|\b(?:te|le) (?:devolveremos|reembolsaremos|devolvemos|reembolsamos)\b"
-            r"|\b(?:vamos a|vamos) (?:devolver|reembolsar|estornar)\b"
+            r"\b(?:reembolsé|reembolsei|reembolsamos|devolví|devolvi|devolvimos|estornamos|estornei|reintegramos)\b"
+            r"|\b(?:he|hemos|ha|han|tenemos|temos)\s+(?:devuelto|reembolsado|reintegrado|acreditado|abonado|estornado"
+            r"|devolvido|reembolsado)\b"
+            r"|\b(?:te|le) (?:devolveremos|reembolsaremos|devolvemos|reembolsamos|acreditaremos|reintegraremos)\b"
+            r"|\b(?:vamos a|vamos) (?:devolver|reembolsar|estornar|reintegrar)\b"
             r"|\b(?:recibirás|recuperarás|vas a recibir|vas a recuperar) (?:tu|el) dinero\b"
             r"|\b(?:vai receber|vai recuperar|receberá) (?:o|seu|o seu) dinheiro\b"
+            r"|\b(?:dinero|dinheiro|monto|importe|valor)\b.{0,30}\b(?:volverá|volvió|regresará|vuelve|voltará|voltou"
+            r"|retornará|será devuelto|será reembolsado|será estornado)\b"
+            r"|\b(?:valor|cobrança|cargo|monto|importe|dinero|dinheiro|pago|pagamento)\b.{0,25}"
+            r"\b(?:foi|fue|ha sido|será|serão|serán)\s+"
+            r"(?:estornad|revertid|reembolsad|devuelt|devolvid|creditad|acreditad|reintegrad)\w*"
         ),
     ),
     (
@@ -68,7 +89,7 @@ _CLAIM_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
 )
 # Offers stay out of the card and dispute claims ("si confirmas, quedará bloqueada"); refund promises and
 # handoff announcements are claims in any tense.
-_TENSE_SENSITIVE = frozenset({"card_blocked", "dispute_opened"})
+_TENSE_SENSITIVE = frozenset({"card_blocked", "dispute_opened", "dispute_exists"})
 _NEGATION = re.compile(r"(?:no|não|nao|sin|sem|nunca)\s+$")
 _FUTURE_WORDS = (
     r"(?:quedará|quedaría|será|sería|estará|estaría|ficará|ficaria|vai ficar|va a quedar|podemos|puedo|posso)"
@@ -161,8 +182,38 @@ def _fact_numbers(value: object) -> set[str]:
     return set().union(*(_number_forms(t) for t in _NUMBER.findall(str(value)))) if str(value) else set()
 
 
+_ISO_DATE = re.compile(r"\b\d{4}-\d{2}-\d{2}\b")
+_MONTHS = {
+    name: index
+    for index, names in enumerate(
+        (
+            ("enero", "janeiro"), ("febrero", "fevereiro"), ("marzo", "março"), ("abril",), ("mayo", "maio"),
+            ("junio", "junho"), ("julio", "julho"), ("agosto",), ("septiembre", "setembro"), ("octubre", "outubro"),
+            ("noviembre", "novembro"), ("diciembre", "dezembro"),
+        ),
+        start=1,
+    )
+    for name in names
+}  # fmt: skip
+_HUMAN_DATE = re.compile(r"\b(\d{1,2}) de (\w+) de (\d{4})\b")
+
+
+def _fact_dates(facts: Mapping[str, object]) -> set[str]:
+    """ISO dates the facts state, directly or as '10 de junio de 2026'."""
+    text = json.dumps(dict(facts), ensure_ascii=False, default=str)
+    dates = set(_ISO_DATE.findall(text))
+    for day, month, year in _HUMAN_DATE.findall(text):
+        if month.casefold() in _MONTHS:
+            dates.add(f"{year}-{_MONTHS[month.casefold()]:02d}-{int(day):02d}")
+    return dates
+
+
 def ungrounded_number(text: str, facts: Mapping[str, object]) -> str | None:
-    """The first number in the reply that no verified fact contains (an invented amount, date or deadline)."""
+    """The first number or ISO date in the reply that no verified fact contains (an invented amount or deadline)."""
+    known_dates = _fact_dates(facts)
+    for iso in _ISO_DATE.findall(text):
+        if iso not in known_dates:
+            return iso
     known = _fact_numbers(facts)
     for token in _NUMBER.findall(text):
         if not _number_forms(token) & known:
@@ -174,14 +225,19 @@ def _unsupported_claim(text: str, facts: dict[str, object]) -> str | None:
     claims = action_claims(text)
     if "card_blocked" in claims and facts.get("card_blocked") is not True:
         return "card_blocked"
-    # An open dispute is supported by the one just opened or by the one that already existed (rule D04).
-    references = [facts.get("dispute_id"), facts.get("existing_dispute_id")]
-    if "dispute_opened" in claims and not any(isinstance(ref, str) and ref and ref in text for ref in references):
+    # "I opened it" needs the dispute just written; "it is open" may cite the one that already existed (D04).
+    opened = facts.get("dispute_id")
+    existing = facts.get("existing_dispute_id")
+    if "dispute_opened" in claims and not (isinstance(opened, str) and opened and opened in text):
         return "dispute_opened"
+    if "dispute_exists" in claims and not any(
+        isinstance(ref, str) and ref and ref in text for ref in (opened, existing)
+    ):
+        return "dispute_exists"
     handoff_id = facts.get("handoff_id")
     if "handoff" in claims and not (isinstance(handoff_id, str) and handoff_id in text):
         return "handoff"
-    if "refund" in claims:
+    if "refund" in claims and facts.get("charge_reversed") is not True:
         return "refund"
     return None
 

@@ -28,6 +28,7 @@ SCRIPTED = (
     "dispute-policy-failure-retry-es",
     "dispute-fraud-block-es",
     "dispute-fraud-no-block-es",
+    "dispute-already-disputed-es",
 )
 
 

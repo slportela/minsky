@@ -91,19 +91,63 @@ def fallback_sentence(language: str, facts: dict[str, object]) -> str:
     return " ".join(parts)
 
 
-# The question a "yes" authorizes is written by code, never by the model, so the customer always
-# consents to exactly the action that runs (AGENTS rule 1). Appended to the model's sentence.
-_QUESTIONS = {
+# What the customer calls the transaction: a transfer or a withdrawal is not a "cargo". (noun, "this <noun>")
+_NOUNS = {
     "es": {
-        "confirm_open": "¿Abro el reclamo por este cargo? Responde sí o no.",
-        "offer_block": "¿Bloqueo tu tarjeta ahora? Responde sí o no.",
+        "Purchase": ("cargo", "este cargo"),
+        "Transfer": ("transferencia", "esta transferencia"),
+        "Withdrawal": ("retiro", "este retiro"),
+        "Payment": ("pago", "este pago"),
+        "Adjustment": ("ajuste", "este ajuste"),
+        "Deposit": ("depósito", "este depósito"),
     },
     "pt": {
-        "confirm_open": "Posso abrir a contestação desta cobrança? Responda sim ou não.",
-        "offer_block": "Posso bloquear o seu cartão agora? Responda sim ou não.",
+        "Purchase": ("cobrança", "esta cobrança"),
+        "Transfer": ("transferência", "esta transferência"),
+        "Withdrawal": ("saque", "este saque"),
+        "Payment": ("pagamento", "este pagamento"),
+        "Adjustment": ("ajuste", "este ajuste"),
+        "Deposit": ("depósito", "este depósito"),
     },
 }
 
 
-def confirm_question(act: str, language: str) -> str:
-    return _QUESTIONS[_lang(language)][act]
+def transaction_noun(transaction_type: str | None, language: str) -> str:
+    return _NOUNS[_lang(language)].get(transaction_type or "", _NOUNS[_lang(language)]["Purchase"])[0]
+
+
+def _this(transaction_type: str | None, language: str) -> str:
+    return _NOUNS[_lang(language)].get(transaction_type or "", _NOUNS[_lang(language)]["Purchase"])[1]
+
+
+# The question a "yes" authorizes is written by code, never by the model, so the customer always
+# consents to exactly the action that runs (AGENTS rule 1). Appended to the model's sentence.
+def confirm_question(act: str, language: str, transaction_type: str | None = None) -> str:
+    this = _this(transaction_type, language)
+    if _lang(language) == "pt":
+        if act == "confirm_open":
+            return f"Posso abrir a contestação de {this}? Responda sim ou não."
+        return "Posso bloquear o seu cartão agora? Responda sim ou não."
+    if act == "confirm_open":
+        return f"¿Abro el reclamo por {this}? Responde sí o no."
+    return "¿Bloqueo tu tarjeta ahora? Responde sí o no."
+
+
+def inform_fallback(language: str, rule_id: str | None, existing_dispute_id: str | None) -> str:
+    """A complete, safe answer when the model cannot phrase a policy explanation (for example D04)."""
+    reason = policy_reason(rule_id, language) or ""
+    text = reason[:1].upper() + reason[1:] + "." if reason else ""
+    if existing_dispute_id:
+        text += (
+            f" A referência da sua contestação é {existing_dispute_id}."
+            if _lang(language) == "pt"
+            else f" La referencia de tu reclamo es {existing_dispute_id}."
+        )
+    return text.strip() or done_fallback(language)
+
+
+def done_fallback(language: str) -> str:
+    """After the conversation's case is settled: no new facts, only what to do next."""
+    if _lang(language) == "pt":
+        return "O seu caso já está registrado com a referência que enviei. Se precisar de outra coisa, escreva aqui."
+    return "Tu caso ya quedó registrado con la referencia que te envié. Si necesitas algo más, escríbeme aquí."

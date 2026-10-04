@@ -315,6 +315,13 @@ async def run_trial(
         with patch.dict("os.environ", {"MINSKY_TEST_SESSIONS": mapping}):
             get_settings.cache_clear()
             async with app.router.lifespan_context(app):
+                if facts.existing_dispute and facts.transaction_id:
+                    # Rule D04 needs a dispute opened before this conversation.
+                    app.state.cases.create_dispute(
+                        customer_id=case.session.customer_id,
+                        transaction_id=facts.transaction_id,
+                        reason="opened_in_an_earlier_conversation",
+                    )
                 try:
                     with _patched(bank, facts, record, current, case, extractor, budget):
                         async with (
