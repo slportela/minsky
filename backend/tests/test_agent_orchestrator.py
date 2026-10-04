@@ -11,15 +11,17 @@ from uuid import uuid4
 import pytest
 
 from minsky_api.agent.extract import DisputeDetails
-from minsky_api.agent.orchestrator import run_turn
+from minsky_api.agent.orchestrator import _candidate_list, run_turn
 from minsky_api.agent.speak import Speech
 from minsky_api.agent.state import ConversationState, Phase
+from minsky_api.agent.wording import clarify_fallback
 from minsky_api.config import Settings, get_settings
 from minsky_api.identity import SessionState, ToolSession
-from minsky_api.llm.client import LLMResult
+from minsky_api.llm.client import LLMNotConfiguredError, LLMResult
 from minsky_api.store.cases_memory import InMemoryCasesBackend
 from minsky_api.store.models import CustomerComplaintStats, Product, Transaction
 from minsky_api.tools.context import ToolContext
+from minsky_api.tools.schemas import TransactionView
 
 
 class _FakeResult:
@@ -822,3 +824,88 @@ def test_a_transfer_is_not_called_a_charge():
         == "¿Abro el reclamo por esta transferencia? Responde sí o no."
     )
     assert "cargo" in confirm_question("confirm_open", "es", None)
+
+
+# ---- clarify: the model asks, code owns the option list -------------------------------------------------------
+
+_OPENER = "Quiero disputar un cargo de Cafe."
+
+
+def _two_cafes() -> tuple[ToolContext, str]:
+    t1 = _txn(transaction_id="T1", amount_usd="25.00")
+    t2 = _txn(transaction_id="T2", amount_usd="30.00")
+    ctx = ToolContext(
+        session=_valid(),
+        db=FakeSession(get_result={CustomerComplaintStats: _stats(), Product: _card()}, exec_rows=[t1, t2]),  # type: ignore[arg-type]
+        cases=InMemoryCasesBackend(),
+    )
+    views = [
+        TransactionView(
+            transaction_id=row.transaction_id,
+            product_id=row.product_id,
+            transaction_date=row.transaction_date,
+            amount_usd=row.amount_usd,
+            merchant_name=row.merchant_name,
+            transaction_status=row.transaction_status,
+        )
+        for row in (t1, t2)
+    ]
+    return ctx, _candidate_list(views, "es")
+
+
+def test_clarify_accepts_a_model_that_punctuates_the_options_its_own_way():
+    """The live model wrote the options on one line with ';' and the guard refused it twice: a 503."""
+    ctx, options = _two_cafes()
+    text = "¿Cuál de estos cargos no reconoces? " + options.replace("\n", "; ") + "."
+    llm = _NthSpeech(_details(amount=None), n=1, speech=Speech(act="clarify", text=text), repeat=1)
+    state, reply = asyncio.run(run_turn(_state(), _OPENER, ctx, llm))  # type: ignore[arg-type]
+    assert state.language == "es"
+    assert state.phase == Phase.CLARIFY
+    assert state.candidate_txn_ids == ["T1", "T2"]
+    assert reply == text  # every option is named exactly, so code adds nothing
+
+
+def test_clarify_appends_the_exact_list_when_the_model_names_no_options():
+    ctx, options = _two_cafes()
+    text = "Veo dos cargos de Cafe el 10 de junio de 2026: uno de 25.00 USD y otro de 30.00 USD. ¿Cuál de los dos?"
+    llm = _NthSpeech(_details(amount=None), n=1, speech=Speech(act="clarify", text=text), repeat=1)
+    state, reply = asyncio.run(run_turn(_state(), _OPENER, ctx, llm))  # type: ignore[arg-type]
+    assert state.phase == Phase.CLARIFY
+    assert reply == f"{text}\n{options}"
+    assert reply.count("1. Cafe") == 1
+
+
+def test_clarify_sends_a_code_written_question_when_both_attempts_are_refused():
+    """No 503: a reply that fails the checks twice is replaced by a question the code wrote."""
+    ctx, options = _two_cafes()
+    refused = Speech(act="clarify", text="¿Cuál de estos? Te cobraremos 900 USD de comisión.")
+    llm = _NthSpeech(_details(amount=None), n=1, speech=refused, repeat=2)
+    state, reply = asyncio.run(run_turn(_state(), _OPENER, ctx, llm))  # type: ignore[arg-type]
+    assert reply == clarify_fallback("es", options)
+    assert "900" not in reply
+    assert state.phase == Phase.CLARIFY
+    assert state.candidate_txn_ids == ["T1", "T2"]
+    assert state.acts[-1] == "clarify"
+
+
+def test_clarify_with_no_match_also_falls_back_to_a_code_written_question():
+    refused = Speech(act="clarify", text="No lo encuentro. Te cobraremos 900 USD de comisión.")
+    llm = _NthSpeech(_details(amount=None), n=1, speech=refused, repeat=2)
+    state, reply = asyncio.run(run_turn(_state(), _OPENER, _ctx(exec_rows=[]), llm))  # type: ignore[arg-type]
+    assert reply == clarify_fallback("es", None)
+    assert state.phase == Phase.CLARIFY
+    assert state.candidate_txn_ids == []
+
+
+def test_a_missing_llm_key_is_not_hidden_by_the_clarify_fallback():
+    """A fallback covers a reply that failed the checks, never a system that cannot call the model."""
+
+    class _NotConfigured(FakeLLM):
+        async def respond(self, *args: Any, schema: type | None = None, **kwargs: Any) -> LLMResult[Any]:
+            if schema is not None and schema.__name__ == "Speech":
+                raise LLMNotConfiguredError("no key")
+            return await super().respond(*args, schema=schema, **kwargs)
+
+    ctx, _ = _two_cafes()
+    with pytest.raises(LLMNotConfiguredError):
+        asyncio.run(run_turn(_state(), _OPENER, ctx, _NotConfigured(_details(amount=None))))  # type: ignore[arg-type]

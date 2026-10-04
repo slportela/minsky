@@ -99,8 +99,9 @@ _FUTURE_INSIDE = re.compile(rf"\b{_FUTURE_WORDS}\b")
 _RULE_ID = re.compile(r"\bD0\d\b")  # rule ids stay internal: the customer hears the reason instead
 # References the customer needs to keep. Rule ids stay internal: the customer hears the reason instead.
 _ID_FACTS = ("dispute_id", "handoff_id", "existing_dispute_id")
+# `clarify` is absent on purpose: the option list is written by code and appended (wording.with_candidates), so a
+# model that punctuates the list its own way is not refused. Demanding a verbatim copy rejected correct replies.
 _ACT_FACTS: dict[str, tuple[str, ...]] = {
-    "clarify": ("candidates",),
     "confirm_txn": ("merchant", "amount", "when"),
 }
 

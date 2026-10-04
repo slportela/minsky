@@ -9,6 +9,7 @@ from minsky_api.agent.language import LanguageDetector, default_language_detecto
 from minsky_api.agent.speak import Speech, compose_speech
 from minsky_api.agent.state import ConversationState, Phase
 from minsky_api.agent.wording import (
+    clarify_fallback,
     confirm_question,
     done_fallback,
     fallback_sentence,
@@ -17,10 +18,11 @@ from minsky_api.agent.wording import (
     inform_fallback,
     policy_reason,
     transaction_noun,
+    with_candidates,
 )
 from minsky_api.config import get_settings
 from minsky_api.identity.session import SessionState
-from minsky_api.llm.client import LLM
+from minsky_api.llm.client import LLM, LLMNotConfiguredError, ModelMismatchError
 from minsky_api.policy.disputes import Route
 from minsky_api.router.classifier import classify
 from minsky_api.tools.bank import (
@@ -113,6 +115,26 @@ def _accept(state: ConversationState, speech: Speech) -> str:
     if speech.claims_card_blocked:
         state.claims_card_blocked = True
     return speech.text
+
+
+async def _clarify(state: ConversationState, llm: LLM, candidates: str | None = None) -> str:
+    """Ask which transaction. The model writes the question; code owns the option list.
+
+    The list is appended unless the model already carried it exactly, so the customer always sees the real
+    options once. If the model cannot phrase a valid question, a code-written one is sent instead of an
+    error. A missing key or a model other than the pinned one still fails loudly: those are not phrasing
+    failures and a fallback would hide them.
+    """
+    facts = {"candidates": candidates} if candidates else {}
+    try:
+        speech = await _speak(state, llm, ("clarify",), **facts)
+    except (LLMNotConfiguredError, ModelMismatchError):
+        raise
+    except RuntimeError:
+        state.acts.append("clarify")
+        return clarify_fallback(_lang(state), candidates)
+    reply = _accept(state, speech)
+    return with_candidates(reply, candidates) if candidates else reply
 
 
 def _ask(state: ConversationState, phase: Phase, text: str) -> str:
@@ -238,20 +260,20 @@ async def _after_candidates(
         state.clarify_count += 1
         if state.clarify_count > get_settings().max_clarify_attempts:
             return await _handoff(ctx, state, llm, reason="clarify_exhausted")
-        speech = await _speak(state, llm, ("clarify",))
+        reply = await _clarify(state, llm)
         state.phase = Phase.CLARIFY
         state.candidate_txn_ids = []
         state.pending_question = None
-        return _accept(state, speech)
+        return reply
     if len(txns) > 1:
         state.clarify_count += 1
         if state.clarify_count > get_settings().max_clarify_attempts:
             return await _handoff(ctx, state, llm, reason="clarify_exhausted")
-        speech = await _speak(state, llm, ("clarify",), candidates=_candidate_list(txns, _lang(state)))
+        reply = await _clarify(state, llm, _candidate_list(txns, _lang(state)))
         state.phase = Phase.CLARIFY
         state.candidate_txn_ids = [t.transaction_id for t in txns]
         state.pending_question = None
-        return _accept(state, speech)
+        return reply
     txn = txns[0]
     state.selected_txn_id = txn.transaction_id
     state.selected_product_id = txn.product_id

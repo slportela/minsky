@@ -133,6 +133,31 @@ def confirm_question(act: str, language: str, transaction_type: str | None = Non
     return "¿Bloqueo tu tarjeta ahora? Responde sí o no."
 
 
+def with_candidates(text: str, candidates: str) -> str:
+    """The model asks which transaction; code lists the options, so the customer always sees them exactly.
+
+    A reply that already names every option exactly, however it punctuates them, is left alone, so the
+    options never appear twice. Otherwise the code-written list is appended.
+    """
+    options = [line.split(". ", 1)[-1] for line in candidates.splitlines()]
+    return text if all(option in text for option in options) else f"{text.rstrip()}\n{candidates}"
+
+
+def clarify_fallback(language: str, candidates: str | None) -> str:
+    """A complete clarification when the model cannot phrase one: ask which transaction, or ask for details."""
+    pt = _lang(language) == "pt"
+    if candidates:
+        head = (
+            "Encontrei mais de uma transação que corresponde. Qual delas você quer revisar?"
+            if pt
+            else "Encontré más de una transacción que coincide. ¿Cuál es la que quieres revisar?"
+        )
+        return f"{head}\n{candidates}"
+    if pt:
+        return "Não encontrei essa transação. Pode me dizer o estabelecimento, o valor ou a data?"
+    return "No encontré esa transacción. ¿Puedes decirme el comercio, el monto o la fecha?"
+
+
 def inform_fallback(language: str, rule_id: str | None, existing_dispute_id: str | None) -> str:
     """A complete, safe answer when the model cannot phrase a policy explanation (for example D04)."""
     reason = policy_reason(rule_id, language) or ""

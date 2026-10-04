@@ -125,7 +125,7 @@ def test_compose_speech_rejects_an_internal_rule_id():
         )
 
 
-def test_compose_speech_rejects_a_confirm_or_clarify_that_drops_facts():
+def test_compose_speech_rejects_a_confirm_that_drops_facts():
     with pytest.raises(RuntimeError, match="drops"):
         asyncio.run(
             compose_speech(
@@ -133,15 +133,6 @@ def test_compose_speech_rejects_a_confirm_or_clarify_that_drops_facts():
                 language="es",
                 allowed=("confirm_txn",),
                 facts={"transaction_id": "T1", "merchant": "Cafe", "amount_usd": "25.00", "when": "2026-06-10"},
-            )
-        )
-    with pytest.raises(RuntimeError, match="drops"):
-        asyncio.run(
-            compose_speech(
-                RecordingLLM("clarify", "¿Cuál de estos?"),  # type: ignore[arg-type]
-                language="es",
-                allowed=("clarify",),
-                facts={"candidates": "1. Cafe T1 | 2. Cafe Sur T2"},
             )
         )
 
@@ -312,3 +303,50 @@ def test_review_reproductions_of_invented_facts_are_refused():
     assert ungrounded_number("El trámite estará resuelto el 2026-06-20.", facts) == "2026-06-20"
     assert ungrounded_number("Se cobrará un 5% de comisión.", facts) == "5"
     assert ungrounded_number("Tu cargo del 2026-06-10.", facts) is None  # the same date as the fact
+
+
+_CANDIDATES = "1. Cafe, 25.00 USD, 10 de junio de 2026\n2. Cafe, 30.00 USD, 10 de junio de 2026"
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        # Replies the live model wrote (2026-10-04, dispute-clarify-retain-merchant-es) that the guard used to
+        # refuse with "reply drops candidates": same facts, different punctuation, or no list at all.
+        (
+            "¿Cuál de estos cargos no reconoces? "
+            "1. Cafe, 25.00 USD, 10 de junio de 2026; 2. Cafe, 30.00 USD, 10 de junio de 2026."
+        ),
+        (
+            "¿Cuál de estos cargos no reconoces: "
+            "1. Cafe, 25.00 USD, 10 de junio de 2026; o 2. Cafe, 30.00 USD, 10 de junio de 2026?"
+        ),
+        (
+            "Veo dos cargos de Cafe el 10 de junio de 2026: uno de 25.00 USD y otro de 30.00 USD. "
+            "¿Cuál de los dos no reconoces?"
+        ),
+    ],
+)
+def test_clarify_is_not_refused_for_how_it_punctuates_the_options(text: str):
+    speech = asyncio.run(
+        compose_speech(
+            RecordingLLM("clarify", text),  # type: ignore[arg-type]
+            language="es",
+            allowed=("clarify",),
+            facts={"candidates": _CANDIDATES},
+        )
+    )
+    assert speech.act == "clarify"
+
+
+def test_clarify_still_refuses_an_invented_number():
+    """Dropping the verbatim-list requirement must not let a clarification add figures the facts lack."""
+    with pytest.raises(RuntimeError, match="ungrounded number"):
+        asyncio.run(
+            compose_speech(
+                RecordingLLM("clarify", "¿Cuál de estos? Te cobraremos 900 USD de comisión."),  # type: ignore[arg-type]
+                language="es",
+                allowed=("clarify",),
+                facts={"candidates": _CANDIDATES},
+            )
+        )

@@ -6,7 +6,14 @@ from datetime import date
 from decimal import Decimal
 
 from minsky_api.agent.speak import action_claims
-from minsky_api.agent.wording import fallback_sentence, human_amount, human_date, policy_reason
+from minsky_api.agent.wording import (
+    clarify_fallback,
+    fallback_sentence,
+    human_amount,
+    human_date,
+    policy_reason,
+    with_candidates,
+)
 
 
 def test_dates_and_amounts_read_naturally():
@@ -32,3 +39,31 @@ def test_fallback_is_a_sentence_with_the_reference_and_supported_claims_only():
     assert action_claims(text) <= {"card_blocked", "handoff"}
     pt = fallback_sentence("pt", {"dispute_id": "DSP-9"})
     assert "DSP-9" in pt and pt.endswith(".")
+
+
+_LIST = "1. Cafe, 25.00 USD, 10 de junio de 2026\n2. Cafe, 30.00 USD, 10 de junio de 2026"
+
+
+def test_the_option_list_is_appended_when_the_model_did_not_name_the_options():
+    text = "Veo dos cargos de Cafe: uno de 25.00 USD y otro de 30.00 USD. ¿Cuál no reconoces?"
+    assert with_candidates(text, _LIST) == f"{text}\n{_LIST}"
+
+
+def test_the_option_list_is_not_repeated_when_every_option_is_already_named_exactly():
+    assert with_candidates(f"¿Cuál de estos?\n{_LIST}", _LIST) == f"¿Cuál de estos?\n{_LIST}"
+    inline = "¿Cuál no reconoces? 1. Cafe, 25.00 USD, 10 de junio de 2026; 2. Cafe, 30.00 USD, 10 de junio de 2026."
+    assert with_candidates(inline, _LIST) == inline
+
+
+def test_one_missing_option_makes_code_append_the_whole_list():
+    partial = "Veo este cargo: Cafe, 25.00 USD, 10 de junio de 2026. ¿Es ese?"
+    assert with_candidates(partial, _LIST).endswith(_LIST)
+
+
+def test_clarify_fallback_is_a_complete_question_in_both_languages():
+    for language in ("es", "pt"):
+        with_list = clarify_fallback(language, _LIST)
+        assert with_list.endswith(_LIST) and "?" in with_list.split("\n")[0]
+        no_list = clarify_fallback(language, None)
+        assert "?" in no_list and "D0" not in no_list
+    assert clarify_fallback("pt", None) != clarify_fallback("es", None)
