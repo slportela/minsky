@@ -123,6 +123,34 @@
       "output_usd_per_million": "0.50",
       "pricing_basis": "operator-supplied uncached token rates (evals/model_prices.py, standard/short-context, 2026-10-04); not an invoice",
       "note": "evals/runs/smoke-5a0d9c9ca15c: 48/48 passed on feat/submission-gaps 25ffd8d (clarify fix, prompt v5)"
+    },
+    "2026-10-04-fraud-diagnostic-10a": {
+      "cap_usd": "0.10",
+      "reserved_usd": "0.0671329",
+      "usage_cost_usd": "0.0044695",
+      "input_usd_per_million": "0.10",
+      "output_usd_per_million": "0.50",
+      "pricing_basis": "operator-supplied uncached token rates (evals/model_prices.py, standard/short-context, 2026-10-04); not an invoice",
+      "note": "evals/runs/smoke-3e2321187ccf: 10 trials of dispute-fraud-no-block-es; 9 passed, 1 failed (no handoff after a declined card block), on feat/submission-gaps 37c558e"
+    },
+    "2026-10-04-fraud-diagnostic-10b": {
+      "cap_usd": "0.10",
+      "reserved_usd": "0.0671318",
+      "usage_cost_usd": "0.0042937",
+      "input_usd_per_million": "0.10",
+      "output_usd_per_million": "0.50",
+      "pricing_basis": "operator-supplied uncached token rates (evals/model_prices.py, standard/short-context, 2026-10-04); not an invoice",
+      "note": "evals/runs/smoke-a14b04464066: 10 trials of dispute-fraud-no-block-es with every model call logged outside the repo; 10 passed, on feat/submission-gaps 37c558e"
+    },
+    "2026-10-04-confirm-classifier-probe": {
+      "cap_usd": null,
+      "reserved_usd": null,
+      "usage_cost_usd": null,
+      "usage_cost_upper_bound_usd": "0.01116",
+      "input_usd_per_million": "0.10",
+      "output_usd_per_million": "0.50",
+      "pricing_basis": "operator-supplied uncached token rates (evals/model_prices.py, standard/short-context, 2026-10-04); not an invoice",
+      "note": "180 direct classify_confirmation calls (3 questions x 2 replies x 30); usage was not captured, so this is an upper bound (300 input and 64 output tokens per call), not a measurement"
     }
   },
   "usage_cost_usd": "0.0124252",
