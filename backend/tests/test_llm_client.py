@@ -10,7 +10,7 @@ from pydantic import BaseModel, SecretStr, ValidationError
 
 from minsky_api.agent.extract import DisputeDetails
 from minsky_api.config import Settings
-from minsky_api.llm.client import LLM, LLMNotConfiguredError, ModelMismatchError, model_matches
+from minsky_api.llm.client import LLM, LLMNotConfiguredError, ModelMismatchError, ModelOutputError, model_matches
 
 SETTINGS = Settings(llm_api_key=SecretStr("test-key"), llm_model="gpt-6-luna", llm_max_retries=0)
 
@@ -115,6 +115,13 @@ def test_dispute_amount_schema_is_provider_compatible_and_preserves_cents():
     string_branch = next(branch for branch in amount_schema["anyOf"] if branch.get("type") == "string")
     assert re.fullmatch(string_branch["pattern"], "25.37")
     assert re.fullmatch(string_branch["pattern"], "25.00 USD") is None
+
+
+def test_a_reply_that_does_not_fit_the_schema_is_a_model_failure_not_a_bad_request():
+    # pydantic.ValidationError is a ValueError, which the chat route answers as the customer's 400
+    llm = _llm(_response('{"amount": "not-a-number"}'), [])
+    with pytest.raises(ModelOutputError):
+        asyncio.run(llm.respond("Extract.", [{"role": "user", "content": "x"}], schema=DisputeDetails))
 
 
 def test_dispute_amount_still_rejects_non_numeric_values():
