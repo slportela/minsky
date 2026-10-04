@@ -48,6 +48,21 @@ The same pattern shows elsewhere: delinquency does not depend on credit score, d
 
 ## Volume
 
+### Organizer source still matches the downloaded snapshot
+
+Verified against the live organizer S3 bucket on 2026-10-03 at 23:28 UTC. Listing the
+current `data/` objects and comparing their keys, sizes and ETags against the bronze
+manifest from 2026-09-26 found **7,671/7,671 unchanged files**, with **0 additions,
+0 removals and 0 changed files**. Current source modification times still span
+2026-09-01 02:36:08–02:51:35 UTC. The other top-level entries remain
+`data_backup_20260831/` and `marketing_campaigns.csv`.
+
+Separately, all 7,671 local bronze files matched the recorded sizes and hashes,
+including the two multipart ETags. The observed source-data discrepancies are
+therefore not explained by a changed delivery at the recorded `data/` location since
+our download. This does not establish whether organizers published another dataset
+elsewhere or intend a different version.
+
 ### Row counts differ from the documentation
 
 | Table | Documented | Actual | Difference |
@@ -116,6 +131,21 @@ No event lands in a partition later than its own date. See [`process_date` cuts 
 | `service_agents.employee_code` | 13 |
 
 **Handling:** rows are kept; dbt `unique` tests warn. Do not use these columns as keys.
+
+### Complaint products belong to a different customer
+
+Measured on all silver complaints on 2026-10-03: **44,570 of 67,095 complaints** have `affected_product_id`. All 44,570 IDs exist in `products`, but **all 44,570 refer to a product whose `customer_id` differs from the complaint's `customer_id`**. Passing a single-column FK check therefore does not establish ownership.
+
+For comparison, all **4,425,008 transactions** reference an existing product with the same customer and currency. All **171,321 transcripts** and **212,759 surveys** reference an existing interaction with the same customer and agent; no survey predates its interaction. `has_transcript` also matches transcript existence on all 686,296 interactions. These checks cover silver, not bronze-only `digital_events`.
+
+**Handling:** preserve the source records, but do not expose a complaint's affected product as belonging to its customer or derive customer-authorized transaction candidates from that product ID. Ownership must be checked independently in code; the historical complaint linkage is not valid dispute evidence.
+
+```sql
+select count(*) as linked_complaints,
+       count(*) filter (where c.customer_id <> p.customer_id) as different_owner
+from main.complaints c
+join main.products p on c.affected_product_id = p.product_id;
+```
 
 ## Values
 
@@ -200,6 +230,16 @@ In `transactions`, `fraud_score` is between 0 and 30 for every non-fraud transac
 
 ## Transactions and credit
 
+### Transaction amounts follow uniform ranges by type and currency
+
+Measured on all 4,425,008 silver transactions on 2026-10-03. The observed amounts are consistent with uniform sampling inside type-specific ranges, scaled by currency. Inferred bounds in USD are Purchase 5–500, Withdrawal 20–500, Payment 50–2,000, Deposit 50–5,000, Adjustment 10–1,000 and Transfer 100–10,000. ARS amounts fit the same bounds multiplied by 350; COP amounts fit them multiplied by 4,000. These are inferred generation patterns, not verified generator code or an exchange-rate calculation.
+
+For each of the 18 type/currency combinations, dividing the corresponding inferred range into ten equal-width bins puts between **9.79% and 10.28%** of that combination's transactions in each bin. Only **44,204 of 4,425,008** amounts are whole currency units; all 100 cent endings occur, with counts between 43,662 and 44,971. There is no pronounced preference for round amounts in these checks.
+
+Exact amount reuse is common across customers in USD (598,660 distinct amounts across 2,437,979 transactions), but rare within a customer: grouping by `customer_id`, `currency` and `amount` gives only **312 repeated groups**, each containing two transactions (624 rows total). Their median calendar-day separation is 284.5 days, with a minimum of one calendar day. This is an amount-repeat check, not proof of duplicate charges or a complete recurrence analysis.
+
+**Handling:** preserve amounts, but report these patterns as synthetic structure. Do not present the type-specific amount ranges as learned fraud or dispute rules, or use the inferred currency multipliers instead of the recorded exchange rates.
+
 ### No duplicate charges
 
 There are **no duplicated charges** in `transactions`: 0 pairs with the same customer, product, amount, transaction type and merchant within one day. The query is not the reason: the same customer and product within one day gives 53,982 pairs. Pairs with the same customer, product and amount (127 in three years) are at least 5 days apart (median 332 days), i.e. coincidences of amount.
@@ -278,11 +318,93 @@ In `campaign_sends`, `open_device` and `open_country` are filled only when `was_
 
 ## Dates
 
+### Transactions precede customer registration
+
+Measured on the full silver warehouse on 2026-10-03: **830,293 of 4,425,008 transactions (18.76%)** have `transaction_date < customers.registration_date`, affecting **48,469 of 134,515 customers with transactions (36.03%)**. All transactions join to an existing customer, and none of those customers has a null registration date: the IDs are valid, but the chronology is inconsistent.
+
+This is not just a same-day time difference: **829,540 transactions** occur on an earlier calendar day. Among transactions before registration, the median calendar-day gap is **321 days**, with a maximum of **1,096 days**. These are descriptive counts of the complete synthetic snapshot, not estimates of real-bank prevalence.
+
+The product chronology is also inconsistent: **827,610 of 4,425,008 transactions** occur on a calendar date earlier than their linked product's `opening_date` (checked on 2026-10-03).
+
+**Handling:** preserve the source dates; do not infer customer tenure or a plausible account history from these records without explicitly accounting for this inconsistency. No pipeline or policy behavior was changed by this finding. Use event timestamps, not `process_date`, for the comparison.
+
+```sql
+select
+    count(*) as transactions,
+    count(*) filter (where t.transaction_date < c.registration_date) as before_registration,
+    count(distinct t.customer_id) filter (
+        where t.transaction_date < c.registration_date
+    ) as affected_customers
+from main.transactions t
+join main.customers c using (customer_id);
+```
+
 ### `process_date` cuts at 06:00
 
 `process_date` (the partition key) is not the calendar date of the event: events from 00:00 to about 06:00 are assigned to the previous day's partition. For example, 1,106,307 transactions (25 %) have a `transaction_date` one day after their `process_date`; all but 51 of them are between 00:00 and 05:59 (the 51 are at 06:xx). Satisfaction surveys arrive up to 2 days after their partition date.
 
 **Handling:** none; use the event timestamp (`transaction_date`, `interaction_date`, …) for time analysis and `process_date` only for incremental loading.
+
+### Survey response hours do not match the linked timestamps
+
+Measured on all 212,759 silver surveys on 2026-10-03. All have an informed
+`response_time_hours`, `survey_date`, and linked `interaction_date`. In **212,568 of
+212,759 rows (99.91%)**, `response_time_hours` differs from
+`epoch(survey_date - interaction_date) / 3600` by more than **0.011 hours**, allowing
+for the column's two-decimal rounding. The dictionary describes this field as hours
+between the interaction and the response, but the recorded values do not follow that
+definition. This is a snapshot-wide descriptive check, not a sample estimate.
+
+**Handling:** preserve the source column; calculate elapsed hours from the linked
+timestamps when that quantity is needed. Do not describe the recorded column as a
+verified deterministic derivation.
+
+```sql
+select count(*) as checked,
+       count(*) filter (
+           where abs(s.response_time_hours - epoch(s.survey_date - i.interaction_date) / 3600) > 0.011
+       ) as inconsistent
+from main.satisfaction_surveys s
+join main.call_center_interactions i using (interaction_id)
+where s.response_time_hours is not null
+  and s.survey_date is not null
+  and i.interaction_date is not null;
+```
+
+### Balance-inquiry transcripts mention products absent from the customer's inventory
+
+Measured on all 171,321 silver transcripts on 2026-10-03. Of **85,910** customer texts
+containing `crédito`, **44,006 (51.22%)** belong to customers with no `Credit Card`
+product in the snapshot. Of **85,411** texts containing `ahorros`, **38,249 (44.78%)**
+belong to customers with no `Savings Account` product. The lookup includes all product
+statuses, so restricting it to active products would not explain these absences.
+
+This checks the templates against the current product inventory; it does not prove
+what products a customer held at the historical interaction time. Product chronology
+is already inconsistent in this dataset.
+
+**Handling:** do not treat product mentions in the templated transcripts as verified
+customer holdings or use them to authorize access. Read the customer's owned products
+independently.
+
+```sql
+select
+    count(*) filter (
+        where lower(t.customer_text) like '%crédito%'
+          and not exists (
+              select 1 from main.products p
+              where p.customer_id = t.customer_id and p.product_type = 'Credit Card'
+          )
+    ) as credit_mentions_without_product,
+    count(*) filter (
+        where lower(t.customer_text) like '%ahorros%'
+          and not exists (
+              select 1 from main.products p
+              where p.customer_id = t.customer_id and p.product_type = 'Savings Account'
+          )
+    ) as savings_mentions_without_product
+from main.call_transcripts t;
+```
 
 ## Format
 
@@ -295,8 +417,24 @@ In `campaign_sends`, `open_device` and `open_country` are filled only when `was_
 
 ## Bucket contents
 
-- `data_backup_20260831/` (4,833 files, 4.4 GB) is a partial copy of `data/`; ignored.
-- `marketing_campaigns.csv` also exists at the bucket root, outside `data/`; ignored.
+- `data_backup_20260831/` contains 4,833 files (4,731,695,352 bytes, about 4.41 GiB),
+  all with corresponding paths under `data/`. The complete live inventory comparison
+  on 2026-10-03 found only 3 matching size/ETag pairs and 4,830 differing pairs.
+  It is an older, incomplete delivery rather than a byte-identical subset.
+  An exploratory comparison on 2026-10-03 read complete customers/products/agents
+  and 12 matched dates of transactions/interactions/complaints (39 backup files).
+  Only 4,025/150,000 customer IDs and 128,599/400,000 product IDs are shared;
+  every shared product ID has a different owner. All 750 sampled complaint IDs
+  are shared, with identical non-FK attributes but changed customer/product/agent
+  references. Within each delivery, all 492/492 populated complaint product links
+  point to another customer; transaction ownership is consistent in both samples.
+  These results suggest regeneration/relinking rather than a simple incremental
+  update, but do not establish how the organizers produced the versions.
+  Do not mix versions. Excluded from the source pipeline pending organizer guidance.
+  Scope, metrics and limitations: `outputs/dataset-summary-20261003/backup-comparison-20261003.md`.
+- `marketing_campaigns.csv` also exists at the bucket root, outside `data/`. Its size
+  and ETag match `data/marketing_campaigns.csv` in the live 2026-10-03 inventory;
+  ignored to avoid loading it twice.
 
 ## Language coverage
 

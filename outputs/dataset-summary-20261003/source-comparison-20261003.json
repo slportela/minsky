@@ -1,0 +1,18 @@
+{
+  "checked_at": "2026-10-03T23:28:37.426627+00:00",
+  "remote_verified": true,
+  "old_files": 7671,
+  "current_files": 7671,
+  "changed_count": 0,
+  "added_count": 0,
+  "removed_count": 0,
+  "changed": [],
+  "added": [],
+  "removed": [],
+  "other_prefixes": [
+    "data_backup_20260831",
+    "marketing_campaigns.csv"
+  ],
+  "last_modified_min": "2026-09-01T02:36:08+00:00",
+  "last_modified_max": "2026-09-01T02:51:35+00:00"
+}
