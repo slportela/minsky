@@ -78,6 +78,42 @@
       "usage_cost_usd": null,
       "provider_usage_unknown": true,
       "pricing_basis": "Six HTTPS turns reserved at USD 0.005 each; at most one extraction per turn, 256 output tokens, no SDK retries. HTTP responses do not expose provider usage; reservations retained."
+    },
+    "2026-10-04-live-dev-a3b3577": {
+      "cap_usd": "1",
+      "reserved_usd": "0.2407765",
+      "usage_cost_usd": "0.0161994",
+      "input_usd_per_million": "0.10",
+      "output_usd_per_million": "0.50",
+      "pricing_basis": "operator-supplied uncached token rates (evals/model_prices.py, standard/short-context, 2026-10-04); not an invoice",
+      "note": "evals/runs/smoke-ad181d1f4f90: 44/48 passed on feat/submission-gaps a3b3577"
+    },
+    "2026-10-04-live-single-case-check": {
+      "cap_usd": "0.05",
+      "reserved_usd": "0.0044753",
+      "usage_cost_usd": "0.0002893",
+      "input_usd_per_million": "0.10",
+      "output_usd_per_million": "0.50",
+      "pricing_basis": "operator-supplied uncached token rates (evals/model_prices.py, standard/short-context, 2026-10-04); not an invoice",
+      "note": "evals/runs/smoke-d5cf240ee589: 1/1 passed on feat/submission-gaps a3b3577"
+    },
+    "2026-10-04-clarify-diagnostic-1": {
+      "cap_usd": "0.05",
+      "reserved_usd": "0.0089509",
+      "usage_cost_usd": "0.0006275",
+      "input_usd_per_million": "0.10",
+      "output_usd_per_million": "0.50",
+      "pricing_basis": "operator-supplied uncached token rates (evals/model_prices.py, standard/short-context, 2026-10-04); not an invoice",
+      "note": "evals/runs/smoke-92e731e6f572: 1/1 passed, dispute-clarify-retain-merchant-es on a3b3577; 1 trial with compose_speech capture (diagnostic wrapper outside the repo)"
+    },
+    "2026-10-04-clarify-diagnostic-6": {
+      "cap_usd": "0.10",
+      "reserved_usd": "0.0375026",
+      "usage_cost_usd": "0.0028569",
+      "input_usd_per_million": "0.10",
+      "output_usd_per_million": "0.50",
+      "pricing_basis": "operator-supplied uncached token rates (evals/model_prices.py, standard/short-context, 2026-10-04); not an invoice",
+      "note": "evals/runs/smoke-3a3f783b4b05: 3/6 passed, dispute-clarify-retain-merchant-es on a3b3577; 6 trials with compose_speech capture (diagnostic wrapper outside the repo)"
     }
   },
   "usage_cost_usd": "0.0124252",
