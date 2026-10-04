@@ -1,0 +1,356 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Minsky: dispute intake for LATAM Bank</title>
+<!--
+  Pitch deck for the Factored AI & Data Hackathon 2026 (the brief asks for 4-6 slides).
+  Self-contained: no external fonts or scripts, so it works offline and in the video recording.
+  Navigate with arrow keys or space; press P to print a 16:9 PDF, one slide per page.
+  Chips: "measured" = from the data or an eval report, "estimate" = computed with a stated
+  assumption, "pending" = not built or not measured yet. Sources are in each slide footer.
+-->
+<style>
+  :root {
+    --bg: #05070a; --panel: #0d1218; --panel2: #111922; --line: #1d2a35; --text: #e8eef2; --muted: #8a9aa8;
+    --cyan: #00e5ef; --green: #3ddc97; --amber: #ffb547; --red: #ff6b6b;
+    --mono: ui-monospace, "SF Mono", "Roboto Mono", Menlo, Consolas, monospace;
+    --sans: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; background: #000; color: var(--text); font-family: var(--sans); }
+  body { overflow: hidden; }
+
+  /* Fixed 1280x720 stage, scaled to the window: identical layout on screen, in video and in PDF. */
+  .deck { position: absolute; top: 50%; left: 50%; width: 1280px; height: 720px; transform-origin: center; }
+  .slide { position: absolute; inset: 0; padding: 48px 64px 52px; background: var(--bg); display: none; flex-direction: column; overflow: hidden; }
+  .slide.active { display: flex; }
+
+  .kicker { font: 600 13px var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--cyan); margin-bottom: 10px; }
+  h1 { font: 700 50px/1.12 var(--mono); letter-spacing: -.01em; }
+  h2 { font: 700 30px/1.2 var(--mono); letter-spacing: -.01em; margin-bottom: 6px; }
+  h3 { font: 600 14px var(--mono); color: var(--cyan); text-transform: uppercase; letter-spacing: .08em; margin-bottom: 10px; }
+  p, li { font-size: 16px; line-height: 1.45; }
+  .muted { color: var(--muted); }
+  .sub { font-size: 18px; color: var(--muted); max-width: 1100px; }
+  .green { color: var(--green); } .amber { color: var(--amber); } .cyan { color: var(--cyan); } .red { color: var(--red); }
+
+  .footer { position: absolute; left: 64px; right: 64px; bottom: 18px; display: flex; justify-content: space-between; font: 11.5px var(--mono); color: var(--muted); }
+
+  .grid { display: grid; gap: 16px; }
+  .g2 { grid-template-columns: 1fr 1fr; } .g3 { grid-template-columns: repeat(3, 1fr); }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px; }
+
+  .chip { display: inline-block; font: 600 10px/1 var(--mono); letter-spacing: .05em; text-transform: uppercase; padding: 4px 7px; border-radius: 999px; vertical-align: middle; margin-left: 4px; border: 1px solid; }
+  .chip.m { color: var(--green); border-color: var(--green); }
+  .chip.a { color: var(--amber); border-color: var(--amber); }
+  .chip.p { color: var(--red); border-color: var(--red); }
+
+  ul.clean { list-style: none; } ul.clean li { padding-left: 20px; position: relative; margin: 6px 0; }
+  ul.clean li::before { content: "▸"; position: absolute; left: 0; color: var(--cyan); }
+  ul.no li::before { content: "✕"; color: var(--red); }
+
+  table { width: 100%; border-collapse: collapse; }
+  td, th { padding: 8px 10px; border-bottom: 1px solid var(--line); text-align: left; font-size: 15px; vertical-align: top; }
+  th { font: 600 11.5px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+  td.num { font-family: var(--mono); color: var(--cyan); white-space: nowrap; }
+
+  /* The dispute journey: four steps, one or two highlighted */
+  .journey { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; margin-top: 22px; }
+  .jstep { position: relative; padding: 16px 18px 16px 18px; background: var(--panel); border: 1px solid var(--line); border-right: none; }
+  .jstep:first-child { border-radius: 12px 0 0 12px; }
+  .jstep:last-child { border-radius: 0 12px 12px 0; border-right: 1px solid var(--line); }
+  .jstep .num { font: 700 13px var(--mono); color: var(--muted); }
+  .jstep b { display: block; font: 700 17px var(--mono); margin: 4px 0 6px; }
+  .jstep p { font-size: 14px; color: var(--muted); line-height: 1.4; }
+  .jstep.us { background: #06262a; border-color: var(--cyan); border-right: 1px solid var(--cyan); }
+  .jstep.us b { color: var(--cyan); }
+  .jstep .tag { margin-top: 10px; font: 600 11px var(--mono); text-transform: uppercase; letter-spacing: .05em; }
+
+  /* Chat transcripts */
+  .chat { font: 12.5px/1.4 var(--mono); }
+  .chat .c, .chat .s { padding: 6px 9px; border-radius: 8px; margin: 4px 0; max-width: 96%; }
+  .chat .c { background: #1a2430; margin-left: auto; width: fit-content; }
+  .chat .s { background: #0a1d20; border: 1px solid #0f3a3f; }
+  .chat .note { font: 12.5px var(--sans); color: var(--muted); margin-top: 8px; }
+  .ctitle { font: 700 14px var(--mono); margin-bottom: 8px; }
+
+  /* Architecture boxes */
+  .arch { display: grid; grid-template-columns: 170px 40px 1fr 40px 200px; align-items: center; margin-top: 18px; }
+  .box { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; font-size: 14px; }
+  .box b { display: block; font: 700 14px var(--mono); margin-bottom: 4px; }
+  .arrow { text-align: center; color: var(--cyan); font: 700 22px var(--mono); }
+  .core { border-color: var(--cyan); padding: 14px; }
+  .core .row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 10px; }
+  .core .box { background: var(--panel2); }
+  .who { font: 600 11px var(--mono); text-transform: uppercase; margin-top: 6px; }
+  .who.ai { color: var(--cyan); } .who.code { color: var(--green); }
+
+  .big { font: 700 44px/1 var(--mono); color: var(--cyan); }
+  .bar { display: flex; height: 34px; border-radius: 8px; overflow: hidden; margin: 10px 0 6px; font: 600 13px/34px var(--mono); color: #04110c; }
+  .bar div { text-align: center; white-space: nowrap; overflow: hidden; }
+
+  .nav { position: fixed; right: 18px; bottom: 14px; font: 12px var(--mono); color: #556; z-index: 10; }
+
+  @media print {
+    @page { size: 1280px 720px; margin: 0; }
+    html, body { overflow: visible; height: auto; background: var(--bg); }
+    .deck { position: static; transform: none !important; width: 1280px; height: auto; }
+    .slide { display: flex !important; position: relative; width: 1280px; height: 720px; page-break-after: always; break-after: page; }
+    .nav { display: none; }
+    * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  }
+  .chat .txn { margin: 6px 0; padding: 6px 9px; background: #05080b; border: 1px solid #1f3a40; border-left: 3px solid var(--cyan); border-radius: 6px; }
+  .chat .txn b { display: block; font-size: 12.5px; }
+  .chat .txn span { display: block; font-size: 12px; color: var(--muted); }
+  .chat .txn.no { border-left-color: var(--red); }
+</style>
+</head>
+<body>
+<div class="deck" id="deck">
+
+<!-- 1 · WHAT THIS IS -->
+<section class="slide">
+  <div class="kicker">Factored AI &amp; Data Hackathon 2026 · Team <span class="chip p">team name</span></div>
+  <div style="margin: auto 0">
+    <h1>Minsky: a chat assistant that takes a bank customer's dispute from "I don't recognize this charge" to an open case</h1>
+    <p class="sub" style="margin-top:22px">It finds the charge in the customer's account, checks it against the bank's dispute rules,
+      and then opens the case, explains why there is nothing to dispute, or passes it to a person with the facts
+      already collected. People still decide every dispute. The system never moves money.</p>
+    <p class="sub" style="margin-top:16px">Built on the LATAM Bank dataset: 150k customers in Mexico, Colombia and Argentina, three years of data.</p>
+  </div>
+  <div class="footer"><span>Demo: <span class="chip p">deployed URL</span></span><span>1 / 6</span></div>
+</section>
+
+<!-- 2 · THE PROBLEM, AS A JOURNEY -->
+<section class="slide">
+  <div class="kicker">The problem</div>
+  <h2>How a dispute works today, and where it hurts</h2>
+  <p class="sub">Disputed charges are the largest type of complaint at this bank: 27,133 cases in three years, 40 % of all complaints.</p>
+
+  <div class="journey">
+    <div class="jstep"><div class="num">1</div><b>Customer sees a charge</b><p>A charge they don't recognize, or a fee they think is wrong.</p></div>
+    <div class="jstep"><div class="num">2</div><b>Contacts the bank</b><p>Mostly by phone. An agent finds the transaction, checks it and types up the claim.</p></div>
+    <div class="jstep"><div class="num">3</div><b>Bank investigates</b><p>The back office reviews the case, contacts the merchant, decides.</p></div>
+    <div class="jstep"><div class="num">4</div><b>Outcome</b><p>Refund, partial compensation or rejection.</p></div>
+  </div>
+
+  <div class="grid g2" style="margin-top:16px">
+    <div class="card">
+      <h3>Step 2 today: the contact</h3>
+      <table>
+        <tr><td>Complaint contacts a year</td><td class="num">39,000</td><td class="muted">85 % by phone</td></tr>
+        <tr><td>Wait, then length of the call</td><td class="num">2 + 7.2 min</td><td class="muted">twice a routine call</td></tr>
+        <tr><td>Calls that end without a solution</td><td class="num">56 %</td><td class="muted">the customer has to come back</td></tr>
+      </table>
+    </div>
+    <div class="card">
+      <h3>Steps 3-4 today: the back office</h3>
+      <table>
+        <tr><td>Time to resolve a dispute</td><td class="num">15-16 days</td><td class="muted">median</td></tr>
+        <tr><td>Cases that miss the deadline</td><td class="num">~20 %</td><td class="muted">SLA breached</td></tr>
+        <tr><td>Critical vs low priority</td><td class="num">15.5 vs 15.7 d</td><td class="muted">priority changes nothing</td></tr>
+      </table>
+    </div>
+  </div>
+  <div class="footer"><span>All measured on the bank's data: complaints and call_center_interactions tables · docs/disputes_findings.md</span><span>2 / 6</span></div>
+</section>
+
+<!-- 3 · WHAT MINSKY DOES, WITH EXAMPLES -->
+<section class="slide">
+  <div class="kicker">What Minsky does</div>
+  <h2>Minsky handles step 2 in a chat, and every conversation ends one of three ways</h2>
+
+  <div class="grid g3" style="margin-top:16px">
+    <div class="card">
+      <div class="ctitle green">Case opened</div>
+      <div class="chat">
+        <div class="c">Hola. El viernes pagué 32.50 USD en Restaurante El Buen Sabor, pero en mi cuenta aparece un cargo mayor.</div>
+        <div class="s">Lamento el inconveniente. Revisé tus movimientos del viernes 12 de junio y encontré este cargo:
+          <div class="txn"><b>Restaurante El Buen Sabor</b><span>48.50 USD · 12 jun, 21:14</span><span>Tarjeta de crédito •••• 4821 · Aprobado</span></div>
+          ¿Es este el cargo que quieres reclamar?</div>
+        <div class="c">Sí, ese. Me cobraron 16 USD de más.</div>
+        <div class="s">Entendido. ¿Abro un reclamo por cobro incorrecto de 16 USD sobre este cargo?</div>
+        <div class="c">Sí.</div>
+        <div class="s">Listo, tu reclamo DSP-4FEED87B quedó abierto. Nuestro equipo lo revisará y te avisaremos de cada avance por aquí.</div>
+      </div>
+      <p class="chat note">The case goes to the back office queue, as today. People decide the outcome.</p>
+    </div>
+    <div class="card">
+      <div class="ctitle cyan">Nothing to dispute</div>
+      <div class="chat">
+        <div class="c">Ayer en Super Ahorro me cobraron dos veces la misma compra de 42.10 USD.</div>
+        <div class="s">Revisé tus movimientos de ayer, 17 de junio, en Super Ahorro y veo dos intentos de pago:
+          <div class="txn"><b>Super Ahorro · 42.10 USD</b><span>17 jun, 18:04 · Aprobado</span></div>
+          <div class="txn no"><b>Super Ahorro · 42.10 USD</b><span>17 jun, 18:05 · Rechazado</span></div>
+          El segundo intento fue rechazado, así que ese dinero nunca salió de tu cuenta: la compra se cobró una sola vez.</div>
+        <div class="c">Ah, perfecto. Gracias.</div>
+        <div class="s">Con gusto. Si ves algún otro cargo que no reconozcas, escríbeme por aquí.</div>
+      </div>
+      <p class="chat note">Declined, already refunded or still pending. The customer gets the reason and no case is created.</p>
+    </div>
+    <div class="card">
+      <div class="ctitle amber">A person takes over</div>
+      <div class="chat">
+        <div class="c">Tengo un cargo de 25 USD en Cafe que yo no hice.</div>
+        <div class="s">Gracias por avisarnos. Si no hiciste esta compra, alguien podría estar usando tu tarjeta. Para proteger tu dinero puedo bloquearla ahora mismo. ¿Quieres que lo haga?</div>
+        <div class="c">Sí, por favor.</div>
+        <div class="s">Tu tarjeta ya está bloqueada. Un especialista de seguridad tomará tu caso con todos los detalles. Tu referencia es HND-7C21.</div>
+      </div>
+      <p class="chat note">Fraud, amounts above USD 500 or repeat complaints. The agent gets the verified facts, what was done and what is still open.</p>
+    </div>
+  </div>
+  <p class="sub" style="margin-top:16px;font-size:16px">Illustrative conversations showing the intended tone. Spanish works today; Portuguese is in progress <span class="chip p">pending</span>.</p>
+  <div class="footer"><span>Rules D01-D09 in docs/dispute_policy.md (a synthetic policy written for the hackathon)</span><span>3 / 6</span></div>
+</section>
+
+<!-- 4 · HOW IT WORKS -->
+<section class="slide">
+  <div class="kicker">How it works</div>
+  <h2>The AI reads the message. Tested code decides and acts.</h2>
+
+  <div class="arch">
+    <div class="box"><b>Customer</b>Chat in the browser, with a session that proves who they are</div>
+    <div class="arrow">→</div>
+    <div class="box core">
+      <b>Minsky backend</b>
+      <div class="row">
+        <div class="box"><b>Understand</b>Reads the message: merchant, amount, date, "it wasn't me"<div class="who ai">language model</div></div>
+        <div class="box"><b>Decide</b>Applies the bank's dispute rules to the verified facts<div class="who code">code</div></div>
+        <div class="box"><b>Act and check</b>Opens the case or blocks the card after a "yes", then reads it back<div class="who code">code</div></div>
+      </div>
+    </div>
+    <div class="arrow">→</div>
+    <div class="box"><b>Bank systems</b>The customer's transactions; new cases; handoffs to the fraud or dispute team</div>
+  </div>
+
+  <div class="grid g2" style="margin-top:20px">
+    <div class="card">
+      <h3>Why this split</h3>
+      <ul class="clean">
+        <li>Free-text Spanish with typos is the one thing code handles badly, so that is the only job of the model.</li>
+        <li>Who the customer is, which records they can see, and whether a charge can be disputed are decided by code that we test, and every decision cites the rule that made it.</li>
+        <li>The system only tells the customer an action happened after reading it back from the database.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>What it will not do</h3>
+      <ul class="clean no">
+        <li>Show another customer's transactions, even if asked for one by id</li>
+        <li>Grant a refund because "the manager approved it"</li>
+        <li>Follow instructions hidden in the message</li>
+        <li>Act without an explicit "yes" from the customer</li>
+      </ul>
+    </div>
+  </div>
+  <div class="footer"><span>backend/src/minsky_api: agent (orchestrator), policy, tools · README.proposal.md "How it works"</span><span>4 / 6</span></div>
+</section>
+
+<!-- 5 · WHAT IT IS WORTH -->
+<section class="slide">
+  <div class="kicker">What it is worth</div>
+  <h2>Most disputes would not need an agent to get started</h2>
+
+  <div class="grid g2" style="margin-top:12px; grid-template-columns: 1.25fr 1fr">
+    <div class="card">
+      <h3>If customers disputed their recent charges</h3>
+      <p style="font-size:14.5px" class="muted">We ran the bank's dispute rules on every charge from the last 120 days of data (425,209 charges)
+        and counted where each one would end <span class="chip a">estimate</span></p>
+      <div class="bar">
+        <div style="width:54%;background:var(--green)">54 % case opened</div>
+        <div style="width:8%;background:var(--cyan)">8 %</div>
+        <div style="width:38%;background:var(--amber)">38 % to a person</div>
+      </div>
+      <p style="font-size:13.5px" class="muted">Green: opened in the chat · cyan: nothing to dispute · amber: fraud, above USD 500, repeat complaint</p>
+      <p style="margin-top:12px">So <b>62 %</b> never need an agent at intake. For card purchases, the most common thing to dispute, it is <b>96 %</b>.
+        Almost every case sent to a person is a transfer or payment above USD 500.</p>
+      <p style="margin-top:10px">The USD 500 limit is the bank's choice of risk. At USD 2,000, the share without an agent rises to 80 %.</p>
+    </div>
+    <div class="grid" style="gap:14px">
+      <div class="card">
+        <h3>For the customer</h3>
+        <p>An open case in three messages, at any hour, instead of a phone queue and a 7-minute call that ends without a solution more than half the time.</p>
+        <p class="muted" style="font-size:13.5px;margin-top:6px">1.4-1.8 s of system time per conversation in live tests <span class="chip m">measured</span></p>
+      </div>
+      <div class="card">
+        <h3>For the bank</h3>
+        <p>About 1,600 agent hours a year go to dispute calls today <span class="chip a">estimate</span>. Fraud cases get the card blocked in the first minute.</p>
+        <p class="muted" style="font-size:13.5px;margin-top:6px">Not changed by Minsky: the 15-16 days of investigation. Next step: the agent console orders incoming cases by urgency, fraud first <span class="chip p">pending</span></p>
+      </div>
+    </div>
+  </div>
+  <div class="footer"><span>Estimates assume any recent charge is equally likely to be disputed, and that disputes are 40 % of complaint calls as they are of complaints. "It wasn't me" claims also go to fraud and are not counted.</span><span>5 / 6</span></div>
+</section>
+
+<!-- 6 · PROOF AND NEXT STEPS -->
+<section class="slide">
+  <div class="kicker">Proof and next steps</div>
+  <h2>Tested on what should happen and on what should not</h2>
+
+  <div class="grid g3" style="margin-top:16px">
+    <div class="card">
+      <h3>How we test</h3>
+      <p>Simulated customers chat with the real system. We check what changed in the database (case opened, card blocked, handoff created), not what the bot said.</p>
+    </div>
+    <div class="card">
+      <h3>Results so far</h3>
+      <p>Every test conversation ended with the right outcome, and the evals found no unsafe actions: no other customer's data shown, nothing done without a "yes", no action reported before it was confirmed.</p>
+      <p class="muted" style="font-size:13px;margin-top:8px">12 development cases, 3 runs each <span class="chip m">measured</span>. Held-out test cases and the comparison with "always send to an agent" <span class="chip p">pending</span></p>
+    </div>
+    <div class="card">
+      <h3>Situations covered</h3>
+      <ul class="clean" style="font-size:15px">
+        <li>Another customer's transaction</li>
+        <li>Expired session</li>
+        <li>A system failure mid-conversation</li>
+        <li>Vague or missing details</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="grid g2" style="margin-top:16px">
+    <div class="card">
+      <h3>A first pilot</h3>
+      <p>Unrecognized card charges in one country, running next to the current agents for four weeks. Compare the share opened without an agent and the time to an open case against today.</p>
+    </div>
+    <div class="card">
+      <h3>Limits we state openly</h3>
+      <p style="font-size:15px">The data is synthetic and has no dispute conversations, so the rules are a policy we wrote, not learned from history. There is no Portuguese source data. The language model runs outside AWS for now because our account cannot use Bedrock yet.</p>
+    </div>
+  </div>
+  <div class="footer"><span>evals/reports/2026-10-02-live-l2.md · docs/evals.md · docs/known_issues.md · ADR 0008</span><span>6 / 6</span></div>
+</section>
+
+</div>
+<div class="nav" id="nav"></div>
+
+<script>
+  const slides = [...document.querySelectorAll(".slide")];
+  const deck = document.getElementById("deck");
+  const nav = document.getElementById("nav");
+  let i = Math.max(0, Math.min(slides.length - 1, (parseInt(location.hash.slice(1), 10) || 1) - 1));
+
+  function fit() {
+    const s = Math.min(innerWidth / 1280, innerHeight / 720);
+    deck.style.transform = `translate(-50%, -50%) scale(${s})`;
+  }
+  function show(n) {
+    i = Math.max(0, Math.min(slides.length - 1, n));
+    slides.forEach((el, k) => el.classList.toggle("active", k === i));
+    history.replaceState(null, "", `#${i + 1}`);
+    nav.textContent = `${i + 1} / ${slides.length} · ← → · P to print`;
+  }
+  addEventListener("keydown", (e) => {
+    if (["ArrowRight", "PageDown", " "].includes(e.key)) show(i + 1);
+    else if (["ArrowLeft", "PageUp"].includes(e.key)) show(i - 1);
+    else if (e.key === "Home") show(0);
+    else if (e.key === "End") show(slides.length - 1);
+    else if (e.key.toLowerCase() === "p") print();
+  });
+  addEventListener("click", (e) => show(e.clientX > innerWidth / 2 ? i + 1 : i - 1));
+  addEventListener("resize", fit);
+  fit(); show(i);
+</script>
+</body>
+</html>
