@@ -163,8 +163,12 @@ def test_already_done_d03_abstain_no_invented_date():
     assert "registré" not in text
     # Must not invent a posting date
     assert not re.search(r"\d{4}-\d{2}-\d{2}", text), "must not contain an invented date"
-    # Must offer a way forward
-    assert "asesor" in text or "más tarde" in text or "persona" in text
+    # Way forward the system can honour: check again later, or start a new conversation.
+    assert "más tarde" in text
+    # Phase DONE answers every message with this reply, so it must not invite a keyword or a human
+    # handoff that nothing would act on.
+    assert "asesor" not in text.lower()
+    assert "escribir" not in text.lower()
 
 
 def test_already_done_other_flow_short_and_no_action_claim():

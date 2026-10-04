@@ -13,7 +13,8 @@ Merchant is shown only when `merchant_name` is present.
 
 **Defect (c) — already_done after D03 pending/abstain:**
 Before: "Esta conversación ya terminó. Si necesitas otro reclamo, inicia una conversación nueva."
-After (D03): "Ese movimiento sigue pendiente de registro. Este sistema no tiene fecha de acreditación y no puede estimarla. Puedes consultar de nuevo más tarde o escribir 'asesor' si quieres hablar con una persona."
+After (D03): "Ese movimiento sigue pendiente de registro. Este sistema no tiene fecha de registro y no puede estimarla. Puedes consultar de nuevo más tarde, o iniciar una conversación nueva si necesitas otra cosa."
+Note: an earlier draft offered to type "asesor" for a person. Review found that phase DONE answers every message with this same reply, so nothing would act on that keyword; the offer was removed rather than promised. Offering a human handoff from DONE is a design change for the owners (it needs a state transition and a handoff tool call) and is not part of this PR.
 After (other flows): "Esta conversación ya terminó. Si tienes otro reclamo, inicia una conversación nueva."
 
 No action is claimed in either reply. No posting date is invented (verified by unit test regex check).

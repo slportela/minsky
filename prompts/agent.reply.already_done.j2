@@ -1,10 +1,10 @@
 {#
-version: 2
+version: 3
 owner: agent
-changed: 2026-10-04 D03 pending: say so honestly; no invented posting date; offer to try later or escalate
+changed: 2026-10-04 D03 pending: say so honestly; no invented posting date; offer to try later; no human offer because nothing in phase DONE can act on a keyword
 #}
 {% if rule_id == "D03-pending-not-posted" -%}
-Ese movimiento sigue pendiente de registro. Este sistema no tiene fecha de acreditación y no puede estimarla. Puedes consultar de nuevo más tarde o escribir "asesor" si quieres hablar con una persona.
+Ese movimiento sigue pendiente de registro. Este sistema no tiene fecha de registro y no puede estimarla. Puedes consultar de nuevo más tarde, o iniciar una conversación nueva si necesitas otra cosa.
 {%- else -%}
 Esta conversación ya terminó. Si tienes otro reclamo, inicia una conversación nueva.
 {%- endif %}
