@@ -299,6 +299,39 @@ Placeholders: `<VM_IP>` static IPv4 of the instance; `<OPERATOR_CIDR>` operator 
     option `"all"` is also rejected (use `"allow-list"`). `Content-Type` and POST `Authorization`
     are forwarded by default.
 
+### Redeploy a new version
+
+Once the stack exists, `infra/redeploy_smoke.sh` ships a commit to it without repeating steps 6 to 9:
+
+```bash
+infra/redeploy_smoke.sh --host ubuntu@<VM_IP> --key <KEY_FILE> --dry-run            # plan only
+infra/redeploy_smoke.sh --host ubuntu@<VM_IP> --key <KEY_FILE> [--ref <git-ref>] \
+  [--public-url https://<CDN_DOMAIN>]                                              # deploy (default ref: HEAD)
+infra/redeploy_smoke.sh --host ubuntu@<VM_IP> --key <KEY_FILE> --rollback          # previous release
+```
+
+What it does, in order: a read-only preflight on the VM (the three config files exist, `runtime.env` has
+`MINSKY_LLM_API_KEY` and `MINSKY_TEST_SESSIONS`, at least 5 GB free, at least 1 GB of swap, Compose and Docker
+usable); uploads the tracked files of the ref with `git archive` (only the paths listed in the script, never
+`.env`, keys, `data/` or anything untracked) into `/opt/minsky/releases/<sha>`; builds both images on the VM
+tagged with the commit; points `images.env` at them and runs `docker compose -p minsky up -d`; waits up to two
+minutes for `/api/health`. If the new version does not become healthy it goes back to the previous release by
+itself and exits non-zero. With `--public-url` it also checks the public health endpoint and that an
+unauthenticated chat turn is refused with 401.
+
+- The first run moves the hand-built `/opt/minsky/src` directory to `releases/manual-<timestamp>` and makes
+  `src` a symlink to the active release. Old releases and their images stay until you remove them; each is
+  about 0.7 GB of images.
+- It edits only `images.env` (the previous copy is `images.env.prev`). It never writes `runtime.env` or
+  `db.env`, never removes Compose volumes (`pgdata`, `caddy_data`), and runs no prune.
+- A version that needs a new setting (for example `MINSKY_STAFF_SESSIONS` for a staff console) needs you to add
+  it to `runtime.env` first; the preflight prints whether it is set.
+- Conversations and cases are process-local in this POC, so every redeploy that recreates the `api` container
+  clears them.
+- `--print-remote` prints the script that runs on the VM, for review.
+- Not covered: the swapfile from step 5 must also be in `/etc/fstab` (the preflight warns if it is not),
+  otherwise a VM reboot loses it and a later build can run out of memory.
+
 ### Teardown
 
 > **NOT EXECUTED; operator-run after the demo window. Suggested after 2026-10-16.**
