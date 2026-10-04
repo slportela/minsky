@@ -25,3 +25,6 @@ frontend/tsconfig.tsbuildinfo
 pipeline/notebooks/checks_sebas.ipynb
 # the router training data is small, generated and committed (ml/README.md)
 !ml/router/data/
+
+# Saved infrastructure plans may contain sensitive provider values.
+infra/tofu/**/*.tfplan

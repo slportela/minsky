@@ -1,4 +1,4 @@
-# 0012. Cases in Postgres, a triaged back-office queue and an agent console
+# 0013. Cases in Postgres, a triaged back-office queue and an agent console
 
 - Status: proposed
 - Date: 2026-10-04

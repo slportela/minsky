@@ -1,0 +1,56 @@
+{
+  "evidence_type": "historical dbt execution summary; not a new run",
+  "generated_at": "2026-09-26T03:32:40.598119Z",
+  "dbt_version": "1.12.5",
+  "invocation_id": "7aeaecb6-03f7-4aa1-9b9b-9acacffb1d6e",
+  "source_git_sha": null,
+  "source_git_sha_limitation": "The original run_results.json does not record the source Git revision.",
+  "status_counts": {
+    "success": 13,
+    "pass": 211,
+    "warn": 9
+  },
+  "warning_tests": [
+    {
+      "unique_id": "test.minsky.not_null_call_transcripts_duration_seconds.dc13d40de9",
+      "failing_rows": 24029
+    },
+    {
+      "unique_id": "test.minsky.relationships_customers_registration_branch_id__branch_id__ref_branches_.423414084b",
+      "failing_rows": 149995
+    },
+    {
+      "unique_id": "test.minsky.accepted_values_products_product_type__Checking_Account__Savings_Account__Credit_Card__Debit_Card__Personal_Loan__Mortgage__Investment.33063edb03",
+      "failing_rows": 1
+    },
+    {
+      "unique_id": "test.minsky.unique_products_product_number.1ff302931b",
+      "failing_rows": 6
+    },
+    {
+      "unique_id": "test.minsky.relationships_service_agents_assigned_branch_id__branch_id__ref_branches_.c3eac6f41e",
+      "failing_rows": 831
+    },
+    {
+      "unique_id": "test.minsky.unique_service_agents_employee_code.4c02a648c0",
+      "failing_rows": 13
+    },
+    {
+      "unique_id": "test.minsky.accepted_values_call_center_interactions_channel__Phone__Web_Chat__WhatsApp__Email__App.0cab366c10",
+      "failing_rows": 1
+    },
+    {
+      "unique_id": "test.minsky.accepted_values_call_center_interactions_detected_sentiment__Positive__Neutral__Negative__Very_Negative.1f4c5aa9e1",
+      "failing_rows": 1
+    },
+    {
+      "unique_id": "test.minsky.accepted_values_call_center_interactions_reason_category__Transactional__Product__Technical__Commercial__Complaint.1ab03ebf92",
+      "failing_rows": 1
+    }
+  ],
+  "limitations": [
+    "Summarized from an existing local transform/target/run_results.json artifact; the pipeline was not rerun for this PR.",
+    "Warnings are retained as warnings; this is not an all-tests-pass claim.",
+    "No raw source records, compiled SQL, environment variables or local absolute paths are included."
+  ]
+}

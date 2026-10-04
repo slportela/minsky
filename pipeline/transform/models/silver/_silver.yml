@@ -199,6 +199,7 @@ models:
           - Personal Loan
           - Mortgage
           - Investment
+          - Insurance
         config: *id003
   - name: product_number
     data_type: varchar
@@ -851,6 +852,7 @@ models:
           - WhatsApp
           - Email
           - App
+          - Web
         config: *id014
   - name: contact_reason
     data_type: varchar
@@ -868,6 +870,7 @@ models:
           - Technical
           - Commercial
           - Complaint
+          - Retention
         config: *id014
   - name: duration_seconds
     data_type: integer
@@ -889,6 +892,7 @@ models:
           - Neutral
           - Negative
           - Very Negative
+          - Very Positive
         config: *id014
   - name: sentiment_score
     data_type: decimal(3,2)

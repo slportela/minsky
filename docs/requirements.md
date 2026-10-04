@@ -16,7 +16,7 @@ Status: ✅ done · 🟡 partial · ⬜ planned · ⚠️ risk or gap
 | S6 | Interactions in Spanish **and Portuguese**; report language and data limitations (PS, KO) | es + pt suites; Portuguese is generated and labeled; limitation stated | `evals.md`, `known_issues.md`, `evals/cases/val` | 🟡 replies in the language of the first message; 11 pt val cases (generated text, real records) pass offline; no Portuguese source data; live pt run pending |
 | S7 | Working prototype + evidence of production readiness + honest remaining work (PS) | POC on EC2; target architecture; POC → production map | `architecture.md`, `poc_to_prod.md` | 🟡 docs |
 | D1 | Public repo `factored-hackathon-2026-<team>` (KO) | Rename or new repo before submission; remove private links from history | — | ⚠️ history has a private link |
-| D2 | Link to the deployed tool (KO) | Demo on EC2, up until 2026-10-16 | `infra/README.md` | ⬜ |
+| D2 | Link to the deployed tool (KO) | Temporary Lightsail CDN → Compose smoke; final link must stay up until 2026-10-16 | `infra/README.md`, ADR 0011, ADR 0012 | 🟡 configuration validated with mocked plans; the primary account has zero compute quotas, so ADR 0012 moves the compute to a second account of the same owner (default quotas; real plan: 5 creates); smoke stack deployed by hand 2026-10-04 (VM + CDN, HTTPS, auth denials and no-cache verified; model chat turn not yet verified in a browser); final retained demo and teardown pending |
 | D3 | 4-6 slides (KO) | — | — | ⬜ |
 | D4 | Short video: working solution + core architecture decisions (KO) | — | — | ⬜ |
 
@@ -46,6 +46,16 @@ Status: ✅ done · 🟡 partial · ⬜ planned · ⚠️ risk or gap
 | P6.3 | Explanations from sources, policy rules and execution records; not chain of thought | Rule ids + tool results + traces | `dispute_policy.md` | 🟡 |
 
 ## Boundaries (PS)
+
+### Proposed response to source-data inconsistencies (2026-10-03)
+
+This is a recommendation, not an implemented change to pipeline, policy or tools. The findings and counts are in `known_issues.md`.
+
+- **P1.1 / P4.1:** preserve source records and lineage; add explicit cross-table ownership and chronology checks. Document which fields support descriptive analysis and which can support an action. Do not repair missing links or dates by guessing.
+- **P2.3 / P3.2 / B6:** use verified customer/product/transaction ownership for lookup. Do not treat historical `complaints.affected_product_id` as customer-owned evidence: all 44,570 populated references point to another customer's product. Define deterministic treatment of inconsistent dates before implementing it; do not shift dates silently.
+- **B2 / B4:** keep organizer-derived records separate from team-generated dialogues, policy and mock-bank cases. New disputes should explicitly link the authenticated customer and verified transaction, with writes and read-back kept separate from historical complaint outcomes.
+- **P4.4 / P4.5:** do not train intent from mismatched transcript/reason pairs or use leakage columns. Evaluate an appropriate learned component against a baseline using independently valid labels and justified splits. The brief also allows pretrained/retrieval-based component evaluation; it does not require training a new model.
+- **P5.1 / P5.2 / E11:** add development cases for incorrect ownership, inconsistent chronology and missing evidence before behavior changes; report coverage, exclusions and simulated results. Preserve the locked test split. Do not claim a historical complaint-to-transaction decision target or a measured production improvement.
 
 | ID | Requirement | Our answer | Where | Status |
 |---|---|---|---|---|

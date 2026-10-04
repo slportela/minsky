@@ -67,7 +67,7 @@ checked as (
             case when "opening_channel" is null then 'not_null:opening_channel' end,
             case when "has_linked_app" is null then 'not_null:has_linked_app' end,
             case when "last_updated" is null then 'not_null:last_updated' end,
-            case when "product_type" not in ('Checking Account', 'Savings Account', 'Credit Card', 'Debit Card', 'Personal Loan', 'Mortgage', 'Investment') then 'undocumented_value:product_type' end,
+            case when "product_type" not in ('Checking Account', 'Savings Account', 'Credit Card', 'Debit Card', 'Personal Loan', 'Mortgage', 'Investment', 'Insurance') then 'undocumented_value:product_type' end,
             case when "currency" not in ('MXN', 'COP', 'ARS', 'USD') then 'undocumented_value:currency' end,
             case when "product_status" not in ('Active', 'Blocked', 'Closed', 'Suspended') then 'undocumented_value:product_status' end,
             case when "opening_channel" not in ('Branch', 'Web', 'App', 'Call Center') then 'undocumented_value:opening_channel' end

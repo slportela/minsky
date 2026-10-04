@@ -141,3 +141,24 @@ install/use the trusted local CA through the user's normal setup or use a valid 
 
 Attach matched evidence/report to the PRs and update requirements honestly. Merge #24 → #23 → #25 only
 when the required live-model and integrated gates are met; rerun a final smoke on their combined source.
+
+## Lightsail CDN deployed-origin follow-up (ADR 0011)
+
+Use `demo_url` from OpenTofu; AWS's public certificate should validate without importing
+Caddy's local CA. Deploy with `compose.demo.yaml`; browser TLS ends at CloudFront and
+Caddy origin HTTP is public. This does not close production end-to-end TLS.
+Repeat the browser checks above. Navigate from the home page to `/chat` and `/console`
+using the links without a full reload; verify the Next.js client-navigation responses.
+Send a JSON chat POST and verify successful parsing and Authorization forwarding.
+Check no cached customer/auth/error responses, and anonymous/expired HTTP 401. Inspect references against
+case read-back evidence before reporting actions as verified. The deployment and this gate
+remain pending until actual AWS plan/apply and the deployed browser run are recorded.
+
+The temporary smoke has a six-hour lifetime and USD 5 infrastructure allowance. Record
+results before teardown; D2 needs a separately retained demo through October 16. Verify
+real CDN forwarding/cache behavior and amd64 capacity; local and mocked checks are not
+deployed evidence. Keep the independent cumulative model allowance at USD 1.
+
+On 2026-10-03 the Lightsail deployment attempt was blocked by instance quota zero in
+the confirmed own account; EC2 standard vCPU quota was also zero. The sole allocated
+static IP was deleted. No public smoke was performed; see the deployment report.

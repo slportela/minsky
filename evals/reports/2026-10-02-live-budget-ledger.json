@@ -71,12 +71,19 @@
       "input_usd_per_million": "0.10",
       "output_usd_per_million": "0.50",
       "pricing_basis": "operator-supplied uncached token rates; not an invoice"
+    },
+    "2026-10-02-caddy-https": {
+      "cap_usd": "0.03",
+      "reserved_usd": "0.0300000",
+      "usage_cost_usd": null,
+      "provider_usage_unknown": true,
+      "pricing_basis": "Six HTTPS turns reserved at USD 0.005 each; at most one extraction per turn, 256 output tokens, no SDK retries. HTTP responses do not expose provider usage; reservations retained."
     }
   },
   "usage_cost_usd": "0.0124252",
-  "reserved_usd": "0.2085836",
+  "reserved_usd": "0.2385836",
   "approved_total_usd": "1",
   "failed_usage_unknown": true,
   "pricing_source": "https://developers.openai.com/api/docs/models/gpt-6-luna",
-  "limitation": "Usage-priced estimate, not provider invoice; failed calls retain conservative reservations."
+  "limitation": "Usage-priced estimate for instrumented runs, not provider invoice; failed calls and uninstrumented HTTPS turns retain conservative reservations. Caddy HTTPS usage is unknown and excluded from the known usage sum."
 }
