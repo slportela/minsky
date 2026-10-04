@@ -2,7 +2,7 @@
 services:
   api:
     environment:
-      AWS_PROFILE: ${AWS_PROFILE:?set AWS_PROFILE to a profile with Bedrock access}
+      AWS_PROFILE: ${AWS_PROFILE:-}  # only for Bedrock (ADR 0008: interim provider is the OpenAI API)
     volumes:
       - ${HOME}/.aws:/home/app/.aws:ro
 

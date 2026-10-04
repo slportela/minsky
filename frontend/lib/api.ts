@@ -78,3 +78,73 @@ export async function postChatTurn(args: {
     body: JSON.stringify(body),
   });
 }
+
+// ---- Agent console (staff credential; never a customer one) ----
+
+export type CaseSummary = {
+  case_id: string;
+  kind: "dispute" | "handoff";
+  priority: "Critical" | "High" | "Medium" | "Low";
+  queue: "fraud" | "disputes" | "general";
+  status: "new" | "in_progress" | "resolved";
+  summary: string;
+  rule_id: string | null;
+  due_at: string;
+  overdue: boolean;
+  assigned_to: string | null;
+  created_at: string;
+  amount_usd: string | null;
+  merchant: string | null;
+};
+
+export type QueueStats = {
+  open_cases: number;
+  overdue: number;
+  by_priority: Record<string, number>;
+  by_queue: Record<string, number>;
+};
+
+export type CaseList = { agent_id: string; stats: QueueStats; cases: CaseSummary[] };
+
+export type AuditEntry = { tool: string; outcome: string; reason: string | null; at: string };
+
+export type CaseDetail = {
+  case: CaseSummary;
+  customer_id: string;
+  reason: string;
+  triage_reason: string;
+  facts: { verified?: Record<string, unknown>; customer_said?: Record<string, unknown> };
+  actions: string[];
+  open_questions: string[];
+  expected_resolution_days: number | null;
+  resolution_note: string | null;
+  audit: AuditEntry[];
+};
+
+function staffHeaders(credential: string): Record<string, string> {
+  return { Authorization: `Bearer ${credential}` };
+}
+
+export async function listCases(credential: string, queue?: string): Promise<CaseList> {
+  const query = queue ? `?queue=${encodeURIComponent(queue)}` : "";
+  return api<CaseList>(`/console/cases${query}`, { headers: staffHeaders(credential) });
+}
+
+export async function getCase(credential: string, caseId: string): Promise<CaseDetail> {
+  return api<CaseDetail>(`/console/cases/${encodeURIComponent(caseId)}`, { headers: staffHeaders(credential) });
+}
+
+export async function claimCase(credential: string, caseId: string): Promise<CaseDetail> {
+  return api<CaseDetail>(`/console/cases/${encodeURIComponent(caseId)}/claim`, {
+    method: "POST",
+    headers: staffHeaders(credential),
+  });
+}
+
+export async function resolveCase(credential: string, caseId: string, note: string): Promise<CaseDetail> {
+  return api<CaseDetail>(`/console/cases/${encodeURIComponent(caseId)}/resolve`, {
+    method: "POST",
+    headers: staffHeaders(credential),
+    body: JSON.stringify({ note }),
+  });
+}

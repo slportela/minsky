@@ -7,7 +7,7 @@ PROFILE    := $(shell grep '^BRONZE_AWS_PROFILE=' .env 2>/dev/null | cut -d= -f2
 LAKE_URI   := $(patsubst %/bronze,%,$(BRONZE_URI))
 AWS        := AWS_PROFILE=$(PROFILE) aws
 
-.PHONY: help setup lock-check lint typecheck test llm-smoke regression-smoke eval-smoke eval-live-estimate frontend-check eval-check router ci up down logs demo-plan demo-apply pipeline bronze mirror silver gold publish docs
+.PHONY: demo-sessions help setup lock-check lint typecheck test llm-smoke regression-smoke eval-smoke eval-live-estimate frontend-check eval-check router ci up down logs demo-plan demo-apply pipeline bronze mirror silver gold publish docs
 
 EVAL_CAP_USD ?= 1
 
@@ -65,6 +65,9 @@ ci: lock-check lint typecheck test eval-check regression-smoke eval-smoke fronte
 
 COMPOSE_LOCAL := docker compose -f compose.yaml -f compose.local.yaml
 DEMO          := tofu -chdir=infra/tofu/envs/demo
+
+demo-sessions:  ## print demo customer + agent-console credentials for .env (needs make gold)
+	uv run python infra/demo_sessions.py
 
 up:  ## start the full stack locally (https://localhost)
 	$(COMPOSE_LOCAL) up -d --build
