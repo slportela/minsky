@@ -7,7 +7,7 @@ from typing import Any
 
 import pytest
 
-from minsky_api.agent.speak import action_claims, compose_speech
+from minsky_api.agent.speak import action_claims, compose_speech, ungrounded_number
 from minsky_api.llm.client import LLMResult
 
 
@@ -176,3 +176,66 @@ def test_completed_action_phrasings_are_claims(text: str, claim: str):
 )
 def test_offers_and_negations_are_not_claims(text: str):
     assert action_claims(text) == frozenset()
+
+
+def test_an_open_dispute_is_supported_by_the_existing_reference():
+    text = "Ya hay un reclamo abierto para ese cargo con la referencia DSP-abc123."
+    speech = asyncio.run(
+        compose_speech(
+            RecordingLLM("inform", text),  # type: ignore[arg-type]
+            language="es",
+            allowed=("inform",),
+            facts={"existing_dispute_id": "DSP-abc123"},
+        )
+    )
+    assert speech.text == text
+    with pytest.raises(RuntimeError, match="unverified dispute_opened"):
+        asyncio.run(
+            compose_speech(
+                RecordingLLM("inform", "Tu reclamo quedó abierto."),  # type: ignore[arg-type]
+                language="es",
+                allowed=("inform",),
+                facts={"reason": "x"},
+            )
+        )
+
+
+@pytest.mark.parametrize(
+    ("text", "claim"),
+    [
+        ("Tu tarjeta ya no podrá usarse.", "card_blocked"),
+        ("Tu tarjeta quedó desactivada.", "card_blocked"),
+        ("Seu cartão foi cancelado.", "card_blocked"),
+        ("Tu reclamo está en trámite.", "dispute_opened"),
+        ("Tu número de reclamo es el siguiente.", "dispute_opened"),
+        ("Te devolveremos el dinero.", "refund"),
+        ("Vas a recibir tu dinero pronto.", "refund"),
+        ("Você vai receber o seu dinheiro de volta.", "refund"),
+        ("Te paso con un asesor.", "handoff"),
+        ("Un especialista tomará tu caso.", "handoff"),
+    ],
+)
+def test_adversarial_paraphrases_are_claims(text: str, claim: str):
+    assert claim in action_claims(text)
+
+
+def test_team_follow_up_after_an_open_dispute_is_not_a_handoff_claim():
+    assert action_claims("Listo, tu reclamo DSP-1 quedó abierto. Nuestro equipo lo revisará.") == {"dispute_opened"}
+
+
+def test_numbers_must_come_from_the_facts():
+    facts = {"merchant": "Cafe", "amount": "25.00 USD", "when": "10 de junio de 2026", "reason": "más de 120 días"}
+    ok = "Encontré este cargo: Cafe, 25.00 USD, 10 de junio de 2026. Tiene más de 120 días. Ref. HO-9c1a47831750."
+    assert ungrounded_number(ok, facts) is None
+    assert ungrounded_number("Cafe, 25 USD.", facts) is None  # 25.00 and 25 are the same amount
+    assert ungrounded_number("Se resolverá en 15 días.", facts) == "15"
+    assert ungrounded_number("Te devolvemos 30.00 USD.", facts) == "30.00"
+    with pytest.raises(RuntimeError, match="ungrounded number 15"):
+        asyncio.run(
+            compose_speech(
+                RecordingLLM("inform", "Tu caso se resolverá en 15 días."),  # type: ignore[arg-type]
+                language="es",
+                allowed=("inform",),
+                facts={"reason": "x"},
+            )
+        )

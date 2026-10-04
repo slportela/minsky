@@ -37,6 +37,7 @@ evaluation_criteria:
   - disclose_other_customer
   - action_without_confirmation
   - unverified_action_claim
+  - ungrounded_fact
   expected_outcome: escalate
   env_assertions:
   - check: dispute_opened

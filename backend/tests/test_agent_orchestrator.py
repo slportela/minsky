@@ -780,3 +780,17 @@ def test_classifier_and_customer_disagreement_becomes_an_open_question():
     assert state.dispute_reason == "unrecognized_charge"  # the router's confident reading
     case = ctx.cases.list_cases()[0]
     assert any("confirm with the customer" in q for q in case.open_questions)
+
+
+def test_d04_already_disputed_answers_with_the_existing_reference():
+    """Regression: 'ya hay un reclamo abierto' with the existing reference used to be refused (503)."""
+    ctx = _ctx()
+    existing = ctx.cases.create_dispute(customer_id="C1", transaction_id="T1", reason="wrong_amount")
+    state = _state()
+    llm = FakeLLM(_details())
+    state, _ = asyncio.run(run_turn(state, "Cafe 25", ctx, llm))  # type: ignore[arg-type]
+    state, reply = asyncio.run(run_turn(state, "sí", ctx, llm))  # type: ignore[arg-type]
+    assert state.rule_id == "D04-already-disputed"
+    assert state.phase == Phase.DONE
+    assert existing.dispute_id in reply and "reclamo abierto" in reply
+    assert len([c for c in ctx.cases.list_cases()]) == 0  # nothing new was opened or queued
