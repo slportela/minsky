@@ -7,7 +7,7 @@ PROFILE    := $(shell grep '^BRONZE_AWS_PROFILE=' .env 2>/dev/null | cut -d= -f2
 LAKE_URI   := $(patsubst %/bronze,%,$(BRONZE_URI))
 AWS        := AWS_PROFILE=$(PROFILE) aws
 
-.PHONY: demo-reset demo-sessions help setup lock-check lint typecheck test llm-smoke regression-smoke eval-smoke eval-live-estimate frontend-check eval-check router ci up down logs demo-plan demo-apply pipeline bronze mirror silver gold publish docs
+.PHONY: demo-reset demo-sessions help setup lock-check lint typecheck test llm-smoke regression-smoke eval-smoke eval-live-estimate frontend-check eval-check router ci model-prices up down logs demo-plan demo-apply pipeline bronze mirror silver gold publish docs
 
 EVAL_CAP_USD ?= 1
 
@@ -44,8 +44,17 @@ eval-check:  ## validate every eval case and the case set (schema, leakage, cove
 eval-smoke:  ## partial offline dev smoke with durable evidence (scripted extraction)
 	uv run python -m evals.runner --include-drafts
 
-eval-live-estimate:  ## estimate real dev smoke; set EVAL_INPUT_RATE and EVAL_OUTPUT_RATE to pinned model rates
-	uv run python -m evals.runner --include-drafts --extractor real --trials 3 --max-cost-usd $(EVAL_CAP_USD) --input-usd-per-million $(EVAL_INPUT_RATE) --output-usd-per-million $(EVAL_OUTPUT_RATE) --estimate-only
+# Token prices for the pinned model come from evals/model_prices.py, so one dated table feeds every
+# run instead of a rate retyped per command. The runner still gets both prices as explicit flags.
+# Force a price (a change the table does not have yet) by setting both on the command line:
+#   make eval-live-estimate EVAL_INPUT_RATE=0.10 EVAL_OUTPUT_RATE=0.50
+EVAL_PRICE_FLAGS = $(if $(and $(EVAL_INPUT_RATE),$(EVAL_OUTPUT_RATE)),--input-usd-per-million $(EVAL_INPUT_RATE) --output-usd-per-million $(EVAL_OUTPUT_RATE),$(shell MINSKY_ENVIRONMENT=local uv run python -m evals.model_prices --flags))
+
+eval-live-estimate:  ## estimate a real dev smoke; token prices come from evals/model_prices.py
+	uv run python -m evals.runner --include-drafts --extractor real --trials 3 --max-cost-usd $(EVAL_CAP_USD) $(EVAL_PRICE_FLAGS) --estimate-only
+
+model-prices:  ## show the recorded token prices for the pinned model
+	@MINSKY_ENVIRONMENT=local uv run python -m evals.model_prices
 
 regression-smoke:  ## offline chat regressions (scripted extraction; no provider spend)
 	uv run python -m evals.regression_smoke --output evals/runs/pr24-regressions.json
