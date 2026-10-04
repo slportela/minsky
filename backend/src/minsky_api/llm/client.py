@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from openai import AsyncOpenAI
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from minsky_api.config import Settings, get_settings
 
@@ -38,6 +38,10 @@ def model_matches(pinned: str, returned: str) -> bool:
 
 class ModelMismatchError(RuntimeError):
     """The provider answered with a different model than the pinned one."""
+
+
+class ModelOutputError(RuntimeError):
+    """The provider answered, but the reply does not fit the requested schema."""
 
 
 class LLMNotConfiguredError(RuntimeError):
@@ -90,7 +94,10 @@ class LLM:
             "store": False,  # nothing kept on the provider's side beyond its own retention policy
         }
         if schema is not None:
-            response = await self.client.responses.parse(text_format=schema, **common)
+            try:
+                response = await self.client.responses.parse(text_format=schema, **common)
+            except ValidationError as exc:  # a ValueError: it must not read as a bad customer request
+                raise ModelOutputError("the model reply does not fit the requested schema") from exc
             parsed = response.output_parsed
         else:
             response = await self.client.responses.create(**common)
