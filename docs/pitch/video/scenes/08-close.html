@@ -1,0 +1,59 @@
+<!doctype html>
+<html>
+  <head><meta charset="UTF-8" /></head>
+  <body>
+    <template>
+      <style>
+        /*@include base.css*/
+        /*@include phone.css*/
+        #s8 .ph { left: 755px; top: 70px; }
+        #s8 .notif .ic { background: linear-gradient(135deg, #00e5ef, #3ddc97); color: #04110f; }
+        #s8 .off { position: absolute; inset: 0; background: #000; border-radius: 52px; }
+        #s8 .logo { position: absolute; left: 0; right: 0; top: 330px; display: flex; justify-content: center; align-items: flex-start; gap: 16px; }
+        #s8 .word { font-size: 190px; font-weight: 750; letter-spacing: -0.055em; line-height: 1; }
+        #s8 .dot { display: block; width: 40px; height: 40px; margin-top: 30px; border-radius: 50%; background: #00e5ef; }
+        #s8 .tag { position: absolute; left: 0; right: 0; top: 570px; text-align: center; font-size: 54px; font-weight: 600; letter-spacing: -0.02em; color: #00e5ef; }
+        #s8 .end { position: absolute; left: 0; right: 0; top: 700px; text-align: center; font-size: 28px; line-height: 1.6; color: #b9c6d0; }
+        #s8 .credit { position: absolute; left: 0; right: 0; bottom: 40px; text-align: center; font-size: 18px; color: #93a3b1; }
+      </style>
+      <div id="root" data-composition-id="s8" data-width="1920" data-height="1080">
+        <div id="s8" class="scene">
+          <div id="s8-phone" class="ph">
+            <div class="ph-screen">
+              <div class="lock"></div>
+              <div class="ph-island"></div>
+              <div class="lock-date">Friday, June 12</div>
+              <div class="lock-time">11:51</div>
+              <div id="s8-notif" class="notif">
+                <div class="ic">M</div>
+                <div class="tx">
+                  <div class="app"><span>Minsky · LATAM Bank</span><span>now</span></div>
+                  <div class="t">Your claim is open</div>
+                  <div class="b"><span class="mono">DSP-4FEED87B</span> · We'll keep you posted here.</div>
+                </div>
+              </div>
+              <div id="s8-off" class="off"></div>
+            </div>
+          </div>
+          <div id="s8-logo" class="logo"><div class="word">Minsky</div><i class="dot"></i></div>
+          <div id="s8-tag" class="tag">Disputes, handled.</div>
+          <div id="s8-end" class="end"><div>Team Minsky · Factored AI &amp; Data Hackathon 2026</div><div>Demo: <span class="mono">[demo URL]</span> · Next: a four-week pilot in one country</div></div>
+          <div id="s8-credit" class="credit">Music: “Autumn Day” by Kevin MacLeod, CC BY 3.0 · Voice: AI-generated · Data: LATAM Bank synthetic dataset</div>
+        </div>
+      </div>
+      <script>
+        const tl = gsap.timeline({ paused: true });
+        tl.fromTo("#s8-phone", { opacity: 0, y: 40 }, { opacity: 1, y: 0, duration: 0.8, ease: "power3.out" }, 0);
+        tl.fromTo("#s8-notif", { opacity: 0, y: -40, scale: 0.96 }, { opacity: 1, y: 0, scale: 1, duration: 0.5, ease: "back.out(1.6)" }, 0.8);
+        tl.fromTo("#s8-off", { opacity: 0 }, { opacity: 1, duration: 0.6, ease: "power2.in" }, 3.3);
+        tl.to("#s8-phone", { opacity: 0, scale: 0.97, duration: 0.6 }, 3.9);
+        tl.fromTo("#s8-logo", { opacity: 0, scale: 1.08, filter: "blur(14px)" }, { opacity: 1, scale: 1, filter: "blur(0px)", duration: 1.0, ease: "power3.out" }, 4.7);
+        tl.fromTo("#s8 .dot", { scale: 0 }, { scale: 1, duration: 0.5, ease: "back.out(2.4)" }, 5.2);
+        tl.fromTo("#s8-tag", { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: 0.7, ease: "power3.out" }, 5.9);
+        tl.fromTo("#s8-end", { opacity: 0 }, { opacity: 1, duration: 0.8 }, 7.0);
+        tl.fromTo("#s8-credit", { opacity: 0 }, { opacity: 1, duration: 0.8 }, 7.4);
+        window.__timelines["s8"] = tl;
+      </script>
+    </template>
+  </body>
+</html>

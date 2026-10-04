@@ -1,0 +1,183 @@
+<!doctype html>
+<html>
+  <head><meta charset="UTF-8" /></head>
+  <body>
+    <template>
+      <style>
+        /* Shared look for every scene (inlined into each sub-composition by build.py). Deck palette. */
+#root { position: absolute; inset: 0; }
+.scene {
+  position: absolute; inset: 0; overflow: hidden;
+  background: #05070a; color: #e8eef2;
+  font-family: system-ui, sans-serif;
+}
+.layer { position: absolute; inset: 0; }
+.spot { position: absolute; inset: 0; background: radial-gradient(ellipse 60% 55% at 50% 45%, rgba(0, 229, 239, 0.08), rgba(0, 229, 239, 0) 70%); }
+.vig { position: absolute; inset: 0; background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0) 55%, rgba(0, 0, 0, 0.7)); }
+.foot { position: absolute; left: 72px; bottom: 26px; max-width: 1100px; font-size: 18px; line-height: 1.35; color: #93a3b1; }
+.mono { font-family: ui-monospace, monospace; }
+.kicker { font-size: 22px; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase; color: #00e5ef; }
+.green { color: #3ddc97; } .cyan { color: #00e5ef; } .amber { color: #ffb547; } .red { color: #ff6b6b; } .muted { color: #93a3b1; }
+.chip {
+  display: inline-flex; align-items: center; gap: 10px; padding: 10px 18px; border-radius: 999px;
+  font-size: 22px; font-weight: 600; border: 2px solid currentColor; background: rgba(5, 7, 10, 0.85);
+}
+.chip i { display: block; width: 12px; height: 12px; border-radius: 50%; background: currentColor; }
+
+        /* Phone + chat mockup, modeled on the real /chat (customer and assistant bubbles, transaction card, Yes/No). */
+.ph {
+  position: absolute; width: 410px; height: 840px; border-radius: 64px; padding: 13px;
+  background: linear-gradient(160deg, #1a222c, #0b0f14 40%);
+  box-shadow: 0 50px 140px rgba(0, 0, 0, 0.75), 0 0 0 2px #2a3644, inset 0 0 0 2px #121922;
+}
+.ph-screen { position: relative; width: 100%; height: 100%; border-radius: 52px; overflow: hidden; background: #0a0e13; display: flex; flex-direction: column; }
+.ph-island { position: absolute; top: 11px; left: 50%; width: 118px; height: 34px; margin-left: -59px; border-radius: 20px; background: #000; z-index: 5; }
+.ph-status { height: 52px; flex: none; display: flex; align-items: center; justify-content: space-between; padding: 6px 34px 0; font-size: 16px; font-weight: 600; }
+.ph-status .bars { display: flex; gap: 3px; align-items: flex-end; }
+.ph-status .bars b { display: block; width: 4px; background: #e8eef2; border-radius: 1px; }
+.ph-head { flex: none; display: flex; align-items: center; gap: 12px; padding: 8px 18px 12px; border-bottom: 1px solid #1a2430; }
+.ph-av { width: 40px; height: 40px; border-radius: 50%; flex: none; background: linear-gradient(135deg, #00e5ef, #3ddc97); color: #04110f; display: grid; place-items: center; font-weight: 800; font-size: 19px; }
+.ph-name { font-size: 17px; font-weight: 650; }
+.ph-sub { position: relative; height: 18px; font-size: 13px; }
+.ph-sub span { position: absolute; left: 0; top: 0; white-space: nowrap; }
+.ph-sub .typing { color: #00e5ef; opacity: 0; }
+.ph-msgs { position: relative; flex: 1; overflow: hidden; }
+.ph-inner { position: absolute; left: 0; right: 0; top: 0; padding: 16px 14px 20px; }
+.msg { width: fit-content; max-width: 84%; padding: 11px 15px; border-radius: 20px; font-size: 17px; line-height: 1.36; margin-bottom: 10px; }
+.msg.me { margin-left: auto; background: #1b64f2; color: #fff; border-bottom-right-radius: 6px; }
+.msg.bot { background: #151d26; border: 1px solid #243242; border-bottom-left-radius: 6px; }
+.txn { margin: 9px 0 6px; padding: 9px 12px; border-radius: 12px; background: #0a0f14; border: 1px solid #1f3a40; border-left: 4px solid #00e5ef; }
+.txn b { display: block; font-size: 16px; font-weight: 650; }
+.txn span { display: block; font-size: 14px; color: #93a3b1; font-family: ui-monospace, monospace; }
+.txn.no { border-left-color: #ff6b6b; }
+.btns { display: flex; gap: 10px; margin: 2px 0 10px; }
+.btn { width: 96px; padding: 10px 0; text-align: center; border-radius: 999px; font-size: 16px; font-weight: 650; border: 1.5px solid #3a4a5a; color: #e8eef2; }
+.btn.yes { background: #00e5ef; border-color: #00e5ef; color: #04110f; }
+.ph-input { flex: none; margin: 8px 14px 22px; height: 46px; border-radius: 23px; border: 1px solid #243242; display: flex; align-items: center; padding: 0 18px; color: #6f7f8d; font-size: 16px; }
+/* lock screen */
+.lock { position: absolute; inset: 0; background: radial-gradient(ellipse 120% 70% at 30% 10%, #1d3b4a, rgba(29, 59, 74, 0) 60%), radial-gradient(ellipse 90% 60% at 80% 90%, #3a2547, rgba(58, 37, 71, 0) 60%), #0a0e13; }
+.lock-time { position: absolute; top: 96px; left: 0; right: 0; text-align: center; font-size: 92px; font-weight: 300; letter-spacing: -0.02em; }
+.lock-date { position: absolute; top: 76px; left: 0; right: 0; text-align: center; font-size: 19px; font-weight: 500; color: #d4dde4; }
+.notif { position: absolute; left: 14px; right: 14px; top: 250px; padding: 14px 16px; border-radius: 24px; background: rgba(40, 48, 58, 0.82); display: flex; gap: 12px; }
+.notif .ic { width: 40px; height: 40px; border-radius: 10px; flex: none; display: grid; place-items: center; font-weight: 800; font-size: 15px; }
+.notif .tx { flex: 1; }
+.notif .app { display: flex; justify-content: space-between; font-size: 13px; color: #c4ced6; letter-spacing: 0.04em; text-transform: uppercase; }
+.notif .t { font-size: 16px; font-weight: 650; margin-top: 2px; }
+.notif .b { font-size: 15px; color: #e3e9ee; margin-top: 1px; }
+
+        #s3 .ph { left: 1180px; top: 70px; }
+        #s3 .co { position: absolute; left: 150px; width: 900px; }
+        #s3 .co .k { font-size: 22px; font-weight: 700; letter-spacing: 0.16em; color: #00e5ef; }
+        #s3 .co .t { font-size: 84px; font-weight: 750; letter-spacing: -0.04em; line-height: 1.05; margin-top: 8px; }
+        #s3 .co .s { font-size: 30px; color: #93a3b1; margin-top: 10px; }
+        #s3 #s3-c1 { top: 200px; } #s3 #s3-c2 { top: 430px; } #s3 #s3-c3 { top: 660px; }
+        #s3 #s3-c3 .t .mono { font-size: 56px; color: #3ddc97; letter-spacing: 0; }
+        #s3 .final { position: absolute; left: 150px; top: 330px; width: 900px; }
+        #s3 .final div { font-size: 104px; font-weight: 750; letter-spacing: -0.045em; line-height: 1.08; }
+        #s3 .btn { position: relative; overflow: hidden; }
+        #s3 .tap { position: absolute; left: 50%; top: 50%; width: 120px; height: 120px; margin: -60px 0 0 -60px; border-radius: 50%; background: rgba(255, 255, 255, 0.55); }
+        #s3 .done { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 14px; font-weight: 650; color: #3ddc97; }
+        #s3 .done i { display: block; width: 9px; height: 9px; border-radius: 50%; background: #3ddc97; }
+      </style>
+      <div id="root" data-composition-id="s3" data-width="1920" data-height="1080">
+        <div id="s3" class="scene">
+          <div class="spot"></div>
+          <div id="s3-phone" class="ph">
+            <div class="ph-screen"><div class="ph-island"></div>
+  <div class="ph-status"><span>11:48</span><span class="bars"><b style="height:6px"></b><b style="height:9px"></b><b style="height:12px"></b><b style="height:15px"></b></span></div>
+  <div class="ph-head"><div class="ph-av">M</div><div><div class="ph-name">Minsky</div><div class="ph-sub"><span class="online muted">LATAM Bank · disputes</span><span class="typing">typing…</span></div></div></div>
+  <div class="ph-msgs"><div class="ph-inner">
+
+            <div class="msg me">Hi. On Friday I paid 32.50 USD at El Buen Sabor Restaurant, but my account shows a bigger charge.</div>
+            <div class="msg bot">Sorry about that. I checked your transactions from Friday, June 12 and found this charge:
+              <div class="txn"><b>El Buen Sabor Restaurant · 48.50 USD</b><span>Jun 12, 21:14 · Credit card •••• 4821</span><span>Approved</span></div>
+              Is this the charge you want to dispute?</div>
+            <div class="msg me">Yes, that one. I was charged 16 USD too much.</div>
+            <div class="msg bot">Got it. Should I open a claim for an incorrect charge of 16 USD on this transaction?
+              <div class="btns" style="margin-top:10px"><div id="s3-yes" class="btn yes">Yes<i id="s3-tap" class="tap"></i></div><div class="btn">No</div></div></div>
+            <div class="msg me">Yes.</div>
+            <div class="msg bot">Done. Your claim <b class="mono">DSP-4FEED87B</b> is open. Our team will review it and keep you posted here.
+              <div class="done"><i></i>Case opened · verified</div></div>
+              </div></div>
+  <div class="ph-input">Message</div>
+</div>
+
+          </div>
+          <div id="s3-cos" class="layer">
+            <div id="s3-c1" class="co"><div class="k">01</div><div class="t">Finds the charge.</div><div class="s">Only in Lucía's own account.</div></div>
+            <div id="s3-c2" class="co"><div class="k">02</div><div class="t">Asks before acting.</div><div class="s">Nothing happens without a “yes”.</div></div>
+            <div id="s3-c3" class="co"><div class="k">03</div><div class="t">Opens the case. <span class="mono">DSP-4FEED87B</span></div><div class="s">Checked in the bank's records before Lucía hears it.</div></div>
+          </div>
+          <div id="s3-final" class="final"><div>Three messages.</div><div class="cyan">Any hour.</div><div class="cyan">No queue.</div></div>
+          <div id="s3-foot" class="foot">Recreated from the working system and translated to English. Minsky serves customers in Spanish and Portuguese.</div>
+          <div class="vig"></div>
+        </div>
+      </div>
+      <script>
+        /* Chat playback shared by the phone scenes: reveal messages at set times, auto-scroll, "typing…" before bot replies. */
+function hfChatMeasure(phone) {
+  const area = phone.querySelector(".ph-msgs");
+  const inner = phone.querySelector(".ph-inner");
+  const viewH = area.clientHeight || 620;
+  const msgs = Array.from(inner.children);
+  const shifts = msgs.map((m) => Math.max(0, m.offsetTop + m.offsetHeight + 20 - viewH));
+  return { inner, msgs, shifts };
+}
+
+function hfPlayChat(tl, phone, times) {
+  const { inner, msgs, shifts } = hfChatMeasure(phone);
+  const typing = phone.querySelector(".ph-sub .typing");
+  const online = phone.querySelector(".ph-sub .online");
+  let prev = 0;
+  msgs.forEach((m, i) => {
+    const t = times[i];
+    if (t == null) return;
+    if (m.classList.contains("bot") && typing) {
+      const ts = Math.max(0, t - 0.85);
+      tl.fromTo(typing, { opacity: 0 }, { opacity: 1, duration: 0.15 }, ts);
+      tl.fromTo(online, { opacity: 1 }, { opacity: 0, duration: 0.15 }, ts);
+      tl.fromTo(typing, { opacity: 1 }, { opacity: 0, duration: 0.15, immediateRender: false }, t);
+      tl.fromTo(online, { opacity: 0 }, { opacity: 1, duration: 0.15, immediateRender: false }, t);
+    }
+    tl.fromTo(m, { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.35, ease: "power2.out" }, t);
+    if (shifts[i] > prev) {
+      tl.fromTo(inner, { y: -prev }, { y: -shifts[i], duration: 0.4, ease: "power2.inOut", immediateRender: false }, t - 0.05);
+      prev = shifts[i];
+    }
+  });
+}
+
+function hfFinalChat(phone) {
+  const { inner, shifts } = hfChatMeasure(phone);
+  gsap.set(inner, { y: -shifts[shifts.length - 1] });
+}
+
+function hfCount(tl, el, to, at, dur, fmt) {
+  const o = { v: 0 };
+  el.textContent = fmt(0);
+  tl.to(o, { v: to, duration: dur, ease: "power2.out", onUpdate: () => { el.textContent = fmt(o.v); } }, at);
+}
+
+        const tl = gsap.timeline({ paused: true });
+        const phone = document.getElementById("s3-phone");
+        gsap.set(phone, { transformPerspective: 1600, rotationY: -9 });
+        tl.fromTo(phone, { opacity: 0, x: 80 }, { opacity: 1, x: 0, duration: 0.9, ease: "power3.out" }, 0);
+        hfPlayChat(tl, phone, [1.0, 3.0, 6.0, 7.6, 10.0, 10.9]);
+        tl.fromTo("#s3-foot", { opacity: 0 }, { opacity: 1, duration: 0.6 }, 1.2);
+        const co = (sel, t) => tl.fromTo(sel, { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.6, ease: "power3.out" }, t);
+        co("#s3-c1", 3.3);
+        tl.to("#s3-c1", { opacity: 0.35, duration: 0.4 }, 7.9);
+        co("#s3-c2", 8.0);
+        // the tap on "Yes"
+        tl.fromTo("#s3-tap", { scale: 0, opacity: 0.9 }, { scale: 1.4, opacity: 0, duration: 0.5, ease: "power2.out" }, 9.7);
+        tl.fromTo("#s3-yes", { scale: 1 }, { scale: 0.9, duration: 0.1, yoyo: true, repeat: 1, ease: "power1.inOut" }, 9.7);
+        tl.to("#s3-c2", { opacity: 0.35, duration: 0.4 }, 11.1);
+        co("#s3-c3", 11.2);
+        tl.to("#s3-cos", { opacity: 0, x: -40, duration: 0.6, ease: "power2.in" }, 13.4);
+        tl.fromTo("#s3-final div", { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.6, ease: "power3.out", stagger: 0.45 }, 13.9);
+        tl.to(["#s3-final", "#s3-foot"], { opacity: 0, duration: 0.6 }, 20.6);
+        window.__timelines["s3"] = tl;
+      </script>
+    </template>
+  </body>
+</html>

@@ -1,0 +1,19 @@
+/* Shared look for every scene (inlined into each sub-composition by build.py). Deck palette. */
+#root { position: absolute; inset: 0; }
+.scene {
+  position: absolute; inset: 0; overflow: hidden;
+  background: #05070a; color: #e8eef2;
+  font-family: system-ui, sans-serif;
+}
+.layer { position: absolute; inset: 0; }
+.spot { position: absolute; inset: 0; background: radial-gradient(ellipse 60% 55% at 50% 45%, rgba(0, 229, 239, 0.08), rgba(0, 229, 239, 0) 70%); }
+.vig { position: absolute; inset: 0; background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0) 55%, rgba(0, 0, 0, 0.7)); }
+.foot { position: absolute; left: 72px; bottom: 26px; max-width: 1100px; font-size: 18px; line-height: 1.35; color: #93a3b1; }
+.mono { font-family: ui-monospace, monospace; }
+.kicker { font-size: 22px; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase; color: #00e5ef; }
+.green { color: #3ddc97; } .cyan { color: #00e5ef; } .amber { color: #ffb547; } .red { color: #ff6b6b; } .muted { color: #93a3b1; }
+.chip {
+  display: inline-flex; align-items: center; gap: 10px; padding: 10px 18px; border-radius: 999px;
+  font-size: 22px; font-weight: 600; border: 2px solid currentColor; background: rgba(5, 7, 10, 0.85);
+}
+.chip i { display: block; width: 12px; height: 12px; border-radius: 50%; background: currentColor; }

@@ -1,0 +1,1 @@
+Lucia tells Minsky what happened, in her own words. It finds the charge in her account, checks it against the bank's rules, and asks before doing anything. Then it opens the case. Any hour. No queue.

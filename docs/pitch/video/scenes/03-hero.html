@@ -1,0 +1,74 @@
+<!doctype html>
+<html>
+  <head><meta charset="UTF-8" /></head>
+  <body>
+    <template>
+      <style>
+        /*@include base.css*/
+        /*@include phone.css*/
+        #s3 .ph { left: 1180px; top: 70px; }
+        #s3 .co { position: absolute; left: 150px; width: 900px; }
+        #s3 .co .k { font-size: 22px; font-weight: 700; letter-spacing: 0.16em; color: #00e5ef; }
+        #s3 .co .t { font-size: 84px; font-weight: 750; letter-spacing: -0.04em; line-height: 1.05; margin-top: 8px; }
+        #s3 .co .s { font-size: 30px; color: #93a3b1; margin-top: 10px; }
+        #s3 #s3-c1 { top: 200px; } #s3 #s3-c2 { top: 430px; } #s3 #s3-c3 { top: 660px; }
+        #s3 #s3-c3 .t .mono { font-size: 56px; color: #3ddc97; letter-spacing: 0; }
+        #s3 .final { position: absolute; left: 150px; top: 330px; width: 900px; }
+        #s3 .final div { font-size: 104px; font-weight: 750; letter-spacing: -0.045em; line-height: 1.08; }
+        #s3 .btn { position: relative; overflow: hidden; }
+        #s3 .tap { position: absolute; left: 50%; top: 50%; width: 120px; height: 120px; margin: -60px 0 0 -60px; border-radius: 50%; background: rgba(255, 255, 255, 0.55); }
+        #s3 .done { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 14px; font-weight: 650; color: #3ddc97; }
+        #s3 .done i { display: block; width: 9px; height: 9px; border-radius: 50%; background: #3ddc97; }
+      </style>
+      <div id="root" data-composition-id="s3" data-width="1920" data-height="1080">
+        <div id="s3" class="scene">
+          <div class="spot"></div>
+          <div id="s3-phone" class="ph">
+            <!--@include phone-top.html-->
+            <div class="msg me">Hi. On Friday I paid 32.50 USD at El Buen Sabor Restaurant, but my account shows a bigger charge.</div>
+            <div class="msg bot">Sorry about that. I checked your transactions from Friday, June 12 and found this charge:
+              <div class="txn"><b>El Buen Sabor Restaurant · 48.50 USD</b><span>Jun 12, 21:14 · Credit card •••• 4821</span><span>Approved</span></div>
+              Is this the charge you want to dispute?</div>
+            <div class="msg me">Yes, that one. I was charged 16 USD too much.</div>
+            <div class="msg bot">Got it. Should I open a claim for an incorrect charge of 16 USD on this transaction?
+              <div class="btns" style="margin-top:10px"><div id="s3-yes" class="btn yes">Yes<i id="s3-tap" class="tap"></i></div><div class="btn">No</div></div></div>
+            <div class="msg me">Yes.</div>
+            <div class="msg bot">Done. Your claim <b class="mono">DSP-4FEED87B</b> is open. Our team will review it and keep you posted here.
+              <div class="done"><i></i>Case opened · verified</div></div>
+            <!--@include phone-bottom.html-->
+          </div>
+          <div id="s3-cos" class="layer">
+            <div id="s3-c1" class="co"><div class="k">01</div><div class="t">Finds the charge.</div><div class="s">Only in Lucía's own account.</div></div>
+            <div id="s3-c2" class="co"><div class="k">02</div><div class="t">Asks before acting.</div><div class="s">Nothing happens without a “yes”.</div></div>
+            <div id="s3-c3" class="co"><div class="k">03</div><div class="t">Opens the case. <span class="mono">DSP-4FEED87B</span></div><div class="s">Checked in the bank's records before Lucía hears it.</div></div>
+          </div>
+          <div id="s3-final" class="final"><div>Three messages.</div><div class="cyan">Any hour.</div><div class="cyan">No queue.</div></div>
+          <div id="s3-foot" class="foot">Recreated from the working system and translated to English. Minsky serves customers in Spanish and Portuguese.</div>
+          <div class="vig"></div>
+        </div>
+      </div>
+      <script>
+        //@include chat.js
+        const tl = gsap.timeline({ paused: true });
+        const phone = document.getElementById("s3-phone");
+        gsap.set(phone, { transformPerspective: 1600, rotationY: -9 });
+        tl.fromTo(phone, { opacity: 0, x: 80 }, { opacity: 1, x: 0, duration: 0.9, ease: "power3.out" }, 0);
+        hfPlayChat(tl, phone, [1.0, 3.0, 6.0, 7.6, 10.0, 10.9]);
+        tl.fromTo("#s3-foot", { opacity: 0 }, { opacity: 1, duration: 0.6 }, 1.2);
+        const co = (sel, t) => tl.fromTo(sel, { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.6, ease: "power3.out" }, t);
+        co("#s3-c1", 3.3);
+        tl.to("#s3-c1", { opacity: 0.35, duration: 0.4 }, 7.9);
+        co("#s3-c2", 8.0);
+        // the tap on "Yes"
+        tl.fromTo("#s3-tap", { scale: 0, opacity: 0.9 }, { scale: 1.4, opacity: 0, duration: 0.5, ease: "power2.out" }, 9.7);
+        tl.fromTo("#s3-yes", { scale: 1 }, { scale: 0.9, duration: 0.1, yoyo: true, repeat: 1, ease: "power1.inOut" }, 9.7);
+        tl.to("#s3-c2", { opacity: 0.35, duration: 0.4 }, 11.1);
+        co("#s3-c3", 11.2);
+        tl.to("#s3-cos", { opacity: 0, x: -40, duration: 0.6, ease: "power2.in" }, 13.4);
+        tl.fromTo("#s3-final div", { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.6, ease: "power3.out", stagger: 0.45 }, 13.9);
+        tl.to(["#s3-final", "#s3-foot"], { opacity: 0, duration: 0.6 }, 20.6);
+        window.__timelines["s3"] = tl;
+      </script>
+    </template>
+  </body>
+</html>

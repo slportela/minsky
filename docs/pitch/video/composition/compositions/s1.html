@@ -1,0 +1,205 @@
+<!doctype html>
+<html>
+  <head><meta charset="UTF-8" /></head>
+  <body>
+    <template>
+      <style>
+        /* Shared look for every scene (inlined into each sub-composition by build.py). Deck palette. */
+#root { position: absolute; inset: 0; }
+.scene {
+  position: absolute; inset: 0; overflow: hidden;
+  background: #05070a; color: #e8eef2;
+  font-family: system-ui, sans-serif;
+}
+.layer { position: absolute; inset: 0; }
+.spot { position: absolute; inset: 0; background: radial-gradient(ellipse 60% 55% at 50% 45%, rgba(0, 229, 239, 0.08), rgba(0, 229, 239, 0) 70%); }
+.vig { position: absolute; inset: 0; background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0) 55%, rgba(0, 0, 0, 0.7)); }
+.foot { position: absolute; left: 72px; bottom: 26px; max-width: 1100px; font-size: 18px; line-height: 1.35; color: #93a3b1; }
+.mono { font-family: ui-monospace, monospace; }
+.kicker { font-size: 22px; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase; color: #00e5ef; }
+.green { color: #3ddc97; } .cyan { color: #00e5ef; } .amber { color: #ffb547; } .red { color: #ff6b6b; } .muted { color: #93a3b1; }
+.chip {
+  display: inline-flex; align-items: center; gap: 10px; padding: 10px 18px; border-radius: 999px;
+  font-size: 22px; font-weight: 600; border: 2px solid currentColor; background: rgba(5, 7, 10, 0.85);
+}
+.chip i { display: block; width: 12px; height: 12px; border-radius: 50%; background: currentColor; }
+
+        /* Phone + chat mockup, modeled on the real /chat (customer and assistant bubbles, transaction card, Yes/No). */
+.ph {
+  position: absolute; width: 410px; height: 840px; border-radius: 64px; padding: 13px;
+  background: linear-gradient(160deg, #1a222c, #0b0f14 40%);
+  box-shadow: 0 50px 140px rgba(0, 0, 0, 0.75), 0 0 0 2px #2a3644, inset 0 0 0 2px #121922;
+}
+.ph-screen { position: relative; width: 100%; height: 100%; border-radius: 52px; overflow: hidden; background: #0a0e13; display: flex; flex-direction: column; }
+.ph-island { position: absolute; top: 11px; left: 50%; width: 118px; height: 34px; margin-left: -59px; border-radius: 20px; background: #000; z-index: 5; }
+.ph-status { height: 52px; flex: none; display: flex; align-items: center; justify-content: space-between; padding: 6px 34px 0; font-size: 16px; font-weight: 600; }
+.ph-status .bars { display: flex; gap: 3px; align-items: flex-end; }
+.ph-status .bars b { display: block; width: 4px; background: #e8eef2; border-radius: 1px; }
+.ph-head { flex: none; display: flex; align-items: center; gap: 12px; padding: 8px 18px 12px; border-bottom: 1px solid #1a2430; }
+.ph-av { width: 40px; height: 40px; border-radius: 50%; flex: none; background: linear-gradient(135deg, #00e5ef, #3ddc97); color: #04110f; display: grid; place-items: center; font-weight: 800; font-size: 19px; }
+.ph-name { font-size: 17px; font-weight: 650; }
+.ph-sub { position: relative; height: 18px; font-size: 13px; }
+.ph-sub span { position: absolute; left: 0; top: 0; white-space: nowrap; }
+.ph-sub .typing { color: #00e5ef; opacity: 0; }
+.ph-msgs { position: relative; flex: 1; overflow: hidden; }
+.ph-inner { position: absolute; left: 0; right: 0; top: 0; padding: 16px 14px 20px; }
+.msg { width: fit-content; max-width: 84%; padding: 11px 15px; border-radius: 20px; font-size: 17px; line-height: 1.36; margin-bottom: 10px; }
+.msg.me { margin-left: auto; background: #1b64f2; color: #fff; border-bottom-right-radius: 6px; }
+.msg.bot { background: #151d26; border: 1px solid #243242; border-bottom-left-radius: 6px; }
+.txn { margin: 9px 0 6px; padding: 9px 12px; border-radius: 12px; background: #0a0f14; border: 1px solid #1f3a40; border-left: 4px solid #00e5ef; }
+.txn b { display: block; font-size: 16px; font-weight: 650; }
+.txn span { display: block; font-size: 14px; color: #93a3b1; font-family: ui-monospace, monospace; }
+.txn.no { border-left-color: #ff6b6b; }
+.btns { display: flex; gap: 10px; margin: 2px 0 10px; }
+.btn { width: 96px; padding: 10px 0; text-align: center; border-radius: 999px; font-size: 16px; font-weight: 650; border: 1.5px solid #3a4a5a; color: #e8eef2; }
+.btn.yes { background: #00e5ef; border-color: #00e5ef; color: #04110f; }
+.ph-input { flex: none; margin: 8px 14px 22px; height: 46px; border-radius: 23px; border: 1px solid #243242; display: flex; align-items: center; padding: 0 18px; color: #6f7f8d; font-size: 16px; }
+/* lock screen */
+.lock { position: absolute; inset: 0; background: radial-gradient(ellipse 120% 70% at 30% 10%, #1d3b4a, rgba(29, 59, 74, 0) 60%), radial-gradient(ellipse 90% 60% at 80% 90%, #3a2547, rgba(58, 37, 71, 0) 60%), #0a0e13; }
+.lock-time { position: absolute; top: 96px; left: 0; right: 0; text-align: center; font-size: 92px; font-weight: 300; letter-spacing: -0.02em; }
+.lock-date { position: absolute; top: 76px; left: 0; right: 0; text-align: center; font-size: 19px; font-weight: 500; color: #d4dde4; }
+.notif { position: absolute; left: 14px; right: 14px; top: 250px; padding: 14px 16px; border-radius: 24px; background: rgba(40, 48, 58, 0.82); display: flex; gap: 12px; }
+.notif .ic { width: 40px; height: 40px; border-radius: 10px; flex: none; display: grid; place-items: center; font-weight: 800; font-size: 15px; }
+.notif .tx { flex: 1; }
+.notif .app { display: flex; justify-content: space-between; font-size: 13px; color: #c4ced6; letter-spacing: 0.04em; text-transform: uppercase; }
+.notif .t { font-size: 16px; font-weight: 650; margin-top: 2px; }
+.notif .b { font-size: 15px; color: #e3e9ee; margin-top: 1px; }
+
+        #s1 .ph { left: 755px; top: 70px; filter: saturate(0.25); }
+        #s1 .call { position: absolute; inset: 0; background: linear-gradient(180deg, #1c232b, #0b0f14); }
+        #s1 .call .who { position: absolute; top: 120px; left: 0; right: 0; text-align: center; font-size: 34px; font-weight: 600; }
+        #s1 .call .dept { position: absolute; top: 168px; left: 0; right: 0; text-align: center; font-size: 18px; color: #93a3b1; }
+        #s1 .st { position: absolute; top: 214px; left: 0; right: 0; text-align: center; font-size: 22px; color: #c4ced6; }
+        #s1 .wave { position: absolute; top: 300px; left: 60px; right: 60px; height: 90px; display: flex; gap: 8px; align-items: center; justify-content: center; }
+        #s1 .wave b { display: block; width: 10px; height: 60px; border-radius: 5px; background: #6f7f8d; }
+        #s1 .keys { position: absolute; bottom: 70px; left: 0; right: 0; display: flex; justify-content: center; gap: 34px; }
+        #s1 .keys b { display: block; width: 74px; height: 74px; border-radius: 50%; background: #2a3440; }
+        #s1 .keys b.end { background: #c0392b; }
+        #s1 .later { position: absolute; left: 22px; right: 22px; top: 430px; padding: 18px 20px; border-radius: 20px; background: #20272f; font-size: 22px; text-align: center; color: #e3e9ee; }
+        #s1 .stats { position: absolute; left: 1010px; top: 190px; width: 800px; }
+        #s1 .stat { display: flex; align-items: baseline; gap: 30px; padding: 26px 0; border-bottom: 1px solid #1d2a35; }
+        #s1 .stat .n { width: 300px; flex: none; font-size: 120px; font-weight: 750; letter-spacing: -0.045em; line-height: 1; color: #ff6b6b; }
+        #s1 .stat .l { font-size: 34px; line-height: 1.25; color: #d4dde4; }
+        #s1 .big { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        #s1 .big .n { font-size: 260px; font-weight: 800; letter-spacing: -0.05em; line-height: 1; }
+        #s1 .big .l { font-size: 46px; color: #93a3b1; margin-top: 20px; }
+      </style>
+      <div id="root" data-composition-id="s1" data-width="1920" data-height="1080">
+        <div id="s1" class="scene">
+          <div id="s1-stage" class="layer">
+            <div id="s1-phone" class="ph">
+              <div class="ph-screen">
+                <div class="call">
+                  <div class="ph-island"></div>
+                  <div class="who">LATAM Bank</div>
+                  <div class="dept">Customer service</div>
+                  <div id="s1-st1" class="st">calling…</div>
+                  <div id="s1-st2" class="st">On hold · <span id="s1-hold" class="mono">00:00</span></div>
+                  <div id="s1-st3" class="st">In call · <span id="s1-call" class="mono">00:00</span></div>
+                  <div id="s1-st4" class="st">Call ended</div>
+                  <div id="s1-wave" class="wave"></div>
+                  <div id="s1-later" class="later">“We'll get back to you.”</div>
+                  <div class="keys"><b></b><b></b><b class="end"></b></div>
+                </div>
+              </div>
+            </div>
+            <div class="stats">
+              <div id="s1-a" class="stat"><span class="n" id="s1-an">0%</span><span class="l">of complaint calls end without a solution</span></div>
+              <div id="s1-b" class="stat"><span class="n" id="s1-bn">0%</span><span class="l">of all complaints are disputed charges</span></div>
+              <div id="s1-c" class="stat"><span class="n" id="s1-cn">0</span><span class="l">days to resolve a dispute (median)</span></div>
+            </div>
+          </div>
+          <div id="s1-big" class="big">
+            <div id="s1-bign" class="n">0</div>
+            <div id="s1-bigl" class="l">disputes in three years. One bank.</div>
+          </div>
+          <div id="s1-foot" class="foot">LATAM Bank dataset (synthetic): complaints and call-center tables, June 2023 to June 2026.</div>
+          <div class="vig"></div>
+        </div>
+      </div>
+      <script>
+        /* Chat playback shared by the phone scenes: reveal messages at set times, auto-scroll, "typing…" before bot replies. */
+function hfChatMeasure(phone) {
+  const area = phone.querySelector(".ph-msgs");
+  const inner = phone.querySelector(".ph-inner");
+  const viewH = area.clientHeight || 620;
+  const msgs = Array.from(inner.children);
+  const shifts = msgs.map((m) => Math.max(0, m.offsetTop + m.offsetHeight + 20 - viewH));
+  return { inner, msgs, shifts };
+}
+
+function hfPlayChat(tl, phone, times) {
+  const { inner, msgs, shifts } = hfChatMeasure(phone);
+  const typing = phone.querySelector(".ph-sub .typing");
+  const online = phone.querySelector(".ph-sub .online");
+  let prev = 0;
+  msgs.forEach((m, i) => {
+    const t = times[i];
+    if (t == null) return;
+    if (m.classList.contains("bot") && typing) {
+      const ts = Math.max(0, t - 0.85);
+      tl.fromTo(typing, { opacity: 0 }, { opacity: 1, duration: 0.15 }, ts);
+      tl.fromTo(online, { opacity: 1 }, { opacity: 0, duration: 0.15 }, ts);
+      tl.fromTo(typing, { opacity: 1 }, { opacity: 0, duration: 0.15, immediateRender: false }, t);
+      tl.fromTo(online, { opacity: 0 }, { opacity: 1, duration: 0.15, immediateRender: false }, t);
+    }
+    tl.fromTo(m, { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.35, ease: "power2.out" }, t);
+    if (shifts[i] > prev) {
+      tl.fromTo(inner, { y: -prev }, { y: -shifts[i], duration: 0.4, ease: "power2.inOut", immediateRender: false }, t - 0.05);
+      prev = shifts[i];
+    }
+  });
+}
+
+function hfFinalChat(phone) {
+  const { inner, shifts } = hfChatMeasure(phone);
+  gsap.set(inner, { y: -shifts[shifts.length - 1] });
+}
+
+function hfCount(tl, el, to, at, dur, fmt) {
+  const o = { v: 0 };
+  el.textContent = fmt(0);
+  tl.to(o, { v: to, duration: dur, ease: "power2.out", onUpdate: () => { el.textContent = fmt(o.v); } }, at);
+}
+
+        const tl = gsap.timeline({ paused: true });
+        const mmss = (s) => String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(Math.floor(s % 60)).padStart(2, "0");
+        // hold-music bars: deterministic heights driven by one proxy
+        const wave = document.getElementById("s1-wave");
+        const bars = [];
+        for (let i = 0; i < 14; i++) { const b = document.createElement("b"); wave.appendChild(b); bars.push(b); }
+        const w = { t: 0 };
+        const drawWave = () => bars.forEach((b, i) => { b.style.transform = "scaleY(" + (0.25 + 0.75 * Math.abs(Math.sin(w.t * 6 + i * 0.7) * Math.cos(w.t * 2.3 + i * 0.3))) + ")"; });
+        drawWave();
+        tl.fromTo("#s1-st1", { opacity: 1 }, { opacity: 0, duration: 0.2 }, 2.4);
+        tl.fromTo("#s1-st2", { opacity: 0 }, { opacity: 1, duration: 0.2 }, 2.5);
+        tl.fromTo("#s1-wave", { opacity: 0 }, { opacity: 1, duration: 0.3 }, 2.5);
+        tl.to(w, { t: 4, duration: 4, ease: "none", onUpdate: drawWave }, 2.5);
+        hfCount(tl, document.getElementById("s1-hold"), 120, 2.5, 1.6, mmss);
+        tl.to("#s1-st2", { opacity: 0, duration: 0.2 }, 4.2);
+        tl.to("#s1-wave", { opacity: 0, duration: 0.3 }, 4.2);
+        tl.fromTo("#s1-st3", { opacity: 0 }, { opacity: 1, duration: 0.2 }, 4.3);
+        hfCount(tl, document.getElementById("s1-call"), 432, 4.3, 1.8, mmss);
+        tl.to("#s1-st3", { opacity: 0, duration: 0.2 }, 6.3);
+        tl.fromTo("#s1-st4", { opacity: 0 }, { opacity: 1, duration: 0.2 }, 6.4);
+        tl.fromTo("#s1-later", { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.5, ease: "power2.out" }, 6.6);
+        // phone steps aside, stats arrive as the voice names them
+        tl.to("#s1-phone", { x: -470, duration: 1, ease: "power3.inOut" }, 7.6);
+        tl.fromTo("#s1-a", { opacity: 0, x: 60 }, { opacity: 1, x: 0, duration: 0.6, ease: "power3.out" }, 8.0);
+        hfCount(tl, document.getElementById("s1-an"), 56, 8.0, 0.9, (v) => Math.round(v) + "%");
+        tl.fromTo("#s1-foot", { opacity: 0 }, { opacity: 1, duration: 0.6 }, 8.2);
+        tl.fromTo("#s1-b", { opacity: 0, x: 60 }, { opacity: 1, x: 0, duration: 0.6, ease: "power3.out" }, 10.2);
+        hfCount(tl, document.getElementById("s1-bn"), 40, 10.2, 0.9, (v) => Math.round(v) + "%");
+        tl.fromTo("#s1-c", { opacity: 0, x: 60 }, { opacity: 1, x: 0, duration: 0.6, ease: "power3.out" }, 13.0);
+        hfCount(tl, document.getElementById("s1-cn"), 15, 13.0, 0.9, (v) => Math.round(v) + (v >= 14.99 ? "+" : ""));
+        // the scale: one number
+        tl.to("#s1-stage", { opacity: 0, scale: 0.96, duration: 0.7, ease: "power2.in" }, 16.0);
+        tl.fromTo("#s1-big", { opacity: 0, scale: 1.06 }, { opacity: 1, scale: 1, duration: 0.8, ease: "power3.out" }, 16.6);
+        hfCount(tl, document.getElementById("s1-bign"), 27133, 16.6, 1.8, (v) => Math.round(v).toLocaleString("en-US"));
+        tl.fromTo("#s1-bigl", { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.6 }, 17.8);
+        tl.to(["#s1-big", "#s1-foot"], { opacity: 0, duration: 0.7 }, 21.6);
+        window.__timelines["s1"] = tl;
+      </script>
+    </template>
+  </body>
+</html>

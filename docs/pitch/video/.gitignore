@@ -1,0 +1,8 @@
+# renders and generated audio stay out of git
+*.mp4
+brag.jpg
+composition/assets/vo/
+composition/assets/music/*.mp3
+composition/snapshots/
+composition/.hyperframes/
+composition/node_modules/

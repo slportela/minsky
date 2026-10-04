@@ -1,0 +1,64 @@
+<!doctype html>
+<html>
+  <head><meta charset="UTF-8" /></head>
+  <body>
+    <template>
+      <style>
+        /*@include base.css*/
+        #s7 .grid { position: absolute; inset: 0; opacity: 0.5; background-image: linear-gradient(#111a22 1px, rgba(0, 0, 0, 0) 1px), linear-gradient(90deg, #111a22 1px, rgba(0, 0, 0, 0) 1px); background-size: 64px 64px; }
+        #s7 .head { position: absolute; left: 0; right: 0; top: 130px; text-align: center; }
+        #s7 .head .t { font-size: 88px; font-weight: 750; letter-spacing: -0.04em; margin-top: 12px; }
+        #s7 .blocks { position: absolute; left: 150px; right: 150px; top: 390px; display: flex; align-items: stretch; gap: 0; }
+        #s7 .blk { width: 440px; padding: 30px 32px; border-radius: 22px; background: #0c1218; border: 2px solid #1d2a35; }
+        #s7 .blk .tag { font-size: 18px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; }
+        #s7 .blk .n { font-size: 46px; font-weight: 750; letter-spacing: -0.03em; margin-top: 10px; }
+        #s7 .blk .d { font-size: 24px; line-height: 1.35; color: #b9c6d0; margin-top: 10px; }
+        #s7 .blk.ai { border-color: #00e5ef; } #s7 .blk.code { border-color: #3ddc97; }
+        #s7 .arr { width: 100px; flex: none; position: relative; }
+        #s7 .arr b { position: absolute; left: 14px; right: 14px; top: 50%; height: 3px; background: #93a3b1; transform-origin: 0 50%; }
+        #s7 .arr i { position: absolute; right: 10px; top: 50%; width: 16px; height: 16px; margin-top: -7px; border-top: 3px solid #93a3b1; border-right: 3px solid #93a3b1; rotate: 45deg; }
+        #s7 .gs { position: absolute; left: 150px; right: 150px; top: 720px; display: flex; justify-content: space-between; }
+        #s7 .g { font-size: 32px; font-weight: 600; }
+        #s7 .g span { color: #3ddc97; margin-right: 12px; }
+        #s7 .ev { position: absolute; left: 0; right: 0; top: 830px; text-align: center; font-size: 28px; color: #93a3b1; }
+      </style>
+      <div id="root" data-composition-id="s7" data-width="1920" data-height="1080">
+        <div id="s7" class="scene">
+          <div id="s7-grid" class="grid"></div>
+          <div class="head"><div id="s7-k" class="kicker">Under the hood</div><div id="s7-t" class="t">The AI reads. Code decides.</div></div>
+          <div class="blocks">
+            <div id="s7-b1" class="blk ai"><div class="tag cyan">Language model</div><div class="n">Reads</div><div class="d">Merchant, amount, date, “it wasn't me”: free text, typos and all.</div></div>
+            <div class="arr" id="s7-a1"><b></b><i></i></div>
+            <div id="s7-b2" class="blk code"><div class="tag green">Tested code</div><div class="n">Decides</div><div class="d">The bank's dispute rules on verified facts. Every decision cites its rule.</div></div>
+            <div class="arr" id="s7-a2"><b></b><i></i></div>
+            <div id="s7-b3" class="blk code"><div class="tag green">Tested code</div><div class="n">Acts, then checks</div><div class="d">Opens the case or blocks the card after a “yes”, then reads it back.</div></div>
+          </div>
+          <div class="gs">
+            <div class="g"><span>✓</span>Never another customer's data</div>
+            <div class="g"><span>✓</span>Nothing without a “yes”</div>
+            <div class="g"><span>✓</span>No action claimed until verified</div>
+          </div>
+          <div id="s7-ev" class="ev">Simulated customers chat with the real system on every change; we grade what changed in the database.</div>
+          <div class="vig"></div>
+        </div>
+      </div>
+      <script>
+        const tl = gsap.timeline({ paused: true });
+        tl.fromTo("#s7-grid", { opacity: 0 }, { opacity: 0.5, duration: 1.2 }, 0);
+        tl.fromTo("#s7-k", { opacity: 0 }, { opacity: 1, duration: 0.5 }, 0.6);
+        tl.fromTo("#s7-t", { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 0.7, ease: "power3.out" }, 1.0);
+        tl.fromTo("#s7-b1", { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.6, ease: "power3.out" }, 2.8);
+        tl.fromTo("#s7-a1 b", { scaleX: 0 }, { scaleX: 1, duration: 0.4 }, 4.2);
+        tl.fromTo("#s7-a1 i", { opacity: 0 }, { opacity: 1, duration: 0.2 }, 4.5);
+        tl.fromTo("#s7-b2", { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.6, ease: "power3.out" }, 4.6);
+        tl.fromTo("#s7-a2 b", { scaleX: 0 }, { scaleX: 1, duration: 0.4 }, 5.6);
+        tl.fromTo("#s7-a2 i", { opacity: 0 }, { opacity: 1, duration: 0.2 }, 5.9);
+        tl.fromTo("#s7-b3", { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.6, ease: "power3.out" }, 6.0);
+        tl.fromTo("#s7 .g", { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: 0.5, stagger: 0.8, ease: "power2.out" }, 7.0);
+        tl.fromTo("#s7-ev", { opacity: 0 }, { opacity: 1, duration: 0.6 }, 10.4);
+        tl.to("#s7", { opacity: 0, duration: 0.6 }, 14.4);
+        window.__timelines["s7"] = tl;
+      </script>
+    </template>
+  </body>
+</html>

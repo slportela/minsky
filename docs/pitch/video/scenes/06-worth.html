@@ -1,0 +1,89 @@
+<!doctype html>
+<html>
+  <head><meta charset="UTF-8" /></head>
+  <body>
+    <template>
+      <style>
+        /*@include base.css*/
+        #s6 canvas { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; }
+        #s6 .count { position: absolute; left: 120px; top: 70px; }
+        #s6 .count .n { font-size: 64px; font-weight: 750; letter-spacing: -0.03em; font-family: ui-monospace, monospace; }
+        #s6 .count .l { font-size: 26px; color: #93a3b1; }
+        #s6 .node { position: absolute; left: 860px; top: 532px; width: 200px; height: 56px; border-radius: 999px; border: 2px solid #00e5ef; background: #05070a; display: grid; place-items: center; font-size: 26px; font-weight: 700; }
+        #s6 .lab { position: absolute; top: 784px; width: 360px; margin-left: -180px; text-align: center; font-size: 26px; font-weight: 600; }
+        #s6 .lab b { font-size: 34px; }
+        #s6 #s6-lg { left: 638px; } #s6 #s6-lc { left: 1070px; } #s6 #s6-la { left: 1400px; }
+        #s6 .brk { position: absolute; left: 260px; top: 600px; width: 864px; height: 20px; border: 3px solid #e8eef2; border-bottom: 0; border-radius: 6px 6px 0 0; }
+        #s6 .hero { position: absolute; left: 260px; width: 864px; top: 310px; text-align: center; }
+        #s6 .hero .n { font-size: 190px; font-weight: 800; letter-spacing: -0.05em; line-height: 1; }
+        #s6 .hero .l { font-size: 36px; color: #d4dde4; margin-top: 6px; }
+        #s6 .card { position: absolute; left: 1260px; top: 360px; width: 420px; text-align: center; }
+        #s6 .card .n { font-size: 120px; font-weight: 800; letter-spacing: -0.05em; line-height: 1; color: #3ddc97; }
+        #s6 .card .l { font-size: 32px; color: #d4dde4; }
+        #s6 .hours { position: absolute; left: 0; right: 0; top: 866px; text-align: center; font-size: 30px; color: #b9c6d0; }
+      </style>
+      <div id="root" data-composition-id="s6" data-width="1920" data-height="1080">
+        <div id="s6" class="scene">
+          <canvas id="s6-cv" width="1920" height="1080"></canvas>
+          <div id="s6-count" class="count"><div id="s6-cn" class="n">0</div><div class="l">recent charges · the bank's rules applied to each one¹</div></div>
+          <div id="s6-node" class="node">Minsky</div>
+          <div id="s6-lg" class="lab green"><b>54%</b> case opened</div>
+          <div id="s6-lc" class="lab cyan"><b>8%</b> nothing to dispute</div>
+          <div id="s6-la" class="lab amber"><b>38%</b> to a person</div>
+          <div id="s6-brk" class="brk"></div>
+          <div id="s6-hero" class="hero"><div class="n">62%</div><div class="l">never need an agent to get started¹</div></div>
+          <div id="s6-card" class="card"><div class="n">96%</div><div class="l">for card purchases¹</div></div>
+          <div id="s6-hours" class="hours">Today, dispute calls take about 1,600 agent hours a year.¹</div>
+          <div id="s6-foot" class="foot">¹ Estimates: the bank's dispute rules applied to the 425,209 charges in the last 120 days of data, assuming any recent charge is equally likely to be disputed. “It wasn't me” claims go to a person and are not counted.</div>
+          <div class="vig"></div>
+        </div>
+      </div>
+      <script>
+        //@include chat.js
+        const tl = gsap.timeline({ paused: true });
+        const cv = document.getElementById("s6-cv"), ctx = cv.getContext("2d");
+        // seeded PRNG (determinism)
+        let seed = 7;
+        const rnd = () => { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; };
+        const COLS = 116, ROWS = 10, CELL = 12, X0 = 260, Y0 = 640;
+        const NODE = { x: 960, y: 560 };
+        const COL = ["#3ddc97", "#00e5ef", "#ffb547"];
+        const dots = [];
+        for (let c = 0; c < COLS; c++) for (let r = 0; r < ROWS; r++) {
+          const cat = c < 63 ? 0 : c < 72 ? 1 : 2;
+          dots.push({ sx: 120 + rnd() * 1680, sy: 170 + rnd() * 300, tx: X0 + c * CELL + 6, ty: Y0 + r * CELL + 6, cat, d: (c / COLS) * 1.8 + rnd() * 0.5, ph: rnd() * 6.28 });
+        }
+        const S = { a: 0, p: 0 };
+        const draw = () => {
+          ctx.clearRect(0, 0, 1920, 1080);
+          for (const o of dots) {
+            const t = Math.min(1, Math.max(0, (S.p - o.d) / 1.4));
+            const e = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+            const sx = o.sx + Math.sin(S.a * 2 + o.ph) * 6 * (1 - e), sy = o.sy + Math.cos(S.a * 2 + o.ph) * 6 * (1 - e);
+            const x = (1 - e) * (1 - e) * sx + 2 * (1 - e) * e * NODE.x + e * e * o.tx;
+            const y = (1 - e) * (1 - e) * sy + 2 * (1 - e) * e * NODE.y + e * e * o.ty;
+            ctx.globalAlpha = Math.min(1, S.a);
+            ctx.fillStyle = e > 0.55 ? COL[o.cat] : "#5d6b78";
+            ctx.beginPath(); ctx.arc(x, y, 4, 0, 6.2832); ctx.fill();
+          }
+        };
+        draw();
+        tl.to(S, { a: 1, duration: 1.0, ease: "power1.out", onUpdate: draw }, 0.2);
+        tl.fromTo("#s6-count", { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: 0.6 }, 0.3);
+        hfCount(tl, document.getElementById("s6-cn"), 425209, 0.3, 1.6, (v) => Math.round(v).toLocaleString("en-US"));
+        tl.fromTo("#s6-foot", { opacity: 0 }, { opacity: 1, duration: 0.6 }, 0.8);
+        tl.fromTo("#s6-node", { opacity: 0, scale: 0.8 }, { opacity: 1, scale: 1, duration: 0.5, ease: "back.out(2)" }, 1.3);
+        tl.to(S, { p: 3.8, duration: 3.6, ease: "none", onUpdate: draw }, 1.6);
+        tl.to(S, { a: 3, duration: 3.6, ease: "none" }, 1.6);
+        tl.to("#s6-node", { opacity: 0, duration: 0.4 }, 5.0);
+        tl.fromTo(["#s6-lg", "#s6-lc", "#s6-la"], { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.5, stagger: 0.2 }, 4.8);
+        tl.fromTo("#s6-brk", { opacity: 0, scaleX: 0.2 }, { opacity: 1, scaleX: 1, duration: 0.5, ease: "power3.out" }, 5.6);
+        tl.fromTo("#s6-hero", { opacity: 0, y: 30, scale: 0.94 }, { opacity: 1, y: 0, scale: 1, duration: 0.7, ease: "power3.out" }, 5.7);
+        tl.fromTo("#s6-card", { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.7, ease: "power3.out" }, 8.4);
+        tl.fromTo("#s6-hours", { opacity: 0 }, { opacity: 1, duration: 0.6 }, 11.0);
+        tl.to("#s6", { opacity: 0, duration: 0.6 }, 16.4);
+        window.__timelines["s6"] = tl;
+      </script>
+    </template>
+  </body>
+</html>

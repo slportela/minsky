@@ -1,0 +1,126 @@
+<!doctype html>
+<html>
+  <head><meta charset="UTF-8" /></head>
+  <body>
+    <template>
+      <style>
+        /* Shared look for every scene (inlined into each sub-composition by build.py). Deck palette. */
+#root { position: absolute; inset: 0; }
+.scene {
+  position: absolute; inset: 0; overflow: hidden;
+  background: #05070a; color: #e8eef2;
+  font-family: system-ui, sans-serif;
+}
+.layer { position: absolute; inset: 0; }
+.spot { position: absolute; inset: 0; background: radial-gradient(ellipse 60% 55% at 50% 45%, rgba(0, 229, 239, 0.08), rgba(0, 229, 239, 0) 70%); }
+.vig { position: absolute; inset: 0; background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0) 55%, rgba(0, 0, 0, 0.7)); }
+.foot { position: absolute; left: 72px; bottom: 26px; max-width: 1100px; font-size: 18px; line-height: 1.35; color: #93a3b1; }
+.mono { font-family: ui-monospace, monospace; }
+.kicker { font-size: 22px; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase; color: #00e5ef; }
+.green { color: #3ddc97; } .cyan { color: #00e5ef; } .amber { color: #ffb547; } .red { color: #ff6b6b; } .muted { color: #93a3b1; }
+.chip {
+  display: inline-flex; align-items: center; gap: 10px; padding: 10px 18px; border-radius: 999px;
+  font-size: 22px; font-weight: 600; border: 2px solid currentColor; background: rgba(5, 7, 10, 0.85);
+}
+.chip i { display: block; width: 12px; height: 12px; border-radius: 50%; background: currentColor; }
+
+        #s5 .omt { position: absolute; left: 0; right: 0; top: 470px; text-align: center; font-size: 96px; font-weight: 700; letter-spacing: -0.04em; }
+        #s5 .lap { position: absolute; left: 230px; top: 96px; width: 1460px; height: 830px; border-radius: 22px; background: #0b1016; border: 2px solid #243242; box-shadow: 0 50px 140px rgba(0, 0, 0, 0.75); overflow: hidden; }
+        #s5 .bar { height: 46px; display: flex; align-items: center; gap: 10px; padding: 0 18px; background: #121922; border-bottom: 1px solid #1d2a35; }
+        #s5 .bar b { display: block; width: 13px; height: 13px; border-radius: 50%; background: #2f3b48; }
+        #s5 .bar span { margin-left: 18px; font-size: 16px; color: #93a3b1; }
+        #s5 .app { position: absolute; top: 46px; left: 0; right: 0; bottom: 0; padding: 22px 26px; }
+        #s5 .h1 { font-size: 30px; font-weight: 700; }
+        #s5 .tiles { display: flex; gap: 14px; margin: 16px 0 18px; }
+        #s5 .tile { width: 150px; padding: 12px 16px; border-radius: 12px; background: #121922; border: 1px solid #1d2a35; }
+        #s5 .tile .n { font-size: 34px; font-weight: 750; }
+        #s5 .tile .l { font-size: 14px; color: #93a3b1; }
+        #s5 .queue { position: absolute; left: 26px; top: 190px; width: 600px; height: 520px; }
+        #s5 .row { position: absolute; left: 0; width: 600px; height: 66px; padding: 0 16px; border-radius: 12px; display: flex; align-items: center; gap: 14px; background: #10161d; border: 1px solid #1a2430; }
+        #s5 .row .id { width: 120px; font-size: 16px; font-family: ui-monospace, monospace; }
+        #s5 .row .ty { flex: 1; font-size: 17px; }
+        #s5 .row .am { width: 110px; text-align: right; font-size: 16px; font-family: ui-monospace, monospace; color: #c4ced6; }
+        #s5 .row .du { width: 52px; text-align: right; font-size: 15px; color: #93a3b1; }
+        #s5 .badge { width: 86px; text-align: center; padding: 4px 0; border-radius: 999px; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; border: 1.5px solid currentColor; }
+        #s5 .crit { color: #ff6b6b; } #s5 .high { color: #ffb547; } #s5 .norm { color: #93a3b1; }
+        #s5 .row.sel { border-color: #00e5ef; background: #0c1d22; }
+        #s5 .detail { position: absolute; left: 656px; top: 190px; width: 752px; height: 590px; padding: 20px 24px; border-radius: 14px; background: #10161d; border: 1px solid #1d2a35; }
+        #s5 .detail .t { font-size: 26px; font-weight: 700; display: flex; align-items: center; gap: 14px; }
+        #s5 .detail .why { font-size: 17px; color: #c4ced6; margin-top: 8px; }
+        #s5 .sec { margin-top: 16px; }
+        #s5 .sec h4 { margin: 0 0 6px; font-size: 14px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #00e5ef; }
+        #s5 .sec p { margin: 3px 0; font-size: 18px; line-height: 1.35; }
+        #s5 .claim { position: absolute; right: 24px; bottom: 20px; width: 210px; padding: 12px 0; text-align: center; border-radius: 999px; background: #00e5ef; color: #04110f; font-size: 18px; font-weight: 700; }
+        #s5 .claimed { position: absolute; right: 24px; bottom: 20px; width: 210px; padding: 12px 0; text-align: center; border-radius: 999px; border: 2px solid #3ddc97; color: #3ddc97; font-size: 18px; font-weight: 700; }
+        #s5 .cursor { position: absolute; left: 0; top: 0; width: 26px; height: 26px; border-radius: 50%; background: rgba(255, 255, 255, 0.9); border: 3px solid #05070a; }
+      </style>
+      <div id="root" data-composition-id="s5" data-width="1920" data-height="1080">
+        <div id="s5" class="scene">
+          <div class="spot"></div>
+          <div id="s5-omt" class="omt">One more thing.</div>
+          <div id="s5-lap" class="lap">
+            <div class="bar"><b></b><b></b><b></b><span>Minsky · agent console · disputes and fraud</span></div>
+            <div class="app">
+              <div class="h1">Back-office queue</div>
+              <div class="tiles">
+                <div class="tile"><div class="n">24</div><div class="l">Open</div></div>
+                <div class="tile"><div class="n red">3</div><div class="l">Overdue</div></div>
+                <div class="tile"><div class="n red">2</div><div class="l">Critical</div></div>
+                <div class="tile"><div class="n amber">5</div><div class="l">High</div></div>
+                <div class="tile"><div class="n">17</div><div class="l">Normal</div></div>
+              </div>
+            </div>
+            <div class="queue">
+              <div class="row" data-to="6"><span class="id">DSP-81A2</span><span class="ty">Wrong amount</span><span class="badge norm">normal</span><span class="am">16.00</span><span class="du">13 d</span></div>
+              <div class="row" data-to="5"><span class="id">DSP-77C0</span><span class="ty">Duplicate charge</span><span class="badge norm">normal</span><span class="am">42.10</span><span class="du">12 d</span></div>
+              <div class="row" id="s5-target" data-to="1"><span class="id">HND-7C21</span><span class="ty">Possible fraud</span><span class="badge crit">critical</span><span class="am">25.00</span><span class="du">4 h</span></div>
+              <div class="row" data-to="3"><span class="id">DSP-90B4</span><span class="ty">Unrecognized charge</span><span class="badge high">high</span><span class="am">61.30</span><span class="du">5 d</span></div>
+              <div class="row" data-to="2"><span class="id">HND-6E19</span><span class="ty">Above USD 500</span><span class="badge high">high</span><span class="am">1,250.00</span><span class="du">2 d</span></div>
+              <div class="row" data-to="4"><span class="id">DSP-72F8</span><span class="ty">Refund not received</span><span class="badge norm">normal</span><span class="am">88.00</span><span class="du">14 d</span></div>
+              <div class="row" data-to="0"><span class="id">HND-8D05</span><span class="ty">Possible fraud</span><span class="badge crit">critical</span><span class="am">310.00</span><span class="du">4 h</span></div>
+            </div>
+            <div id="s5-detail" class="detail">
+              <div class="t"><span class="mono">HND-7C21</span><span class="badge crit">critical</span><span style="font-size:20px;color:#93a3b1;font-weight:500">Possible fraud · due in 4 h</span></div>
+              <div class="why">Why this priority: the customer says they did not make the purchase; the card is already blocked.</div>
+              <div class="sec"><h4>Verified facts · bank records</h4><p>Cafe · <span class="mono">25.00 USD</span> · Jun 10, 09:30 · Approved</p><p>Credit card •••• 4821</p></div>
+              <div class="sec"><h4>What the customer said · their claim</h4><p>“There's a 25 USD charge at Cafe that I didn't make.”</p></div>
+              <div class="sec"><h4>Actions taken by the assistant</h4><p><span class="green">✓</span> Card blocked · 09:31 · confirmed by the customer</p><p><span class="green">✓</span> Handoff created · fraud queue</p></div>
+              <div class="sec"><h4>Open questions</h4><p>Was the card lost or stolen? Any other charges they don't recognize?</p></div>
+              <div id="s5-claim" class="claim">Claim case</div>
+              <div id="s5-claimed" class="claimed">Claimed by you</div>
+            </div>
+            <div id="s5-cursor" class="cursor"></div>
+          </div>
+          <div id="s5-foot" class="foot">Illustrative queue and case. Triage follows a synthetic policy written for the hackathon.</div>
+          <div class="vig"></div>
+        </div>
+      </div>
+      <script>
+        const tl = gsap.timeline({ paused: true });
+        const ROW = 74;
+        const rows = Array.from(document.querySelectorAll("#s5 .row"));
+        rows.forEach((r, i) => gsap.set(r, { y: i * ROW }));
+        tl.fromTo("#s5-omt", { opacity: 0, scale: 0.96 }, { opacity: 1, scale: 1, duration: 0.8, ease: "power3.out" }, 0.4);
+        tl.to("#s5-omt", { opacity: 0, duration: 0.5, ease: "power2.in" }, 2.5);
+        tl.fromTo("#s5-lap", { opacity: 0, y: 120, rotationX: 12, transformPerspective: 2000 }, { opacity: 1, y: 0, rotationX: 0, duration: 1.2, ease: "power3.out" }, 2.8);
+        tl.fromTo(rows, { opacity: 0, x: -20 }, { opacity: 1, x: 0, duration: 0.4, stagger: 0.08, ease: "power2.out" }, 3.4);
+        tl.fromTo("#s5-foot", { opacity: 0 }, { opacity: 1, duration: 0.6 }, 3.6);
+        // "today, an urgent case waits as long as any other" → then triage: fraud first
+        rows.forEach((r, i) => tl.fromTo(r, { y: i * ROW }, { y: Number(r.dataset.to) * ROW, duration: 1.0, ease: "power3.inOut", immediateRender: false }, 8.9));
+        tl.fromTo("#s5 .row .crit", { boxShadow: "0 0 0 0 rgba(255,107,107,0)" }, { boxShadow: "0 0 18px 2px rgba(255,107,107,0.55)", duration: 0.5, yoyo: true, repeat: 1 }, 9.9);
+        // open the fraud case
+        tl.fromTo("#s5-cursor", { x: 900, y: 700, opacity: 0 }, { x: 330, y: 300, opacity: 1, duration: 0.9, ease: "power2.inOut" }, 10.4);
+        tl.fromTo("#s5-target", { borderColor: "#1a2430", backgroundColor: "#10161d" }, { borderColor: "#00e5ef", backgroundColor: "#0c1d22", duration: 0.2 }, 11.3);
+        tl.fromTo("#s5-detail", { opacity: 0, x: 40 }, { opacity: 1, x: 0, duration: 0.6, ease: "power3.out" }, 11.4);
+        tl.fromTo("#s5-detail .sec", { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: 0.45, stagger: 0.35, ease: "power2.out" }, 11.8);
+        tl.to("#s5-cursor", { x: 1290, y: 760, duration: 0.9, ease: "power2.inOut" }, 14.4);
+        tl.fromTo("#s5-claim", { scale: 1 }, { scale: 0.93, duration: 0.1, yoyo: true, repeat: 1 }, 15.4);
+        tl.to("#s5-claim", { opacity: 0, duration: 0.2 }, 15.6);
+        tl.fromTo("#s5-claimed", { opacity: 0 }, { opacity: 1, duration: 0.3 }, 15.6);
+        tl.to("#s5-cursor", { opacity: 0, duration: 0.4 }, 16.4);
+        tl.to(["#s5-lap", "#s5-foot"], { opacity: 0, duration: 0.6 }, 19.2);
+        window.__timelines["s5"] = tl;
+      </script>
+    </template>
+  </body>
+</html>

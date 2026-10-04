@@ -1,0 +1,128 @@
+<!doctype html>
+<html>
+  <head><meta charset="UTF-8" /></head>
+  <body>
+    <template>
+      <style>
+        /* Shared look for every scene (inlined into each sub-composition by build.py). Deck palette. */
+#root { position: absolute; inset: 0; }
+.scene {
+  position: absolute; inset: 0; overflow: hidden;
+  background: #05070a; color: #e8eef2;
+  font-family: system-ui, sans-serif;
+}
+.layer { position: absolute; inset: 0; }
+.spot { position: absolute; inset: 0; background: radial-gradient(ellipse 60% 55% at 50% 45%, rgba(0, 229, 239, 0.08), rgba(0, 229, 239, 0) 70%); }
+.vig { position: absolute; inset: 0; background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0) 55%, rgba(0, 0, 0, 0.7)); }
+.foot { position: absolute; left: 72px; bottom: 26px; max-width: 1100px; font-size: 18px; line-height: 1.35; color: #93a3b1; }
+.mono { font-family: ui-monospace, monospace; }
+.kicker { font-size: 22px; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase; color: #00e5ef; }
+.green { color: #3ddc97; } .cyan { color: #00e5ef; } .amber { color: #ffb547; } .red { color: #ff6b6b; } .muted { color: #93a3b1; }
+.chip {
+  display: inline-flex; align-items: center; gap: 10px; padding: 10px 18px; border-radius: 999px;
+  font-size: 22px; font-weight: 600; border: 2px solid currentColor; background: rgba(5, 7, 10, 0.85);
+}
+.chip i { display: block; width: 12px; height: 12px; border-radius: 50%; background: currentColor; }
+
+        /* Phone + chat mockup, modeled on the real /chat (customer and assistant bubbles, transaction card, Yes/No). */
+.ph {
+  position: absolute; width: 410px; height: 840px; border-radius: 64px; padding: 13px;
+  background: linear-gradient(160deg, #1a222c, #0b0f14 40%);
+  box-shadow: 0 50px 140px rgba(0, 0, 0, 0.75), 0 0 0 2px #2a3644, inset 0 0 0 2px #121922;
+}
+.ph-screen { position: relative; width: 100%; height: 100%; border-radius: 52px; overflow: hidden; background: #0a0e13; display: flex; flex-direction: column; }
+.ph-island { position: absolute; top: 11px; left: 50%; width: 118px; height: 34px; margin-left: -59px; border-radius: 20px; background: #000; z-index: 5; }
+.ph-status { height: 52px; flex: none; display: flex; align-items: center; justify-content: space-between; padding: 6px 34px 0; font-size: 16px; font-weight: 600; }
+.ph-status .bars { display: flex; gap: 3px; align-items: flex-end; }
+.ph-status .bars b { display: block; width: 4px; background: #e8eef2; border-radius: 1px; }
+.ph-head { flex: none; display: flex; align-items: center; gap: 12px; padding: 8px 18px 12px; border-bottom: 1px solid #1a2430; }
+.ph-av { width: 40px; height: 40px; border-radius: 50%; flex: none; background: linear-gradient(135deg, #00e5ef, #3ddc97); color: #04110f; display: grid; place-items: center; font-weight: 800; font-size: 19px; }
+.ph-name { font-size: 17px; font-weight: 650; }
+.ph-sub { position: relative; height: 18px; font-size: 13px; }
+.ph-sub span { position: absolute; left: 0; top: 0; white-space: nowrap; }
+.ph-sub .typing { color: #00e5ef; opacity: 0; }
+.ph-msgs { position: relative; flex: 1; overflow: hidden; }
+.ph-inner { position: absolute; left: 0; right: 0; top: 0; padding: 16px 14px 20px; }
+.msg { width: fit-content; max-width: 84%; padding: 11px 15px; border-radius: 20px; font-size: 17px; line-height: 1.36; margin-bottom: 10px; }
+.msg.me { margin-left: auto; background: #1b64f2; color: #fff; border-bottom-right-radius: 6px; }
+.msg.bot { background: #151d26; border: 1px solid #243242; border-bottom-left-radius: 6px; }
+.txn { margin: 9px 0 6px; padding: 9px 12px; border-radius: 12px; background: #0a0f14; border: 1px solid #1f3a40; border-left: 4px solid #00e5ef; }
+.txn b { display: block; font-size: 16px; font-weight: 650; }
+.txn span { display: block; font-size: 14px; color: #93a3b1; font-family: ui-monospace, monospace; }
+.txn.no { border-left-color: #ff6b6b; }
+.btns { display: flex; gap: 10px; margin: 2px 0 10px; }
+.btn { width: 96px; padding: 10px 0; text-align: center; border-radius: 999px; font-size: 16px; font-weight: 650; border: 1.5px solid #3a4a5a; color: #e8eef2; }
+.btn.yes { background: #00e5ef; border-color: #00e5ef; color: #04110f; }
+.ph-input { flex: none; margin: 8px 14px 22px; height: 46px; border-radius: 23px; border: 1px solid #243242; display: flex; align-items: center; padding: 0 18px; color: #6f7f8d; font-size: 16px; }
+/* lock screen */
+.lock { position: absolute; inset: 0; background: radial-gradient(ellipse 120% 70% at 30% 10%, #1d3b4a, rgba(29, 59, 74, 0) 60%), radial-gradient(ellipse 90% 60% at 80% 90%, #3a2547, rgba(58, 37, 71, 0) 60%), #0a0e13; }
+.lock-time { position: absolute; top: 96px; left: 0; right: 0; text-align: center; font-size: 92px; font-weight: 300; letter-spacing: -0.02em; }
+.lock-date { position: absolute; top: 76px; left: 0; right: 0; text-align: center; font-size: 19px; font-weight: 500; color: #d4dde4; }
+.notif { position: absolute; left: 14px; right: 14px; top: 250px; padding: 14px 16px; border-radius: 24px; background: rgba(40, 48, 58, 0.82); display: flex; gap: 12px; }
+.notif .ic { width: 40px; height: 40px; border-radius: 10px; flex: none; display: grid; place-items: center; font-weight: 800; font-size: 15px; }
+.notif .tx { flex: 1; }
+.notif .app { display: flex; justify-content: space-between; font-size: 13px; color: #c4ced6; letter-spacing: 0.04em; text-transform: uppercase; }
+.notif .t { font-size: 16px; font-weight: 650; margin-top: 2px; }
+.notif .b { font-size: 15px; color: #e3e9ee; margin-top: 1px; }
+
+        #s0 .ph { left: 755px; top: 70px; }
+        #s0 .left { position: absolute; left: 150px; top: 380px; width: 560px; }
+        #s0 .when { font-size: 104px; font-weight: 700; letter-spacing: -0.04em; line-height: 1; }
+        #s0 .where { font-size: 36px; color: #93a3b1; margin-top: 18px; }
+        #s0 .right { position: absolute; left: 1260px; top: 360px; width: 520px; }
+        #s0 .row { display: flex; align-items: baseline; justify-content: space-between; padding: 22px 0; border-bottom: 1px solid #1d2a35; }
+        #s0 .row .l { font-size: 30px; color: #93a3b1; }
+        #s0 .row .v { font-size: 52px; font-weight: 700; letter-spacing: -0.02em; }
+        #s0 .row.bad .v { color: #ff6b6b; }
+        #s0 .notif .ic { background: #e8eef2; color: #05070a; }
+      </style>
+      <div id="root" data-composition-id="s0" data-width="1920" data-height="1080">
+        <div id="s0" class="scene">
+          <div class="spot"></div>
+          <div id="s0-phone" class="ph">
+            <div class="ph-screen">
+              <div class="lock"></div>
+              <div class="ph-island"></div>
+              <div class="lock-date">Friday, June 12</div>
+              <div class="lock-time">11:47</div>
+              <div id="s0-notif" class="notif">
+                <div class="ic">LB</div>
+                <div class="tx">
+                  <div class="app"><span>LATAM Bank</span><span>now</span></div>
+                  <div class="t">Purchase approved</div>
+                  <div class="b"><span id="s0-amt">48.50 USD</span> · El Buen Sabor Restaurant</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="left">
+            <div id="s0-when" class="when">11:47 p.m.</div>
+            <div id="s0-where" class="where">Mexico City</div>
+          </div>
+          <div class="right">
+            <div id="s0-r1" class="row"><span class="l">Dinner bill</span><span class="v">32.50 USD</span></div>
+            <div id="s0-r2" class="row bad"><span class="l">Charged</span><span class="v">48.50 USD</span></div>
+          </div>
+          <div id="s0-foot" class="foot">Lucía is a fictional customer. All data in this video is synthetic.</div>
+          <div class="vig"></div>
+        </div>
+      </div>
+      <script>
+        const tl = gsap.timeline({ paused: true });
+        tl.fromTo("#s0-phone", { opacity: 0, y: 60 }, { opacity: 1, y: 0, duration: 1.2, ease: "power3.out" }, 0.3);
+        // the buzz
+        tl.fromTo("#s0-notif", { opacity: 0, y: -40, scale: 0.96 }, { opacity: 1, y: 0, scale: 1, duration: 0.5, ease: "back.out(1.6)" }, 1.4);
+        tl.fromTo("#s0-phone", { x: 0 }, { x: 5, duration: 0.05, repeat: 7, yoyo: true, ease: "none", immediateRender: false }, 1.4);
+        tl.fromTo("#s0-phone", { x: 0 }, { x: 4, duration: 0.05, repeat: 5, yoyo: true, ease: "none", immediateRender: false }, 2.1);
+        tl.fromTo("#s0-foot", { opacity: 0 }, { opacity: 1, duration: 0.6 }, 1.6);
+        tl.fromTo("#s0-when", { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.7, ease: "power3.out" }, 2.8);
+        tl.fromTo("#s0-where", { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.7, ease: "power3.out" }, 3.6);
+        tl.fromTo("#s0-r1", { opacity: 0, x: 40 }, { opacity: 1, x: 0, duration: 0.6, ease: "power3.out" }, 5.6);
+        tl.fromTo("#s0-r2", { opacity: 0, x: 40 }, { opacity: 1, x: 0, duration: 0.6, ease: "power3.out" }, 7.6);
+        tl.fromTo("#s0-amt", { color: "#e3e9ee" }, { color: "#ff6b6b", duration: 0.4 }, 7.7);
+        tl.to(["#s0 .left", "#s0 .right", "#s0-foot"], { opacity: 0, duration: 0.5 }, 10.9);
+        window.__timelines["s0"] = tl;
+      </script>
+    </template>
+  </body>
+</html>

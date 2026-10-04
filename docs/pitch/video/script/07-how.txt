@@ -1,0 +1,1 @@
+Under the hood, one rule. The AI reads the message. Tested code decides, and acts. Every action is verified before the customer hears about it, and simulated customers test every change.

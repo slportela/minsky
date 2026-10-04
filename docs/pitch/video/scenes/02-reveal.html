@@ -1,0 +1,47 @@
+<!doctype html>
+<html>
+  <head><meta charset="UTF-8" /></head>
+  <body>
+    <template>
+      <style>
+        /*@include base.css*/
+        #s2 .q { position: absolute; left: 0; right: 0; top: 420px; text-align: center; font-size: 76px; font-weight: 600; letter-spacing: -0.03em; }
+        #s2 .q span { display: inline-block; }
+        #s2 .dots { position: absolute; left: 0; right: 0; top: 560px; display: flex; justify-content: center; gap: 22px; }
+        #s2 .dots b { display: block; width: 74px; height: 50px; border-radius: 22px; background: #1b64f2; }
+        #s2 .dots b:nth-child(2) { background: #151d26; border: 2px solid #00e5ef; }
+        #s2 .glow { position: absolute; left: 460px; top: 240px; width: 1000px; height: 600px; border-radius: 50%; background: radial-gradient(ellipse at center, rgba(0, 229, 239, 0.32), rgba(0, 229, 239, 0) 65%); }
+        #s2 .logo { position: absolute; left: 0; right: 0; top: 380px; display: flex; justify-content: center; align-items: flex-start; gap: 18px; }
+        #s2 .word { font-size: 220px; font-weight: 750; letter-spacing: -0.055em; line-height: 1; }
+        #s2 .dot { display: block; width: 46px; height: 46px; margin-top: 34px; border-radius: 50%; background: #00e5ef; }
+        #s2 .tag { position: absolute; left: 0; right: 0; top: 660px; text-align: center; font-size: 42px; color: #b9c6d0; }
+      </style>
+      <div id="root" data-composition-id="s2" data-width="1920" data-height="1080">
+        <div id="s2" class="scene">
+          <div id="s2-qwrap" class="layer">
+            <div class="q"><span>What</span> <span>if</span> <span>it</span> <span>took</span> <span>three</span> <span>messages?</span></div>
+            <div class="dots"><b></b><b></b><b></b></div>
+          </div>
+          <div id="s2-glow" class="glow"></div>
+          <div id="s2-logo" class="logo"><div class="word">Minsky</div><i class="dot"></i></div>
+          <div id="s2-tag" class="tag">From “I don't recognize this charge” to an open case.</div>
+          <div class="vig"></div>
+        </div>
+      </div>
+      <script>
+        const tl = gsap.timeline({ paused: true });
+        tl.fromTo("#s2 .q span", { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 0.45, ease: "power3.out", stagger: 0.28 }, 0.5);
+        tl.fromTo("#s2 .dots b", { opacity: 0, scale: 0.6 }, { opacity: 1, scale: 1, duration: 0.35, ease: "back.out(2)", stagger: 0.25 }, 2.1);
+        tl.to("#s2-qwrap", { opacity: 0, duration: 0.5, ease: "power2.in" }, 3.1);
+        // beat-locked: logo lands on the music lift (build.py offsets the track so its 37.69s onset hits here, local 4.0s)
+        tl.fromTo("#s2-glow", { opacity: 0, scale: 0.6 }, { opacity: 1, scale: 1, duration: 1.4, ease: "power2.out" }, 3.9);
+        tl.fromTo("#s2-logo", { opacity: 0, scale: 1.12, filter: "blur(18px)" }, { opacity: 1, scale: 1, filter: "blur(0px)", duration: 1.1, ease: "power3.out" }, 4.0);
+        tl.fromTo("#s2 .dot", { scale: 0 }, { scale: 1, duration: 0.5, ease: "back.out(2.4)" }, 4.6);
+        tl.fromTo("#s2-tag", { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.7, ease: "power3.out" }, 5.8);
+        tl.to("#s2-glow", { opacity: 0.45, duration: 2 }, 6.5);
+        tl.to(["#s2-logo", "#s2-tag", "#s2-glow"], { opacity: 0, duration: 0.6, ease: "power2.in" }, 9.3);
+        window.__timelines["s2"] = tl;
+      </script>
+    </template>
+  </body>
+</html>

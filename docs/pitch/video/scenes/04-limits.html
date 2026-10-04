@@ -1,0 +1,122 @@
+<!doctype html>
+<html>
+  <head><meta charset="UTF-8" /></head>
+  <body>
+    <template>
+      <style>
+        /*@include base.css*/
+        /*@include phone.css*/
+        #s4 .ph { top: 70px; }
+        #s4 #s4-pc { left: 1180px; }
+        #s4 #s4-pl { left: 215px; }
+        #s4 #s4-pr { left: 1295px; }
+        #s4 .under { position: absolute; top: 752px; width: 520px; margin-left: -260px; text-align: center; }
+        #s4 .under .w { font-size: 62px; font-weight: 750; letter-spacing: -0.035em; margin-top: 14px; }
+        #s4 #s4-ul { left: 420px; } #s4 #s4-uc { left: 960px; } #s4 #s4-ur { left: 1500px; }
+        #s4 .done { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 14px; font-weight: 650; color: #3ddc97; }
+        #s4 .done i { display: block; width: 9px; height: 9px; border-radius: 50%; background: #3ddc97; }
+        #s4 .btn { position: relative; overflow: hidden; }
+        #s4 .tap { position: absolute; left: 50%; top: 50%; width: 120px; height: 120px; margin: -60px 0 0 -60px; border-radius: 50%; background: rgba(255, 255, 255, 0.55); }
+        #s4 .morph { position: absolute; inset: 0; }
+        #s4 .lang { position: absolute; left: 0; right: 0; top: 300px; display: flex; justify-content: center; }
+        #s4 .lang .chip { position: absolute; color: #00e5ef; font-size: 26px; }
+        #s4 .bub { position: absolute; left: 380px; width: 1160px; top: 400px; height: 260px; }
+        #s4 .bub div { position: absolute; inset: 0; padding: 34px 44px; border-radius: 44px; border-bottom-right-radius: 12px; background: #1b64f2; color: #fff; font-size: 48px; line-height: 1.3; font-weight: 500; }
+        #s4 .note { position: absolute; left: 0; right: 0; top: 700px; text-align: center; font-size: 26px; color: #93a3b1; }
+      </style>
+      <div id="root" data-composition-id="s4" data-width="1920" data-height="1080">
+        <div id="s4" class="scene">
+          <div class="spot"></div>
+          <div id="s4-phones" class="layer">
+            <div id="s4-pc" class="ph">
+              <!--@include phone-top.html-->
+              <div class="msg me">Hi. On Friday I paid 32.50 USD at El Buen Sabor Restaurant, but my account shows a bigger charge.</div>
+              <div class="msg bot">Sorry about that. I checked your transactions from Friday, June 12 and found this charge:
+                <div class="txn"><b>El Buen Sabor Restaurant · 48.50 USD</b><span>Jun 12, 21:14 · Credit card •••• 4821</span><span>Approved</span></div>
+                Is this the charge you want to dispute?</div>
+              <div class="msg me">Yes, that one. I was charged 16 USD too much.</div>
+              <div class="msg bot">Got it. Should I open a claim for an incorrect charge of 16 USD on this transaction?
+                <div class="btns" style="margin-top:10px"><div class="btn yes">Yes</div><div class="btn">No</div></div></div>
+              <div class="msg me">Yes.</div>
+              <div class="msg bot">Done. Your claim <b class="mono">DSP-4FEED87B</b> is open. Our team will review it and keep you posted here.
+                <div class="done"><i></i>Case opened · verified</div></div>
+              <!--@include phone-bottom.html-->
+            </div>
+            <div id="s4-pl" class="ph">
+              <!--@include phone-top.html-->
+              <div class="msg me">Yesterday at Super Ahorro I was charged twice for the same 42.10 USD purchase.</div>
+              <div class="msg bot">I checked yesterday, June 17, at Super Ahorro and see two payment attempts:
+                <div class="txn"><b>Super Ahorro · 42.10 USD</b><span>Jun 17, 18:04 · Approved</span></div>
+                <div class="txn no"><b>Super Ahorro · 42.10 USD</b><span>Jun 17, 18:05 · Declined</span></div></div>
+              <div class="msg bot">The second attempt was declined, so that money never left your account. You were only charged once.</div>
+              <!--@include phone-bottom.html-->
+            </div>
+            <div id="s4-pr" class="ph">
+              <!--@include phone-top.html-->
+              <div class="msg me">There's a 25 USD charge at Cafe that I didn't make.</div>
+              <div class="msg bot">Thanks for telling us. If you didn't make this purchase, someone may be using your card. I can block it right now. Want me to?
+                <div class="btns" style="margin-top:10px"><div class="btn yes">Yes<i id="s4-tap" class="tap"></i></div><div class="btn">No</div></div></div>
+              <div class="msg me">Yes, please.</div>
+              <div class="msg bot">Your card is blocked. A security specialist will take your case with all the details. Reference: <b class="mono">HND-7C21</b>.</div>
+              <!--@include phone-bottom.html-->
+            </div>
+            <div id="s4-uc" class="under"><span class="chip green"><i></i>Case opened</span><div class="w green">Opens.</div></div>
+            <div id="s4-ul" class="under"><span class="chip cyan"><i></i>Nothing to dispute</span><div class="w cyan">Explains.</div></div>
+            <div id="s4-ur" class="under"><span class="chip amber"><i></i>Card blocked · to a person</span><div class="w amber">Hands over.</div></div>
+          </div>
+          <div id="s4-morph" class="morph">
+            <div class="lang">
+              <span id="s4-l1" class="chip">English · shown in this video</span>
+              <span id="s4-l2" class="chip">Español</span>
+              <span id="s4-l3" class="chip">Português</span>
+            </div>
+            <div class="bub">
+              <div id="s4-b1">Hi. On Friday I paid 32.50 USD at El Buen Sabor Restaurant, but my account shows a bigger charge.</div>
+              <div id="s4-b2">Hola. El viernes pagué 32.50 USD en Restaurante El Buen Sabor, pero en mi cuenta aparece un cargo mayor.</div>
+              <div id="s4-b3">Olá. Na sexta paguei 32,50 USD no Restaurante El Buen Sabor, mas na minha conta aparece uma cobrança maior.</div>
+            </div>
+            <div id="s4-note" class="note">Minsky replies in the customer's language.</div>
+          </div>
+          <div id="s4-foot" class="foot">Recreated from the working system and translated to English. Outcomes follow a synthetic dispute policy (rules D01–D09).</div>
+          <div class="vig"></div>
+        </div>
+      </div>
+      <script>
+        //@include chat.js
+        const tl = gsap.timeline({ paused: true });
+        const pc = document.getElementById("s4-pc"), pl = document.getElementById("s4-pl"), pr = document.getElementById("s4-pr");
+        hfFinalChat(pc);
+        gsap.set([pc, pl, pr], { transformPerspective: 1600, transformOrigin: "50% 0%" });
+        // the hero phone from scene 3 steps back to the center
+        tl.fromTo(pc, { x: 0, scale: 1, rotationY: -9 }, { x: -425, scale: 0.78, rotationY: 0, duration: 1.3, ease: "power3.inOut" }, 0);
+        tl.fromTo("#s4-uc", { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.5 }, 1.1);
+        tl.fromTo("#s4-foot", { opacity: 0 }, { opacity: 1, duration: 0.6 }, 1.2);
+        // nothing to dispute
+        tl.fromTo(pl, { opacity: 0, x: -120, scale: 0.78 }, { opacity: 1, x: 0, scale: 0.78, duration: 0.8, ease: "power3.out" }, 1.5);
+        hfPlayChat(tl, pl, [2.1, 3.4, 5.0]);
+        tl.fromTo("#s4-ul", { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.5 }, 6.0);
+        // possible fraud
+        tl.fromTo(pr, { opacity: 0, x: 120, scale: 0.78 }, { opacity: 1, x: 0, scale: 0.78, duration: 0.8, ease: "power3.out" }, 6.6);
+        hfPlayChat(tl, pr, [7.2, 8.4, 10.2, 11.0]);
+        tl.fromTo("#s4-tap", { scale: 0, opacity: 0.9 }, { scale: 1.4, opacity: 0, duration: 0.5, ease: "power2.out" }, 9.9);
+        tl.fromTo("#s4-ur", { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.5 }, 11.8);
+        // the same customer, three languages
+        tl.to("#s4-phones", { opacity: 0.08, scale: 0.97, duration: 0.7, ease: "power2.inOut" }, 14.4);
+        tl.fromTo("#s4-morph", { opacity: 0 }, { opacity: 1, duration: 0.5 }, 14.7);
+        tl.fromTo("#s4-b1", { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.6, ease: "power3.out" }, 14.8);
+        tl.fromTo("#s4-l1", { opacity: 0 }, { opacity: 1, duration: 0.4 }, 14.8);
+        tl.fromTo("#s4-note", { opacity: 0 }, { opacity: 1, duration: 0.5 }, 15.4);
+        const swap = (a, b, la, lb, t) => {
+          tl.to(a, { opacity: 0, filter: "blur(10px)", duration: 0.45 }, t);
+          tl.fromTo(b, { opacity: 0, filter: "blur(10px)" }, { opacity: 1, filter: "blur(0px)", duration: 0.55 }, t + 0.2);
+          tl.to(la, { opacity: 0, duration: 0.3 }, t);
+          tl.fromTo(lb, { opacity: 0 }, { opacity: 1, duration: 0.4 }, t + 0.25);
+        };
+        swap("#s4-b1", "#s4-b2", "#s4-l1", "#s4-l2", 16.6);
+        swap("#s4-b2", "#s4-b3", "#s4-l2", "#s4-l3", 18.6);
+        tl.to(["#s4-morph", "#s4-foot", "#s4-phones"], { opacity: 0, duration: 0.6 }, 21.6);
+        window.__timelines["s4"] = tl;
+      </script>
+    </template>
+  </body>
+</html>
