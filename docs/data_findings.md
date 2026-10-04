@@ -14,7 +14,7 @@ Method: each hypothesis is proposition → query → verdict. Verdicts are **sig
 | H4 | demographics ~ `credit_score` | none | 150k; Δ < 2 points | — |
 | H5 | delinquency ~ utilization | none | 400k; ~15% at every level | — |
 | H6 | delinquency ~ income/score | none | 400k; flat | No credit-risk model |
-| H7 | `interest_rate` ~ product type | structural | 400k; constant per type | — |
+| H7 | `interest_rate` ~ product type | type-specific ranges; corrected 2026-10-03 | 400k; credit cards have 2,701 distinct non-null rates, 18–45 in source units | Type does not determine the rate; score/income associations tested within type are weak |
 | H8-H9 | fraud ~ amount/hour | none | 4.4M; ~0.1% flat | — |
 | H10-H11 | decline/fraud ~ channel/country/merchant | none | 4.4M; 5% / 0.1% flat | — |
 | **H12** | **FCR ~ `contact_reason`** | **signal** | **686k; 43.6% (Queja) → 91.5% (Transaccional); stable in country/year/month/channel/tenure; entropy 0.78→0.66 bits; flag Queja: 56.4% precision, 2.4× lift** | **Viable target/feature (router, triage, risk)** |
@@ -52,7 +52,7 @@ Method: each hypothesis is proposition → query → verdict. Verdicts are **sig
 - **`main_topics` is `contact_reason` (H25).** The two columns match on 100% of the 171,321 transcript rows, and `detected_intents` is constant (`consulta_general`). This is the leakage check that `ml/README.md` demands: the router must not see these columns as features. Note the transcripts are also only two balance-inquiry templates with 42 variants (H24), so text alone cannot predict the reason either (majority purity 34.9%).
 - **`requires_followup` is nearly determined by `was_resolved` (H16).** The pair (not resolved, no follow-up) never occurs. The two columns are not independent targets.
 - **`nps_category` is a transformation of `main_score` (H20)** (detractor 2–6, passive 7, no promoters — scales are truncated, see `known_issues.md`).
-- **`interest_rate` is constant per product type (H7).**
+- **`interest_rate` varies within product type (H7; correction 2026-10-03).** The original notebook displayed means by type, which were incorrectly described as constants. Across all 400,000 current products, credit cards have 2,701 distinct non-null source rates (18–45), personal loans 1,601 (12–28), and mortgages 601 (6–12). Only insurance and debit cards have one non-null rate (zero). Product type alone does not recover the rate: this is not established leakage. In both current and backup data, Pearson correlations with score and income within each variable-rate type are small (absolute r ≤ 0.024); this does not rule out other features or nonlinear relationships. See the scoped comparison in `outputs/dataset-summary-20261003/backup-comparison-20261003.md`.
 
 ## `digital_events`: the untested table (15.6M rows)
 

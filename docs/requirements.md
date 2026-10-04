@@ -47,6 +47,16 @@ Status: ✅ done · 🟡 partial · ⬜ planned · ⚠️ risk or gap
 
 ## Boundaries (PS)
 
+### Proposed response to source-data inconsistencies (2026-10-03)
+
+This is a recommendation, not an implemented change to pipeline, policy or tools. The findings and counts are in `known_issues.md`.
+
+- **P1.1 / P4.1:** preserve source records and lineage; add explicit cross-table ownership and chronology checks. Document which fields support descriptive analysis and which can support an action. Do not repair missing links or dates by guessing.
+- **P2.3 / P3.2 / B6:** use verified customer/product/transaction ownership for lookup. Do not treat historical `complaints.affected_product_id` as customer-owned evidence: all 44,570 populated references point to another customer's product. Define deterministic treatment of inconsistent dates before implementing it; do not shift dates silently.
+- **B2 / B4:** keep organizer-derived records separate from team-generated dialogues, policy and mock-bank cases. New disputes should explicitly link the authenticated customer and verified transaction, with writes and read-back kept separate from historical complaint outcomes.
+- **P4.4 / P4.5:** do not train intent from mismatched transcript/reason pairs or use leakage columns. Evaluate an appropriate learned component against a baseline using independently valid labels and justified splits. The brief also allows pretrained/retrieval-based component evaluation; it does not require training a new model.
+- **P5.1 / P5.2 / E11:** add development cases for incorrect ownership, inconsistent chronology and missing evidence before behavior changes; report coverage, exclusions and simulated results. Preserve the locked test split. Do not claim a historical complaint-to-transaction decision target or a measured production improvement.
+
 | ID | Requirement | Our answer | Where | Status |
 |---|---|---|---|---|
 | B1 | Only organizer-approved data and permitted resources | LATAM Bank dataset + team-generated cases only | — | ✅ |

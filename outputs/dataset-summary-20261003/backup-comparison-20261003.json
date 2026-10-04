@@ -1,0 +1,1243 @@
+{
+  "comparison": {
+    "scope": "3 complete dimension tables and 12 identical-date partitions per fact table; non-random exploratory sample; no held-out model evaluation",
+    "keys": [
+      "data_backup_20260831/customers.csv",
+      "data_backup_20260831/products.csv",
+      "data_backup_20260831/service_agents.csv",
+      "data_backup_20260831/transactions/year=2023/month=07/day=01/transactions_20230701.csv",
+      "data_backup_20260831/transactions/year=2023/month=08/day=11/transactions_20230811.csv",
+      "data_backup_20260831/transactions/year=2023/month=09/day=21/transactions_20230921.csv",
+      "data_backup_20260831/transactions/year=2023/month=11/day=01/transactions_20231101.csv",
+      "data_backup_20260831/transactions/year=2023/month=12/day=12/transactions_20231212.csv",
+      "data_backup_20260831/transactions/year=2024/month=01/day=22/transactions_20240122.csv",
+      "data_backup_20260831/transactions/year=2024/month=03/day=04/transactions_20240304.csv",
+      "data_backup_20260831/transactions/year=2024/month=04/day=14/transactions_20240414.csv",
+      "data_backup_20260831/transactions/year=2024/month=05/day=25/transactions_20240525.csv",
+      "data_backup_20260831/transactions/year=2024/month=07/day=05/transactions_20240705.csv",
+      "data_backup_20260831/transactions/year=2024/month=08/day=15/transactions_20240815.csv",
+      "data_backup_20260831/transactions/year=2024/month=09/day=25/transactions_20240925.csv",
+      "data_backup_20260831/call_center_interactions/year=2023/month=07/day=01/call_center_interactions_20230701.csv",
+      "data_backup_20260831/call_center_interactions/year=2023/month=08/day=11/call_center_interactions_20230811.csv",
+      "data_backup_20260831/call_center_interactions/year=2023/month=09/day=21/call_center_interactions_20230921.csv",
+      "data_backup_20260831/call_center_interactions/year=2023/month=11/day=01/call_center_interactions_20231101.csv",
+      "data_backup_20260831/call_center_interactions/year=2023/month=12/day=12/call_center_interactions_20231212.csv",
+      "data_backup_20260831/call_center_interactions/year=2024/month=01/day=22/call_center_interactions_20240122.csv",
+      "data_backup_20260831/call_center_interactions/year=2024/month=03/day=04/call_center_interactions_20240304.csv",
+      "data_backup_20260831/call_center_interactions/year=2024/month=04/day=14/call_center_interactions_20240414.csv",
+      "data_backup_20260831/call_center_interactions/year=2024/month=05/day=25/call_center_interactions_20240525.csv",
+      "data_backup_20260831/call_center_interactions/year=2024/month=07/day=05/call_center_interactions_20240705.csv",
+      "data_backup_20260831/call_center_interactions/year=2024/month=08/day=15/call_center_interactions_20240815.csv",
+      "data_backup_20260831/call_center_interactions/year=2024/month=09/day=25/call_center_interactions_20240925.csv",
+      "data_backup_20260831/complaints/year=2023/month=07/day=01/complaints_20230701.csv",
+      "data_backup_20260831/complaints/year=2023/month=08/day=11/complaints_20230811.csv",
+      "data_backup_20260831/complaints/year=2023/month=09/day=21/complaints_20230921.csv",
+      "data_backup_20260831/complaints/year=2023/month=11/day=01/complaints_20231101.csv",
+      "data_backup_20260831/complaints/year=2023/month=12/day=12/complaints_20231212.csv",
+      "data_backup_20260831/complaints/year=2024/month=01/day=22/complaints_20240122.csv",
+      "data_backup_20260831/complaints/year=2024/month=03/day=04/complaints_20240304.csv",
+      "data_backup_20260831/complaints/year=2024/month=04/day=14/complaints_20240414.csv",
+      "data_backup_20260831/complaints/year=2024/month=05/day=25/complaints_20240525.csv",
+      "data_backup_20260831/complaints/year=2024/month=07/day=05/complaints_20240705.csv",
+      "data_backup_20260831/complaints/year=2024/month=08/day=15/complaints_20240815.csv",
+      "data_backup_20260831/complaints/year=2024/month=09/day=25/complaints_20240925.csv"
+    ],
+    "selected_bytes": 127103050,
+    "stats": {
+      "backup_customers": {
+        "rows": 150000,
+        "unique_pk": 150000,
+        "extra_pk_rows": 0,
+        "columns": 27
+      },
+      "current_customers": {
+        "rows": 150000,
+        "unique_pk": 150000,
+        "extra_pk_rows": 0,
+        "columns": 27
+      },
+      "backup_products": {
+        "rows": 400000,
+        "unique_pk": 400000,
+        "extra_pk_rows": 0,
+        "columns": 17
+      },
+      "current_products": {
+        "rows": 400000,
+        "unique_pk": 400000,
+        "extra_pk_rows": 0,
+        "columns": 17
+      },
+      "backup_service_agents": {
+        "rows": 1200,
+        "unique_pk": 1200,
+        "extra_pk_rows": 0,
+        "columns": 18
+      },
+      "current_service_agents": {
+        "rows": 1200,
+        "unique_pk": 1200,
+        "extra_pk_rows": 0,
+        "columns": 18
+      },
+      "backup_transactions": {
+        "rows": 54565,
+        "unique_pk": 54565,
+        "extra_pk_rows": 0,
+        "columns": 22
+      },
+      "current_transactions": {
+        "rows": 51254,
+        "unique_pk": 51254,
+        "extra_pk_rows": 0,
+        "columns": 22
+      },
+      "backup_call_center_interactions": {
+        "rows": 8011,
+        "unique_pk": 8011,
+        "extra_pk_rows": 0,
+        "columns": 21
+      },
+      "current_call_center_interactions": {
+        "rows": 7505,
+        "unique_pk": 7505,
+        "extra_pk_rows": 0,
+        "columns": 21
+      },
+      "backup_complaints": {
+        "rows": 750,
+        "unique_pk": 750,
+        "extra_pk_rows": 0,
+        "columns": 27
+      },
+      "current_complaints": {
+        "rows": 750,
+        "unique_pk": 750,
+        "extra_pk_rows": 0,
+        "columns": 27
+      }
+    },
+    "schemas": {
+      "backup_customers": [
+        "customer_id",
+        "document_number",
+        "document_type",
+        "first_name",
+        "last_name",
+        "date_of_birth",
+        "gender",
+        "email",
+        "mobile_phone",
+        "landline_phone",
+        "address",
+        "city",
+        "state",
+        "country",
+        "postal_code",
+        "detected_accent",
+        "segment",
+        "credit_score",
+        "estimated_monthly_income",
+        "occupation",
+        "marital_status",
+        "education_level",
+        "registration_date",
+        "registration_branch_id",
+        "customer_status",
+        "last_updated",
+        "accepts_marketing"
+      ],
+      "current_customers": [
+        "customer_id",
+        "document_number",
+        "document_type",
+        "first_name",
+        "last_name",
+        "date_of_birth",
+        "gender",
+        "email",
+        "mobile_phone",
+        "landline_phone",
+        "address",
+        "city",
+        "state",
+        "country",
+        "postal_code",
+        "detected_accent",
+        "segment",
+        "credit_score",
+        "estimated_monthly_income",
+        "occupation",
+        "marital_status",
+        "education_level",
+        "registration_date",
+        "registration_branch_id",
+        "customer_status",
+        "last_updated",
+        "accepts_marketing"
+      ],
+      "backup_products": [
+        "product_id",
+        "customer_id",
+        "product_type",
+        "product_number",
+        "currency",
+        "current_balance",
+        "credit_limit",
+        "interest_rate",
+        "opening_date",
+        "expiration_date",
+        "opening_branch_id",
+        "product_status",
+        "opening_channel",
+        "has_linked_app",
+        "days_past_due",
+        "last_transaction_date",
+        "last_updated"
+      ],
+      "current_products": [
+        "product_id",
+        "customer_id",
+        "product_type",
+        "product_number",
+        "currency",
+        "current_balance",
+        "credit_limit",
+        "interest_rate",
+        "opening_date",
+        "expiration_date",
+        "opening_branch_id",
+        "product_status",
+        "opening_channel",
+        "has_linked_app",
+        "days_past_due",
+        "last_transaction_date",
+        "last_updated"
+      ],
+      "backup_service_agents": [
+        "agent_id",
+        "employee_code",
+        "first_name",
+        "last_name",
+        "email",
+        "phone",
+        "native_accent",
+        "country_of_origin",
+        "assigned_branch_id",
+        "agent_type",
+        "experience_level",
+        "languages",
+        "specialty",
+        "hire_date",
+        "avg_csat",
+        "total_monthly_interactions",
+        "agent_status",
+        "work_shift"
+      ],
+      "current_service_agents": [
+        "agent_id",
+        "employee_code",
+        "first_name",
+        "last_name",
+        "email",
+        "phone",
+        "native_accent",
+        "country_of_origin",
+        "assigned_branch_id",
+        "agent_type",
+        "experience_level",
+        "languages",
+        "specialty",
+        "hire_date",
+        "avg_csat",
+        "total_monthly_interactions",
+        "agent_status",
+        "work_shift"
+      ],
+      "backup_transactions": [
+        "transaction_id",
+        "transaction_date",
+        "process_date",
+        "product_id",
+        "customer_id",
+        "transaction_type",
+        "transaction_category",
+        "amount",
+        "currency",
+        "amount_usd",
+        "channel",
+        "branch_id",
+        "merchant_name",
+        "merchant_category",
+        "transaction_country",
+        "transaction_city",
+        "transaction_status",
+        "response_code",
+        "is_fraud",
+        "fraud_score",
+        "latitude",
+        "longitude"
+      ],
+      "current_transactions": [
+        "transaction_id",
+        "transaction_date",
+        "process_date",
+        "product_id",
+        "customer_id",
+        "transaction_type",
+        "transaction_category",
+        "amount",
+        "currency",
+        "amount_usd",
+        "channel",
+        "branch_id",
+        "merchant_name",
+        "merchant_category",
+        "transaction_country",
+        "transaction_city",
+        "transaction_status",
+        "response_code",
+        "is_fraud",
+        "fraud_score",
+        "latitude",
+        "longitude"
+      ],
+      "backup_call_center_interactions": [
+        "interaction_id",
+        "interaction_date",
+        "process_date",
+        "customer_id",
+        "agent_id",
+        "interaction_type",
+        "channel",
+        "contact_reason",
+        "reason_category",
+        "duration_seconds",
+        "wait_time_seconds",
+        "was_resolved",
+        "requires_followup",
+        "detected_sentiment",
+        "sentiment_score",
+        "customer_detected_accent",
+        "agent_used_accent",
+        "was_escalated",
+        "mentioned_products",
+        "has_transcript",
+        "has_recording"
+      ],
+      "current_call_center_interactions": [
+        "interaction_id",
+        "interaction_date",
+        "process_date",
+        "customer_id",
+        "agent_id",
+        "interaction_type",
+        "channel",
+        "contact_reason",
+        "reason_category",
+        "duration_seconds",
+        "wait_time_seconds",
+        "was_resolved",
+        "requires_followup",
+        "detected_sentiment",
+        "sentiment_score",
+        "customer_detected_accent",
+        "agent_used_accent",
+        "was_escalated",
+        "mentioned_products",
+        "has_transcript",
+        "has_recording"
+      ],
+      "backup_complaints": [
+        "complaint_id",
+        "creation_date",
+        "process_date",
+        "customer_id",
+        "case_type",
+        "category",
+        "subcategory",
+        "reception_channel",
+        "affected_product_id",
+        "related_branch_id",
+        "origin_interaction_id",
+        "description",
+        "claimed_amount",
+        "currency",
+        "priority",
+        "status",
+        "assigned_agent_id",
+        "assignment_date",
+        "first_response_date",
+        "resolution_date",
+        "closing_date",
+        "sla_breached",
+        "resolution_days",
+        "resolution",
+        "compensation_granted",
+        "resolution_satisfaction",
+        "is_repeat_complainer"
+      ],
+      "current_complaints": [
+        "complaint_id",
+        "creation_date",
+        "process_date",
+        "customer_id",
+        "case_type",
+        "category",
+        "subcategory",
+        "reception_channel",
+        "affected_product_id",
+        "related_branch_id",
+        "origin_interaction_id",
+        "description",
+        "claimed_amount",
+        "currency",
+        "priority",
+        "status",
+        "assigned_agent_id",
+        "assignment_date",
+        "first_response_date",
+        "resolution_date",
+        "closing_date",
+        "sla_breached",
+        "resolution_days",
+        "resolution",
+        "compensation_granted",
+        "resolution_satisfaction",
+        "is_repeat_complainer"
+      ]
+    },
+    "changes": {
+      "customers": {
+        "shared_join_pairs": 4025,
+        "backup_only_pairs": 145975,
+        "current_only_pairs": 145975,
+        "changed_fields": {
+          "accepts_marketing": 70,
+          "address": 1107,
+          "city": 1128,
+          "country": 771,
+          "credit_score": 1525,
+          "customer_status": 48,
+          "date_of_birth": 1089,
+          "detected_accent": 584,
+          "document_number": 1052,
+          "document_type": 574,
+          "education_level": 157,
+          "email": 1236,
+          "estimated_monthly_income": 929,
+          "first_name": 1252,
+          "gender": 850,
+          "landline_phone": 324,
+          "last_name": 1203,
+          "last_updated": 652,
+          "marital_status": 142,
+          "mobile_phone": 503,
+          "occupation": 211,
+          "postal_code": 1065,
+          "registration_branch_id": 494,
+          "registration_date": 575,
+          "segment": 600,
+          "state": 1128
+        },
+        "same_schema": true
+      },
+      "products": {
+        "shared_join_pairs": 128599,
+        "backup_only_pairs": 271401,
+        "current_only_pairs": 271401,
+        "changed_fields": {
+          "credit_limit": 22771,
+          "currency": 67168,
+          "current_balance": 70841,
+          "customer_id": 128599,
+          "days_past_due": 2872,
+          "expiration_date": 4005,
+          "interest_rate": 6666,
+          "last_transaction_date": 6496,
+          "last_updated": 6462,
+          "opening_branch_id": 76143,
+          "opening_channel": 5991,
+          "opening_date": 6458,
+          "product_number": 7151,
+          "product_status": 1416,
+          "product_type": 5448
+        },
+        "same_schema": true
+      },
+      "service_agents": {
+        "shared_join_pairs": 604,
+        "backup_only_pairs": 596,
+        "current_only_pairs": 596,
+        "changed_fields": {
+          "assigned_branch_id": 3,
+          "email": 4,
+          "experience_level": 2,
+          "first_name": 4,
+          "hire_date": 4,
+          "last_name": 4
+        },
+        "same_schema": true
+      },
+      "transactions": {
+        "shared_join_pairs": 51,
+        "backup_only_pairs": 54514,
+        "current_only_pairs": 51203,
+        "changed_fields": {
+          "amount": 44,
+          "amount_usd": 35,
+          "branch_id": 23,
+          "channel": 16,
+          "currency": 34,
+          "customer_id": 51,
+          "fraud_score": 9,
+          "latitude": 11,
+          "longitude": 11,
+          "merchant_category": 8,
+          "merchant_name": 9,
+          "product_id": 51,
+          "response_code": 6,
+          "transaction_category": 12,
+          "transaction_city": 46,
+          "transaction_country": 37,
+          "transaction_date": 22,
+          "transaction_status": 6,
+          "transaction_type": 21
+        },
+        "same_schema": true
+      },
+      "call_center_interactions": {
+        "shared_join_pairs": 73,
+        "backup_only_pairs": 7938,
+        "current_only_pairs": 7432,
+        "changed_fields": {
+          "agent_id": 73,
+          "agent_used_accent": 43,
+          "channel": 1,
+          "contact_reason": 4,
+          "customer_detected_accent": 50,
+          "customer_id": 73,
+          "detected_sentiment": 4,
+          "duration_seconds": 64,
+          "has_recording": 64,
+          "interaction_date": 7,
+          "interaction_type": 65,
+          "reason_category": 4,
+          "requires_followup": 1,
+          "sentiment_score": 7,
+          "wait_time_seconds": 58,
+          "was_escalated": 1,
+          "was_resolved": 1
+        },
+        "same_schema": true
+      },
+      "complaints": {
+        "shared_join_pairs": 750,
+        "backup_only_pairs": 0,
+        "current_only_pairs": 0,
+        "changed_fields": {
+          "affected_product_id": 492,
+          "assigned_agent_id": 255,
+          "customer_id": 750
+        },
+        "same_schema": true
+      }
+    },
+    "checks": {
+      "backup": {
+        "complaint_ownership": [
+          [
+            492,
+            492
+          ]
+        ],
+        "complaint_origin": [
+          [
+            750,
+            0,
+            5,
+            5
+          ]
+        ],
+        "transaction_ownership": [
+          [
+            54565,
+            0
+          ]
+        ],
+        "transaction_dates": [
+          [
+            54565,
+            15888,
+            15833
+          ]
+        ],
+        "fraud_threshold": [
+          [
+            54565,
+            53,
+            25,
+            0,
+            -0.0011182310811868783
+          ]
+        ],
+        "fcr_by_reason": [
+          [
+            "Comercial",
+            613,
+            0.6639477977161501
+          ],
+          [
+            "Producto",
+            1752,
+            0.8789954337899544
+          ],
+          [
+            "Queja",
+            1347,
+            0.4016332590942836
+          ],
+          [
+            "Retención",
+            240,
+            0.6125
+          ],
+          [
+            "Transaccional",
+            2797,
+            0.9163389345727565
+          ],
+          [
+            "Técnico",
+            1262,
+            0.7242472266244057
+          ]
+        ],
+        "reason_mapping": [
+          [
+            "Comercial",
+            [
+              "Comercial"
+            ],
+            613
+          ],
+          [
+            "Producto",
+            [
+              "Producto"
+            ],
+            1752
+          ],
+          [
+            "Queja",
+            [
+              "Queja"
+            ],
+            1347
+          ],
+          [
+            "Retención",
+            [
+              "Retención"
+            ],
+            240
+          ],
+          [
+            "Transaccional",
+            [
+              "Transaccional"
+            ],
+            2797
+          ],
+          [
+            "Técnico",
+            [
+              "Técnico"
+            ],
+            1262
+          ]
+        ],
+        "complaint_corr": [
+          [
+            172,
+            -0.0929825927621557,
+            -0.08791859904103591,
+            16.833333333333332,
+            16.28148148148148
+          ]
+        ],
+        "credit_corr": [
+          [
+            125053,
+            -0.00508563358080024,
+            0.15076007772704372
+          ]
+        ],
+        "products_rate": [
+          [
+            "Cuenta Ahorro",
+            120348,
+            251,
+            1.0,
+            3.5
+          ],
+          [
+            "Cuenta Corriente",
+            100360,
+            41,
+            0.1,
+            0.5
+          ],
+          [
+            "Inversión",
+            5946,
+            501,
+            3.0,
+            8.0
+          ],
+          [
+            "Préstamo Hipotecario",
+            12249,
+            601,
+            6.0,
+            12.0
+          ],
+          [
+            "Préstamo Personal",
+            19924,
+            1601,
+            12.0,
+            28.0
+          ],
+          [
+            "Seguro",
+            1976,
+            1,
+            0.0,
+            0.0
+          ],
+          [
+            "Tarjeta Crédito",
+            99468,
+            2701,
+            18.0,
+            45.0
+          ],
+          [
+            "Tarjeta Débito",
+            39729,
+            1,
+            0.0,
+            0.0
+          ]
+        ],
+        "customer_score_income": [
+          [
+            "Basic",
+            90056,
+            -0.004868537616920748,
+            599.7891115608069
+          ],
+          [
+            "Plus",
+            37586,
+            -0.007659345884236601,
+            699.6646612771824
+          ],
+          [
+            "Premium",
+            14796,
+            -0.0015178819047475692,
+            797.3712631829355
+          ],
+          [
+            "Student",
+            7562,
+            -0.0015364392651209884,
+            649.4723212901225
+          ]
+        ]
+      },
+      "current": {
+        "complaint_ownership": [
+          [
+            492,
+            492
+          ]
+        ],
+        "complaint_origin": [
+          [
+            750,
+            0,
+            5,
+            5
+          ]
+        ],
+        "transaction_ownership": [
+          [
+            51254,
+            0
+          ]
+        ],
+        "transaction_dates": [
+          [
+            51254,
+            15059,
+            14971
+          ]
+        ],
+        "fraud_threshold": [
+          [
+            51254,
+            48,
+            31,
+            0,
+            -0.0069063765761771525
+          ]
+        ],
+        "fcr_by_reason": [
+          [
+            "Comercial",
+            585,
+            0.6376068376068376
+          ],
+          [
+            "Producto",
+            1753,
+            0.901312036508842
+          ],
+          [
+            "Queja",
+            1226,
+            0.43230016313213704
+          ],
+          [
+            "Retención",
+            231,
+            0.6103896103896104
+          ],
+          [
+            "Transaccional",
+            2630,
+            0.9220532319391636
+          ],
+          [
+            "Técnico",
+            1080,
+            0.6972222222222222
+          ]
+        ],
+        "reason_mapping": [
+          [
+            "Comercial",
+            [
+              "Comercial"
+            ],
+            585
+          ],
+          [
+            "Producto",
+            [
+              "Producto"
+            ],
+            1753
+          ],
+          [
+            "Queja",
+            [
+              "Queja"
+            ],
+            1226
+          ],
+          [
+            "Retención",
+            [
+              "Retención"
+            ],
+            231
+          ],
+          [
+            "Transaccional",
+            [
+              "Transaccional"
+            ],
+            2630
+          ],
+          [
+            "Técnico",
+            [
+              "Técnico"
+            ],
+            1080
+          ]
+        ],
+        "complaint_corr": [
+          [
+            172,
+            -0.09298259276215556,
+            -0.08791859904103594,
+            16.833333333333332,
+            16.28148148148148
+          ]
+        ],
+        "credit_corr": [
+          [
+            125350,
+            -0.003759549658614183,
+            0.1497008376545672
+          ]
+        ],
+        "products_rate": [
+          [
+            "Cuenta Ahorro",
+            120203,
+            251,
+            1.0,
+            3.5
+          ],
+          [
+            "Cuenta Corriente",
+            99979,
+            41,
+            0.1,
+            0.5
+          ],
+          [
+            "Inversión",
+            5859,
+            501,
+            3.0,
+            8.0
+          ],
+          [
+            "Préstamo Hipotecario",
+            11910,
+            601,
+            6.0,
+            12.0
+          ],
+          [
+            "Préstamo Personal",
+            19960,
+            1601,
+            12.0,
+            28.0
+          ],
+          [
+            "Seguro",
+            2049,
+            1,
+            0.0,
+            0.0
+          ],
+          [
+            "Tarjeta Crédito",
+            100102,
+            2701,
+            18.0,
+            45.0
+          ],
+          [
+            "Tarjeta Débito",
+            39938,
+            1,
+            0.0,
+            0.0
+          ]
+        ],
+        "customer_score_income": [
+          [
+            "Basic",
+            89756,
+            0.0009297932095901327,
+            599.5372504293337
+          ],
+          [
+            "Plus",
+            37547,
+            -0.0003353548645632501,
+            699.1834338106004
+          ],
+          [
+            "Premium",
+            15207,
+            -0.008609189548249708,
+            797.4042242703533
+          ],
+          [
+            "Student",
+            7490,
+            0.021345339129435537,
+            649.0202862085233
+          ]
+        ]
+      }
+    }
+  },
+  "followup": {
+    "backup": {
+      "rates_by_type": [
+        {
+          "product_type": "Cuenta Ahorro",
+          "n": 120348,
+          "nonnull": 108184,
+          "distinct_rates": 251,
+          "minimum": 1.0,
+          "maximum": 3.5
+        },
+        {
+          "product_type": "Cuenta Corriente",
+          "n": 100360,
+          "nonnull": 90195,
+          "distinct_rates": 41,
+          "minimum": 0.1,
+          "maximum": 0.5
+        },
+        {
+          "product_type": "Inversión",
+          "n": 5946,
+          "nonnull": 5341,
+          "distinct_rates": 501,
+          "minimum": 3.0,
+          "maximum": 8.0
+        },
+        {
+          "product_type": "Préstamo Hipotecario",
+          "n": 12249,
+          "nonnull": 10997,
+          "distinct_rates": 601,
+          "minimum": 6.0,
+          "maximum": 12.0
+        },
+        {
+          "product_type": "Préstamo Personal",
+          "n": 19924,
+          "nonnull": 17969,
+          "distinct_rates": 1601,
+          "minimum": 12.0,
+          "maximum": 28.0
+        },
+        {
+          "product_type": "Seguro",
+          "n": 1976,
+          "nonnull": 1786,
+          "distinct_rates": 1,
+          "minimum": 0.0,
+          "maximum": 0.0
+        },
+        {
+          "product_type": "Tarjeta Crédito",
+          "n": 99468,
+          "nonnull": 89571,
+          "distinct_rates": 2701,
+          "minimum": 18.0,
+          "maximum": 45.0
+        },
+        {
+          "product_type": "Tarjeta Débito",
+          "n": 39729,
+          "nonnull": 35763,
+          "distinct_rates": 1,
+          "minimum": 0.0,
+          "maximum": 0.0
+        }
+      ],
+      "rates_vs_score_income": [
+        {
+          "product_type": "Cuenta Ahorro",
+          "n_rate_score": 91854,
+          "rate_score": -0.00023850772801540566,
+          "n_rate_income": 86396,
+          "rate_income": 0.0020366648262724486
+        },
+        {
+          "product_type": "Cuenta Corriente",
+          "n_rate_score": 76903,
+          "rate_score": 0.0008487322891729442,
+          "n_rate_income": 71950,
+          "rate_income": 0.0004996102551429122
+        },
+        {
+          "product_type": "Inversión",
+          "n_rate_score": 4551,
+          "rate_score": -0.014069343844665478,
+          "n_rate_income": 4273,
+          "rate_income": 0.011820732845593724
+        },
+        {
+          "product_type": "Préstamo Hipotecario",
+          "n_rate_score": 9356,
+          "rate_score": -0.002607214362980195,
+          "n_rate_income": 8884,
+          "rate_income": -0.007927845178748347
+        },
+        {
+          "product_type": "Préstamo Personal",
+          "n_rate_score": 15271,
+          "rate_score": 0.0031553235008493336,
+          "n_rate_income": 14437,
+          "rate_income": -0.0015354067675215166
+        },
+        {
+          "product_type": "Seguro",
+          "n_rate_score": 1504,
+          "rate_score": null,
+          "n_rate_income": 1447,
+          "rate_income": null
+        },
+        {
+          "product_type": "Tarjeta Crédito",
+          "n_rate_score": 76197,
+          "rate_score": 0.0008103449903621372,
+          "n_rate_income": 71531,
+          "rate_income": 0.003845798539748586
+        },
+        {
+          "product_type": "Tarjeta Débito",
+          "n_rate_score": 30415,
+          "rate_score": null,
+          "n_rate_income": 28584,
+          "rate_income": null
+        }
+      ],
+      "credit_days": [
+        {
+          "paired_n": 106407,
+          "r": -0.005085633580799804
+        }
+      ]
+    },
+    "current": {
+      "rates_by_type": [
+        {
+          "product_type": "Cuenta Ahorro",
+          "n": 120203,
+          "nonnull": 108193,
+          "distinct_rates": 251,
+          "minimum": 1.0,
+          "maximum": 3.5
+        },
+        {
+          "product_type": "Cuenta Corriente",
+          "n": 99979,
+          "nonnull": 89973,
+          "distinct_rates": 41,
+          "minimum": 0.1,
+          "maximum": 0.5
+        },
+        {
+          "product_type": "Inversión",
+          "n": 5859,
+          "nonnull": 5225,
+          "distinct_rates": 501,
+          "minimum": 3.0,
+          "maximum": 8.0
+        },
+        {
+          "product_type": "Préstamo Hipotecario",
+          "n": 11910,
+          "nonnull": 10706,
+          "distinct_rates": 601,
+          "minimum": 6.0,
+          "maximum": 12.0
+        },
+        {
+          "product_type": "Préstamo Personal",
+          "n": 19960,
+          "nonnull": 17947,
+          "distinct_rates": 1601,
+          "minimum": 12.0,
+          "maximum": 28.0
+        },
+        {
+          "product_type": "Seguro",
+          "n": 2049,
+          "nonnull": 1842,
+          "distinct_rates": 1,
+          "minimum": 0.0,
+          "maximum": 0.0
+        },
+        {
+          "product_type": "Tarjeta Crédito",
+          "n": 100102,
+          "nonnull": 90122,
+          "distinct_rates": 2701,
+          "minimum": 18.0,
+          "maximum": 45.0
+        },
+        {
+          "product_type": "Tarjeta Débito",
+          "n": 39938,
+          "nonnull": 35926,
+          "distinct_rates": 1,
+          "minimum": 0.0,
+          "maximum": 0.0
+        }
+      ],
+      "rates_vs_score_income": [
+        {
+          "product_type": "Cuenta Ahorro",
+          "n_rate_score": 91918,
+          "rate_score": 0.003509799414439928,
+          "n_rate_income": 86654,
+          "rate_income": -0.006342355566058045
+        },
+        {
+          "product_type": "Cuenta Corriente",
+          "n_rate_score": 76639,
+          "rate_score": 0.0006660066302621392,
+          "n_rate_income": 71949,
+          "rate_income": -0.002764610096242126
+        },
+        {
+          "product_type": "Inversión",
+          "n_rate_score": 4426,
+          "rate_score": -0.00886498819827604,
+          "n_rate_income": 4189,
+          "rate_income": -0.018615880775071328
+        },
+        {
+          "product_type": "Préstamo Hipotecario",
+          "n_rate_score": 9149,
+          "rate_score": -0.023027336635452172,
+          "n_rate_income": 8539,
+          "rate_income": 0.0019686486341040418
+        },
+        {
+          "product_type": "Préstamo Personal",
+          "n_rate_score": 15258,
+          "rate_score": -0.005703702867738074,
+          "n_rate_income": 14387,
+          "rate_income": 0.003734566517179812
+        },
+        {
+          "product_type": "Seguro",
+          "n_rate_score": 1604,
+          "rate_score": null,
+          "n_rate_income": 1496,
+          "rate_income": null
+        },
+        {
+          "product_type": "Tarjeta Crédito",
+          "n_rate_score": 76831,
+          "rate_score": 0.004919175746995425,
+          "n_rate_income": 72316,
+          "rate_income": 0.005800828100131442
+        },
+        {
+          "product_type": "Tarjeta Débito",
+          "n_rate_score": 30538,
+          "rate_score": null,
+          "n_rate_income": 28919,
+          "rate_income": null
+        }
+      ],
+      "credit_days": [
+        {
+          "paired_n": 106905,
+          "r": -0.003759549658614273
+        }
+      ]
+    }
+  }
+}
