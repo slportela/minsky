@@ -192,16 +192,18 @@ Placeholders: `<VM_IP>` static IPv4 of the instance; `<OPERATOR_CIDR>` operator 
        {"fromPort":22,"toPort":22,"protocol":"tcp",
         "cidrs":["<OPERATOR_CIDR>"],"ipv6Cidrs":[]},
        {"fromPort":80,"toPort":80,"protocol":"tcp",
-        "cidrs":["0.0.0.0/0"],"ipv6Cidrs":["::0/0"]}
+        "cidrs":["0.0.0.0/0"],"ipv6Cidrs":["::/0"]}
      ]'
    ```
    SSH is restricted to one operator /32 over IPv4 only; no IPv6 SSH; HTTP open.
 
 4. **Install Docker and Compose on the VM.**
-   The launch script fails under the system `dash` shell; run it explicitly with `bash`:
+   The script installs packages and writes under `/usr/local` and `/opt`, so it needs root, and
+   over SSH you are `ubuntu`: run it with `sudo`. It is POSIX-compatible (Lightsail runs launch
+   scripts under `dash` and ignores the shebang), so `bash` is not required.
    ```bash
-   scp -i <KEY_FILE> infra/tofu/modules/lightsail_smoke/user_data.sh ubuntu@<VM_IP>:/tmp/
-   ssh -i <KEY_FILE> ubuntu@<VM_IP> "bash /tmp/user_data.sh"
+   ssh -i <KEY_FILE> ubuntu@<VM_IP> "sudo bash -s" \
+     < infra/tofu/modules/lightsail_smoke/user_data.sh
    ```
    Reconnect after bootstrap; verify `id -nG` includes `docker` and
    `docker compose version` reports the pinned release (2.39.4).
@@ -237,8 +239,12 @@ Placeholders: `<VM_IP>` static IPv4 of the instance; `<OPERATOR_CIDR>` operator 
    Never upload the workstation `.env`, AWS profiles, organizer credentials or primary-account keys.
    - `images.env`: `MINSKY_API_IMAGE=minsky-api:smoke`; `MINSKY_WEB_IMAGE=minsky-web:smoke`; `AWS_REGION=us-east-2`
    - `db.env`: `POSTGRES_PASSWORD=<POSTGRES_PASSWORD>`
-   - `runtime.env`: model key (ADR 0008); `TEST_SESSIONS` JSON for three synthetic customers, expiring ≤ two weeks ahead
-   - `test-tokens.txt`: bearer tokens from `TEST_SESSIONS`, one per line, labeled with scenario
+   - `runtime.env`: `MINSKY_LLM_API_KEY=<MODEL_KEY>` (ADR 0008) and
+     `MINSKY_TEST_SESSIONS='{"<TOKEN>":{"customer_id":"<ID>","expires_at":"<ISO8601>"}}'` with one
+     random token per synthetic customer, expiring ≤ two weeks ahead (`backend/README.md`,
+     "Trusted test sessions"). Use exactly these names: `compose.yaml` interpolates only the
+     variables its `environment:` block references, and `--env-file` does not rename or inject others.
+   - `test-tokens.txt`: bearer tokens from `MINSKY_TEST_SESSIONS`, one per line, labeled with scenario
 
 9. **Start the Compose stack:**
    ```bash
@@ -250,12 +256,21 @@ Placeholders: `<VM_IP>` static IPv4 of the instance; `<OPERATOR_CIDR>` operator 
    ```
 
 10. **Load the gold read models** via an SSH port-forward tunnel to the Postgres container.
-    PostgreSQL is not host-published to the internet; tunnel through SSH:
+    Neither `compose.yaml` nor `compose.demo.yaml` publishes PostgreSQL on the host, so
+    `localhost:5432` on the VM does not exist. Tunnel to the container's address on the Compose
+    network instead (this is how the 2026-10-04 load was done). The user is the Compose default
+    `minsky`, and the loader must run from a checkout that has `data/warehouse.duckdb`:
     ```bash
-    ssh -i <KEY_FILE> -L 15432:localhost:5432 ubuntu@<VM_IP> -fN
-    GOLD_DATABASE_URL="postgresql://postgres:<POSTGRES_PASSWORD>@localhost:15432/minsky" \
-      python pipeline/load_gold.py
+    PGIP=$(ssh -i <KEY_FILE> ubuntu@<VM_IP> \
+      "docker inspect minsky-postgres-1 -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'")
+    PW=$(ssh -i <KEY_FILE> ubuntu@<VM_IP> "grep '^POSTGRES_PASSWORD=' /opt/minsky/db.env | cut -d= -f2-")
+    ssh -i <KEY_FILE> -f -N -L 15433:$PGIP:5432 ubuntu@<VM_IP>
+    GOLD_DATABASE_URL="postgresql://minsky:$PW@127.0.0.1:15433/minsky" \
+      uv run python pipeline/load_gold.py
+    pkill -f "15433:$PGIP:5432"   # close the tunnel when it finishes
     ```
+    Publishing the port on `127.0.0.1` of the VM with a Compose override would also work, but it was
+    not tried.
     Expected duration: approximately 18 minutes, most of it in transactions.
     Verify counts: customers 150,000; products 400,000; transactions 4,425,008;
     customer_complaint_stats 150,000; resolution_benchmarks 26; dispute_scenarios 160.
