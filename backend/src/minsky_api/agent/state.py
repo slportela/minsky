@@ -36,10 +36,11 @@ class ConversationState:
     dispute_reason: str = "unrecognized_charge"
     # Set from the first customer message; later turns reuse it.
     language: str | None = None
-    # Model decision for the confirm turn in progress (yes, no, unclear). Code acts only on yes.
+    # Model decision for the confirm turn (yes, no, unclear). Consent uses explicit_yes / explicit_no.
     confirmation: str | None = None
     # Acts the model chose on each turn, in order. Graders read this instead of fixed sentences.
     acts: list[str] = field(default_factory=list)
+    # Set only when code reports a verified card block.
     claims_card_blocked: bool = False
     # Text of the confirmation question already sent. None unless phase is a confirm phase.
     pending_question: str | None = None

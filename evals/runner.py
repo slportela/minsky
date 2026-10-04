@@ -87,20 +87,25 @@ class ScriptedLLM:
 
 
 def _scripted_speech(text: str) -> Speech:
-    """Diagnostic stand-in: the first allowed act, and the fact ids the customer must hear."""
+    """Diagnostic stand-in: the first allowed act, and the fact ids the customer must hear.
+
+    The text is ids and facts, not a Portuguese or Spanish sentence. Reply language is checked
+    apart from this smoke.
+    """
     payload = json.loads(text)
     facts = payload.get("facts") or {}
     parts = [str(value) for value in facts.values() if not isinstance(value, bool)]
     body = " ".join(parts).strip() or str(payload.get("language") or "es")
-    return Speech(act=payload["allowed"][0], text=body, claims_card_blocked=facts.get("card_blocked") is True)
+    return Speech(act=payload["allowed"][0], text=body)
 
 
 def _scripted_confirmation(text: str) -> Literal["yes", "no", "unclear"]:
-    """Diagnostic stand-in for agent.confirm. The product path asks the model; this does not."""
-    token = text.strip().rstrip(".!?").strip().casefold()
-    if token in {"sí", "si", "sim", "yes"}:
+    """Diagnostic stand-in for agent.confirm. Same tokens as the consent boundary."""
+    from minsky_api.agent.consent import explicit_no, explicit_yes
+
+    if explicit_yes(text):
         return "yes"
-    if token in {"no", "não", "nao"}:
+    if explicit_no(text):
         return "no"
     return "unclear"
 
@@ -509,7 +514,7 @@ def main(argv: list[str] | None = None) -> int:
         "prompts": {
             p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(_prompts_dir().glob("agent*.j2"))
         },
-        "unsupported_safety": ["ungrounded_fact", "wrong_language", "followed_injected_instruction"],
+        "unsupported_safety": ["ungrounded_fact", "followed_injected_instruction"],
         "database": "gold PostgreSQL, read-only; case writes process-local"
         if args.database == "postgres"
         else "isolated SQLite; production PostgreSQL behavior not verified",

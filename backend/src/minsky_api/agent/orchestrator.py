@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 
+from minsky_api.agent.consent import explicit_no, explicit_yes
 from minsky_api.agent.extract import DisputeDetails, extract_dispute_details
 from minsky_api.agent.language import LanguageDetector, default_language_detector
 from minsky_api.agent.speak import Speech, compose_speech
@@ -67,7 +68,7 @@ async def _speak(state: ConversationState, llm: LLM, allowed: tuple[str, ...], *
 
 
 def _fallback_text(language: str, facts: dict[str, object]) -> str:
-    """Ids from a write that already happened, used when the model cannot phrase the result."""
+    """The only customer sentence for a write that already happened."""
     bits: list[str] = []
     for key in ("dispute_id", "existing_dispute_id", "handoff_id", "rule_id", "transaction_id"):
         value = facts.get(key)
@@ -80,24 +81,18 @@ def _fallback_text(language: str, facts: dict[str, object]) -> str:
     return f"{lead} {body}".strip()
 
 
-async def _speak_verified(state: ConversationState, llm: LLM, allowed: tuple[str, ...], **facts: object) -> str:
-    """Speak after a verified write. A model failure still reports the read-back ids."""
+def _report_verified(state: ConversationState, act: str, **facts: object) -> str:
+    """Report a verified write. The model does not phrase this sentence."""
     language = _lang(state)
     public = _public_facts(state, **facts)
-    try:
-        speech = await compose_speech(llm, language=language, allowed=allowed, facts=public)
-    except Exception:
-        if public.get("card_blocked") is True:
-            state.claims_card_blocked = True
-        state.acts.append(allowed[0])
-        return _fallback_text(language, public)
-    return _accept(state, speech)
+    if public.get("card_blocked") is True:
+        state.claims_card_blocked = True
+    state.acts.append(act)
+    return _fallback_text(language, public)
 
 
 def _accept(state: ConversationState, speech: Speech) -> str:
     state.acts.append(speech.act)
-    if speech.claims_card_blocked:
-        state.claims_card_blocked = True
     return speech.text
 
 
@@ -157,7 +152,7 @@ async def _handoff(
     )
     state.phase = Phase.DONE
     state.pending_question = None
-    return await _speak_verified(state, llm, ("handoff",), handoff_id=result.handoff.handoff_id, rule_id=rule_id)
+    return _report_verified(state, "handoff", handoff_id=result.handoff.handoff_id, rule_id=rule_id)
 
 
 async def _get_owned_txn(ctx: ToolContext, transaction_id: str) -> TransactionView | None:
@@ -260,10 +255,9 @@ async def _apply_policy(ctx: ToolContext, state: ConversationState, llm: LLM) ->
         )
         state.phase = Phase.DONE
         state.pending_question = None
-        return await _speak_verified(
+        return _report_verified(
             state,
-            llm,
-            ("refuse",),
+            "refuse",
             handoff_id=result.handoff.handoff_id,
             rule_id=decision.rule_id,
         )
@@ -312,7 +306,7 @@ async def _phase_clarify(ctx: ToolContext, state: ConversationState, text: str, 
 
 
 async def _remember_decision(ctx: ToolContext, state: ConversationState, text: str, llm: LLM) -> str:
-    """Classify through the tool before any other tool. Only 'yes' may act."""
+    """Classify through the tool before any other tool. The result is evidence, not consent."""
     if not state.pending_question:
         state.confirmation = "unclear"
         return "unclear"
@@ -325,13 +319,28 @@ async def _remember_decision(ctx: ToolContext, state: ConversationState, text: s
     return result.decision
 
 
+async def _consent(ctx: ToolContext, state: ConversationState, text: str, llm: LLM) -> str:
+    """Classify for the audit trail. Only an explicit yes may authorize a write."""
+    if not state.pending_question:
+        state.confirmation = "unclear"
+        return "unclear"
+    decision = await _remember_decision(ctx, state, text, llm)
+    if explicit_no(text):
+        return "no"
+    if explicit_yes(text):
+        return "yes"
+    if decision == "no":
+        return "no"
+    return "unclear"
+
+
 async def _ask_again(state: ConversationState, llm: LLM) -> str:
     speech = await _speak(state, llm, ("ask_again",))
     return _accept(state, speech)
 
 
 async def _phase_confirm_txn(ctx: ToolContext, state: ConversationState, text: str, llm: LLM) -> str:
-    decision = await _remember_decision(ctx, state, text, llm)
+    decision = await _consent(ctx, state, text, llm)
     if decision == "yes":
         return await _apply_policy(ctx, state, llm)
     if decision == "no":
@@ -350,7 +359,7 @@ async def _phase_confirm_txn(ctx: ToolContext, state: ConversationState, text: s
 
 
 async def _phase_confirm_act(ctx: ToolContext, state: ConversationState, text: str, llm: LLM) -> str:
-    decision = await _remember_decision(ctx, state, text, llm)
+    decision = await _consent(ctx, state, text, llm)
     if decision == "no":
         speech = await _speak(state, llm, ("abort",))
         state.phase = Phase.DONE
@@ -371,17 +380,17 @@ async def _phase_confirm_act(ctx: ToolContext, state: ConversationState, text: s
     verified = await get_dispute(ctx, GetDisputeArgs(dispute_id=opened.dispute.dispute_id))
     state.phase = Phase.DONE
     state.pending_question = None
-    return await _speak_verified(
+    return _report_verified(
         state,
-        llm,
-        ("inform",),
+        "inform",
         dispute_id=verified.dispute.dispute_id,
         rule_id=state.rule_id or "D09-eligible",
     )
 
 
 async def _phase_card_offer(ctx: ToolContext, state: ConversationState, text: str, llm: LLM) -> str:
-    if await _remember_decision(ctx, state, text, llm) == "yes":
+    decision = await _consent(ctx, state, text, llm)
+    if decision == "yes":
         actions: list[str] = []
         blocked_ok = False
         if state.selected_product_id:
@@ -406,15 +415,14 @@ async def _phase_card_offer(ctx: ToolContext, state: ConversationState, text: st
         )
         state.phase = Phase.DONE
         state.pending_question = None
-        return await _speak_verified(
+        return _report_verified(
             state,
-            llm,
-            ("handoff",),
+            "handoff",
             handoff_id=result.handoff.handoff_id,
             card_blocked=blocked_ok,
             rule_id=state.rule_id,
         )
-    if state.confirmation == "no":
+    if decision == "no":
         state.pending_question = None
         return await _handoff(ctx, state, llm, reason="possible_fraud_no_block", rule_id=state.rule_id)
     return await _ask_again(state, llm)

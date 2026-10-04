@@ -28,7 +28,6 @@ class _SpeechLLM:
         parsed = schema(
             act=payload["allowed"][0],
             text=" ".join(parts) or "es",
-            claims_card_blocked=facts.get("card_blocked") is True,
         )
         return LLMResult(
             text=parsed.model_dump_json(),

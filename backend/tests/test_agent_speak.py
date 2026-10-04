@@ -12,14 +12,13 @@ from minsky_api.llm.client import LLMResult
 
 
 class RecordingLLM:
-    def __init__(self, act: str, text: str, *, claims_card_blocked: bool = False) -> None:
+    def __init__(self, act: str, text: str) -> None:
         self.act = act
         self.text = text
-        self.claims_card_blocked = claims_card_blocked
 
     async def respond(self, instructions: str, messages: list[dict[str, str]], **kwargs: Any) -> LLMResult[Any]:
         schema = kwargs["schema"]
-        parsed = schema(act=self.act, text=self.text, claims_card_blocked=self.claims_card_blocked)
+        parsed = schema(act=self.act, text=self.text)
         return LLMResult(
             text=parsed.model_dump_json(),
             parsed=parsed,
@@ -55,26 +54,23 @@ def test_compose_speech_rejects_an_act_outside_the_allowed_list():
         )
 
 
-def test_compose_speech_rejects_an_unverified_card_block_claim():
+def test_compose_speech_rejects_a_block_sentence():
     with pytest.raises(RuntimeError, match="unverified"):
         asyncio.run(
             compose_speech(
-                RecordingLLM("handoff", "Bloqueé la tarjeta. HO-abc", claims_card_blocked=True),  # type: ignore[arg-type]
+                RecordingLLM("handoff", "Bloqueé la tarjeta. HO-abc"),  # type: ignore[arg-type]
                 language="es",
                 allowed=("handoff",),
-                facts={"handoff_id": "HO-abc", "card_blocked": False},
+                facts={"handoff_id": "HO-abc"},
             )
         )
-
-
-def test_compose_speech_rejects_a_block_sentence_when_the_flag_is_false():
     with pytest.raises(RuntimeError, match="unverified"):
         asyncio.run(
             compose_speech(
-                RecordingLLM("inform", "Bloqueei o cartão.", claims_card_blocked=False),  # type: ignore[arg-type]
+                RecordingLLM("inform", "Bloqueei o cartão."),  # type: ignore[arg-type]
                 language="pt",
                 allowed=("inform",),
-                facts={"card_blocked": False},
+                facts={},
             )
         )
 
@@ -92,16 +88,58 @@ def test_compose_speech_rejects_an_open_or_refund_or_handoff_sentence_without_fa
             )
 
 
-def test_compose_speech_allows_a_verified_open_and_an_offer_to_block():
-    opened = asyncio.run(
-        compose_speech(
-            RecordingLLM("inform", "Quedó abierto el reclamo DSP-abc."),  # type: ignore[arg-type]
-            language="es",
-            allowed=("inform",),
-            facts={"dispute_id": "DSP-abc"},
+def test_compose_speech_rejects_a_completed_open_even_when_the_id_is_present():
+    with pytest.raises(RuntimeError, match="unverified"):
+        asyncio.run(
+            compose_speech(
+                RecordingLLM("inform", "Quedó abierto el reclamo DSP-abc."),  # type: ignore[arg-type]
+                language="es",
+                allowed=("inform",),
+                facts={"dispute_id": "DSP-abc"},
+            )
         )
+
+
+def test_compose_speech_rejects_paraphrased_refunds_and_blocks():
+    samples = (
+        ("es", "T1: el importe ya fue reembolsado."),
+        ("pt", "T1: seu dinheiro já foi devolvido."),
+        ("es", "T1: hemos bloqueado tu tarjeta."),
     )
-    assert opened.text.startswith("Quedó abierto")
+    for language, text in samples:
+        with pytest.raises(RuntimeError, match="unverified"):
+            asyncio.run(
+                compose_speech(
+                    RecordingLLM("clarify", text),  # type: ignore[arg-type]
+                    language=language,
+                    allowed=("clarify",),
+                    facts={"transaction_id": "T1"},
+                )
+            )
+
+
+def test_compose_speech_rejects_a_confident_reply_in_the_other_language():
+    with pytest.raises(RuntimeError, match="language"):
+        asyncio.run(
+            compose_speech(
+                RecordingLLM("clarify", "T1: necesito el comercio y el monto."),  # type: ignore[arg-type]
+                language="pt",
+                allowed=("clarify",),
+                facts={"transaction_id": "T1"},
+            )
+        )
+    with pytest.raises(RuntimeError, match="language"):
+        asyncio.run(
+            compose_speech(
+                RecordingLLM("clarify", "T1: preciso do comércio e do valor."),  # type: ignore[arg-type]
+                language="es",
+                allowed=("clarify",),
+                facts={"transaction_id": "T1"},
+            )
+        )
+
+
+def test_compose_speech_keeps_an_offer_to_block():
     offer = asyncio.run(
         compose_speech(
             RecordingLLM("offer_block", "¿Quieres que bloquee la tarjeta del cargo T1? Regla D06."),  # type: ignore[arg-type]

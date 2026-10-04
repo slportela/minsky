@@ -1,8 +1,9 @@
 """One model call chooses the next conversational step and writes the customer text.
 
 Code passes the allowed acts and the verified facts. An act outside that list, a reply that
-drops a fact the customer must hear, or a completed-action sentence the facts do not support,
-is refused before anything is sent.
+drops a fact the customer must hear, a completed-action sentence, or a confident reply in
+the other language is refused before anything is sent. The sentence that reports a finished
+action is rendered from the verified result, not by this call.
 """
 
 from __future__ import annotations
@@ -13,14 +14,20 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from minsky_api.agent.language import default_language_detector
 from minsky_api.agent.prompts import render
 from minsky_api.llm.client import LLM
 
 # Completed actions only. Offers ("bloquee", "derivo", "abrir") stay out of these patterns.
+# This is a backstop. The customer-facing action sentence is rendered from the verified result.
 _CLAIM_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
     (
         "card_blocked",
-        re.compile(r"\bbloqueé\b|\bbloqueei\b|\btarjeta bloqueada\b|\bcartão bloqueado\b|\bcartao bloqueado\b"),
+        re.compile(
+            r"\bbloque(?:é|ei|amos|ámos)\b"
+            r"|\bbloquead[oa]s?\b"
+            r"|\b(?:tarjeta|cartão|cartao) bloquead"
+        ),
     ),
     (
         "dispute_opened",
@@ -32,7 +39,7 @@ _CLAIM_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
     ),
     (
         "refund",
-        re.compile(r"\breembolsé\b|\breembolsei\b|\bdevolví\b|\bdevolvi\b"),
+        re.compile(r"\breembols|\bdevolvido\b|\bdevolvida\b|\bdevolv(?:í|i|eu)\b"),
     ),
     (
         "handoff",
@@ -64,7 +71,6 @@ class Speech(BaseModel):
 
     act: Act
     text: str = Field(min_length=1)
-    claims_card_blocked: bool = False
 
 
 def action_claims(text: str) -> frozenset[str]:
@@ -91,18 +97,12 @@ def _dropped_fact(act: str, text: str, facts: dict[str, object]) -> str | None:
     return None
 
 
-def _unsupported_claim(text: str, facts: dict[str, object]) -> str | None:
+def _unsupported_claim(text: str) -> str | None:
+    """The model does not report a finished action. Code renders that sentence."""
     claims = action_claims(text)
-    if "card_blocked" in claims and facts.get("card_blocked") is not True:
-        return "card_blocked"
-    dispute_id = facts.get("dispute_id")
-    if "dispute_opened" in claims and not (isinstance(dispute_id, str) and dispute_id in text):
-        return "dispute_opened"
-    handoff_id = facts.get("handoff_id")
-    if "handoff" in claims and not (isinstance(handoff_id, str) and handoff_id in text):
-        return "handoff"
-    if "refund" in claims:
-        return "refund"
+    for name in ("card_blocked", "dispute_opened", "refund", "handoff"):
+        if name in claims:
+            return name
     return None
 
 
@@ -115,8 +115,8 @@ async def compose_speech(
 ) -> Speech:
     """The model's act and wording.
 
-    Raises when the act is not allowed, a required fact is missing from the text, or the text
-    reports a block, an open, a refund, or a handoff the facts do not support.
+    Raises when the act is not allowed, a required fact is missing from the text, the text
+    reports a finished action, or lingua is confident the sentence is in the other language.
     """
     if not allowed:
         raise RuntimeError("compose_speech: no allowed act")
@@ -138,12 +138,13 @@ async def compose_speech(
         raise RuntimeError("compose_speech: model returned no parsed schema")
     if parsed.act not in allowed:
         raise RuntimeError(f"compose_speech: act {parsed.act} is not allowed")
+    detected = default_language_detector().recognize(parsed.text)
+    if detected is not None and detected != language:
+        raise RuntimeError(f"compose_speech: reply language is {detected}")
     dropped = _dropped_fact(parsed.act, parsed.text, facts)
     if dropped is not None:
         raise RuntimeError(f"compose_speech: reply drops {dropped}")
-    unsupported = _unsupported_claim(parsed.text, facts)
+    unsupported = _unsupported_claim(parsed.text)
     if unsupported is not None:
         raise RuntimeError(f"compose_speech: unverified {unsupported}")
-    if parsed.claims_card_blocked and facts.get("card_blocked") is not True:
-        raise RuntimeError("compose_speech: unverified card block")
     return parsed
