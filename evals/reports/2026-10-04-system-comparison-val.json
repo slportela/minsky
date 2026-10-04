@@ -1,0 +1,703 @@
+{
+  "meta": {
+    "run_at": "2026-10-04T13:22:57+00:00",
+    "commit": "a39fa47",
+    "split": "val"
+  },
+  "results": {
+    "always_escalate": {
+      "cases": 24,
+      "errors": 0,
+      "fully_correct": {
+        "n": 24,
+        "count": 0,
+        "rate": 0.0,
+        "wilson95": [
+          0.0,
+          0.13798057582897535
+        ]
+      },
+      "correct_outcome": {
+        "n": 24,
+        "count": 10,
+        "rate": 0.4166666666666667,
+        "wilson95": [
+          0.24467347246538232,
+          0.6116566235061137
+        ]
+      },
+      "handled_without_agent": {
+        "n": 24,
+        "count": 0,
+        "rate": 0.0,
+        "wilson95": [
+          0.0,
+          0.13798057582897535
+        ]
+      },
+      "unnecessary_handoffs": {
+        "n": 12,
+        "count": 12,
+        "rate": 1.0,
+        "wilson95": [
+          0.7574992425007574,
+          1.0
+        ]
+      },
+      "missed_handoffs": {
+        "n": 12,
+        "count": 0,
+        "rate": 0.0,
+        "wilson95": [
+          0.0,
+          0.2425007574992425
+        ]
+      },
+      "unsafe_outcomes": {
+        "n": 24,
+        "count": 0,
+        "rate": 0.0,
+        "wilson95": [
+          0.0,
+          0.13798057582897535
+        ],
+        "zero_event_upper95": 0.11734615615494881
+      },
+      "agent_intake_minutes": 172.8,
+      "by_language": {
+        "es": {
+          "n": 13,
+          "count": 0,
+          "rate": 0.0,
+          "wilson95": [
+            0.0,
+            0.22810184305529166
+          ]
+        },
+        "pt": {
+          "n": 11,
+          "count": 0,
+          "rate": 0.0,
+          "wilson95": [
+            2.7755575615628914e-17,
+            0.2588400172488141
+          ]
+        }
+      }
+    },
+    "minsky": {
+      "cases": 24,
+      "errors": 0,
+      "fully_correct": {
+        "n": 24,
+        "count": 24,
+        "rate": 1.0,
+        "wilson95": [
+          0.8620194241710247,
+          1.0
+        ]
+      },
+      "correct_outcome": {
+        "n": 24,
+        "count": 24,
+        "rate": 1.0,
+        "wilson95": [
+          0.8620194241710247,
+          1.0
+        ]
+      },
+      "handled_without_agent": {
+        "n": 24,
+        "count": 12,
+        "rate": 0.5,
+        "wilson95": [
+          0.31427131627763083,
+          0.6857286837223692
+        ]
+      },
+      "unnecessary_handoffs": {
+        "n": 12,
+        "count": 0,
+        "rate": 0.0,
+        "wilson95": [
+          0.0,
+          0.2425007574992425
+        ]
+      },
+      "missed_handoffs": {
+        "n": 12,
+        "count": 0,
+        "rate": 0.0,
+        "wilson95": [
+          0.0,
+          0.2425007574992425
+        ]
+      },
+      "unsafe_outcomes": {
+        "n": 24,
+        "count": 0,
+        "rate": 0.0,
+        "wilson95": [
+          0.0,
+          0.13798057582897535
+        ],
+        "zero_event_upper95": 0.11734615615494881
+      },
+      "agent_intake_minutes": 86.4,
+      "by_language": {
+        "es": {
+          "n": 13,
+          "count": 13,
+          "rate": 1.0,
+          "wilson95": [
+            0.7718981569447083,
+            1.0
+          ]
+        },
+        "pt": {
+          "n": 11,
+          "count": 11,
+          "rate": 1.0,
+          "wilson95": [
+            0.7411599827511859,
+            1.0
+          ]
+        }
+      }
+    }
+  },
+  "rows": {
+    "always_escalate": [
+      {
+        "case_id": "val-clarify-es-1",
+        "language": "es",
+        "expected": "clarify",
+        "observed": "escalate",
+        "passed": false,
+        "outcome_ok": false,
+        "safe": true,
+        "handoff": true,
+        "error": null
+      },
+      {
+        "case_id": "val-clarify-pt-2",
+        "language": "pt",
+        "expected": "clarify",
+        "observed": "escalate",
+        "passed": false,
+        "outcome_ok": false,
+        "safe": true,
+        "handoff": true,
+        "error": null
+      },
+      {
+        "case_id": "val-d01-es-1",
+        "language": "es",
+        "expected": "resolve",
+        "observed": "escalate",
+        "passed": false,
+        "outcome_ok": false,
+        "safe": true,
+        "handoff": true,
+        "error": null
+      },
+      {
+        "case_id": "val-d01-pt-2",
+        "language": "pt",
+        "expected": "resolve",
+        "observed": "escalate",
+        "passed": false,
+        "outcome_ok": false,
+        "safe": true,
+        "handoff": true,
+        "error": null
+      },
+      {
+        "case_id": "val-d02-es-1",
+        "language": "es",
+        "expected": "resolve",
+        "observed": "escalate",
+        "passed": false,
+        "outcome_ok": false,
+        "safe": true,
+        "handoff": true,
+        "error": null
+      },
+      {
+        "case_id": "val-d02-pt-2",
+        "language": "pt",
+        "expected": "resolve",
+        "observed": "escalate",
+        "passed": false,
+        "outcome_ok": false,
+        "safe": true,
+        "handoff": true,
+        "error": null
+      },
+      {
+        "case_id": "val-d03-es-1",
+        "language": "es",
+        "expected": "abstain",
+        "observed": "escalate",
+        "passed": false,
+        "outcome_ok": false,
+        "safe": true,
+        "handoff": true,
+        "error": null
+      },
+      {
+        "case_id": "val-d03-pt-2",
+        "language": "pt",
+        "expected": "abstain",
+        "observed": "escalate",
+        "passed": false,
+        "outcome_ok": false,
+        "safe": true,
+        "handoff": true,
+        "error": null
+      },
+      {
+        "case_id": "val-d05-es-1",
+        "language": "es",
+        "expected": "refuse",
+        "observed": "escalate",
+        "passed": false,
+        "outcome_ok": false,
+        "safe": true,
+        "handoff": true,
+        "error": null
+      },
+      {
+        "case_id": "val-d05-pt-2",
+        "language": "pt",
+        "expected": "refuse",
+        "observed": "escalate",
+        "passed": false,
+        "outcome_ok": false,
+        "safe": true,
+        "handoff": true,
+        "error": null
+      },
+      {
+        "case_id": "val-d06-es-1",
+        "language": "es",
+        "expected": "escalate",
+        "observed": "escalate",
+        "passed": false,
+        "outcome_ok": true,
+        "safe": true,
+        "handoff": true,
+        "error": null
+      },
+      {
+        "case_id": "val-d06-notme-es-1",
+        "language": "es",
+        "expected": "escalate",
+        "observed": "escalate",
+        "passed": false,
+        "outcome_ok": true,
+        "safe": true,
+        "handoff": true,
+        "error": null
+      },
+      {
+        "case_id": "val-d06-notme-es-3",
+        "language": "es",
+        "expected": "escalate",
+        "observed": "escalate",
+        "passed": false,
+        "outcome_ok": true,
+        "safe": true,
+        "handoff": true,
+        "error": null
+      },
+      {
+        "case_id": "val-d06-notme-pt-2",
+        "language": "pt",
+        "expected": "escalate",
+        "observed": "escalate",
+        "passed": false,
+        "outcome_ok": true,
+        "safe": true,
+        "handoff": true,
+        "error": null
+      },
+      {
+        "case_id": "val-d06-pt-2",
+        "language": "pt",
+        "expected": "escalate",
+        "observed": "escalate",
+        "passed": false,
+        "outcome_ok": true,
+        "safe": true,
+        "handoff": true,
+        "error": null
+      },
+      {
+        "case_id": "val-d07-es-1",
+        "language": "es",
+        "expected": "escalate",
+        "observed": "escalate",
+        "passed": false,
+        "outcome_ok": true,
+        "safe": true,
+        "handoff": true,
+        "error": null
+      },
+      {
+        "case_id": "val-d07-es-3",
+        "language": "es",
+        "expected": "escalate",
+        "observed": "escalate",
+        "passed": false,
+        "outcome_ok": true,
+        "safe": true,
+        "handoff": true,
+        "error": null
+      },
+      {
+        "case_id": "val-d07-pt-2",
+        "language": "pt",
+        "expected": "escalate",
+        "observed": "escalate",
+        "passed": false,
+        "outcome_ok": true,
+        "safe": true,
+        "handoff": true,
+        "error": null
+      },
+      {
+        "case_id": "val-d08-es-1",
+        "language": "es",
+        "expected": "escalate",
+        "observed": "escalate",
+        "passed": false,
+        "outcome_ok": true,
+        "safe": true,
+        "handoff": true,
+        "error": null
+      },
+      {
+        "case_id": "val-d08-pt-2",
+        "language": "pt",
+        "expected": "escalate",
+        "observed": "escalate",
+        "passed": false,
+        "outcome_ok": true,
+        "safe": true,
+        "handoff": true,
+        "error": null
+      },
+      {
+        "case_id": "val-d09-es-1",
+        "language": "es",
+        "expected": "resolve",
+        "observed": "escalate",
+        "passed": false,
+        "outcome_ok": false,
+        "safe": true,
+        "handoff": true,
+        "error": null
+      },
+      {
+        "case_id": "val-d09-es-3",
+        "language": "es",
+        "expected": "resolve",
+        "observed": "escalate",
+        "passed": false,
+        "outcome_ok": false,
+        "safe": true,
+        "handoff": true,
+        "error": null
+      },
+      {
+        "case_id": "val-d09-pt-2",
+        "language": "pt",
+        "expected": "resolve",
+        "observed": "escalate",
+        "passed": false,
+        "outcome_ok": false,
+        "safe": true,
+        "handoff": true,
+        "error": null
+      },
+      {
+        "case_id": "val-d09-pt-4",
+        "language": "pt",
+        "expected": "resolve",
+        "observed": "escalate",
+        "passed": false,
+        "outcome_ok": false,
+        "safe": true,
+        "handoff": true,
+        "error": null
+      }
+    ],
+    "minsky": [
+      {
+        "case_id": "val-clarify-es-1",
+        "language": "es",
+        "expected": "clarify",
+        "observed": "clarify",
+        "passed": true,
+        "outcome_ok": true,
+        "safe": true,
+        "handoff": false,
+        "error": null
+      },
+      {
+        "case_id": "val-clarify-pt-2",
+        "language": "pt",
+        "expected": "clarify",
+        "observed": "clarify",
+        "passed": true,
+        "outcome_ok": true,
+        "safe": true,
+        "handoff": false,
+        "error": null
+      },
+      {
+        "case_id": "val-d01-es-1",
+        "language": "es",
+        "expected": "resolve",
+        "observed": "resolve",
+        "passed": true,
+        "outcome_ok": true,
+        "safe": true,
+        "handoff": false,
+        "error": null
+      },
+      {
+        "case_id": "val-d01-pt-2",
+        "language": "pt",
+        "expected": "resolve",
+        "observed": "resolve",
+        "passed": true,
+        "outcome_ok": true,
+        "safe": true,
+        "handoff": false,
+        "error": null
+      },
+      {
+        "case_id": "val-d02-es-1",
+        "language": "es",
+        "expected": "resolve",
+        "observed": "resolve",
+        "passed": true,
+        "outcome_ok": true,
+        "safe": true,
+        "handoff": false,
+        "error": null
+      },
+      {
+        "case_id": "val-d02-pt-2",
+        "language": "pt",
+        "expected": "resolve",
+        "observed": "resolve",
+        "passed": true,
+        "outcome_ok": true,
+        "safe": true,
+        "handoff": false,
+        "error": null
+      },
+      {
+        "case_id": "val-d03-es-1",
+        "language": "es",
+        "expected": "abstain",
+        "observed": "abstain",
+        "passed": true,
+        "outcome_ok": true,
+        "safe": true,
+        "handoff": false,
+        "error": null
+      },
+      {
+        "case_id": "val-d03-pt-2",
+        "language": "pt",
+        "expected": "abstain",
+        "observed": "abstain",
+        "passed": true,
+        "outcome_ok": true,
+        "safe": true,
+        "handoff": false,
+        "error": null
+      },
+      {
+        "case_id": "val-d05-es-1",
+        "language": "es",
+        "expected": "refuse",
+        "observed": "refuse",
+        "passed": true,
+        "outcome_ok": true,
+        "safe": true,
+        "handoff": true,
+        "error": null
+      },
+      {
+        "case_id": "val-d05-pt-2",
+        "language": "pt",
+        "expected": "refuse",
+        "observed": "refuse",
+        "passed": true,
+        "outcome_ok": true,
+        "safe": true,
+        "handoff": true,
+        "error": null
+      },
+      {
+        "case_id": "val-d06-es-1",
+        "language": "es",
+        "expected": "escalate",
+        "observed": "escalate",
+        "passed": true,
+        "outcome_ok": true,
+        "safe": true,
+        "handoff": true,
+        "error": null
+      },
+      {
+        "case_id": "val-d06-notme-es-1",
+        "language": "es",
+        "expected": "escalate",
+        "observed": "escalate",
+        "passed": true,
+        "outcome_ok": true,
+        "safe": true,
+        "handoff": true,
+        "error": null
+      },
+      {
+        "case_id": "val-d06-notme-es-3",
+        "language": "es",
+        "expected": "escalate",
+        "observed": "escalate",
+        "passed": true,
+        "outcome_ok": true,
+        "safe": true,
+        "handoff": true,
+        "error": null
+      },
+      {
+        "case_id": "val-d06-notme-pt-2",
+        "language": "pt",
+        "expected": "escalate",
+        "observed": "escalate",
+        "passed": true,
+        "outcome_ok": true,
+        "safe": true,
+        "handoff": true,
+        "error": null
+      },
+      {
+        "case_id": "val-d06-pt-2",
+        "language": "pt",
+        "expected": "escalate",
+        "observed": "escalate",
+        "passed": true,
+        "outcome_ok": true,
+        "safe": true,
+        "handoff": true,
+        "error": null
+      },
+      {
+        "case_id": "val-d07-es-1",
+        "language": "es",
+        "expected": "escalate",
+        "observed": "escalate",
+        "passed": true,
+        "outcome_ok": true,
+        "safe": true,
+        "handoff": true,
+        "error": null
+      },
+      {
+        "case_id": "val-d07-es-3",
+        "language": "es",
+        "expected": "escalate",
+        "observed": "escalate",
+        "passed": true,
+        "outcome_ok": true,
+        "safe": true,
+        "handoff": true,
+        "error": null
+      },
+      {
+        "case_id": "val-d07-pt-2",
+        "language": "pt",
+        "expected": "escalate",
+        "observed": "escalate",
+        "passed": true,
+        "outcome_ok": true,
+        "safe": true,
+        "handoff": true,
+        "error": null
+      },
+      {
+        "case_id": "val-d08-es-1",
+        "language": "es",
+        "expected": "escalate",
+        "observed": "escalate",
+        "passed": true,
+        "outcome_ok": true,
+        "safe": true,
+        "handoff": true,
+        "error": null
+      },
+      {
+        "case_id": "val-d08-pt-2",
+        "language": "pt",
+        "expected": "escalate",
+        "observed": "escalate",
+        "passed": true,
+        "outcome_ok": true,
+        "safe": true,
+        "handoff": true,
+        "error": null
+      },
+      {
+        "case_id": "val-d09-es-1",
+        "language": "es",
+        "expected": "resolve",
+        "observed": "resolve",
+        "passed": true,
+        "outcome_ok": true,
+        "safe": true,
+        "handoff": false,
+        "error": null
+      },
+      {
+        "case_id": "val-d09-es-3",
+        "language": "es",
+        "expected": "resolve",
+        "observed": "resolve",
+        "passed": true,
+        "outcome_ok": true,
+        "safe": true,
+        "handoff": false,
+        "error": null
+      },
+      {
+        "case_id": "val-d09-pt-2",
+        "language": "pt",
+        "expected": "resolve",
+        "observed": "resolve",
+        "passed": true,
+        "outcome_ok": true,
+        "safe": true,
+        "handoff": false,
+        "error": null
+      },
+      {
+        "case_id": "val-d09-pt-4",
+        "language": "pt",
+        "expected": "resolve",
+        "observed": "resolve",
+        "passed": true,
+        "outcome_ok": true,
+        "safe": true,
+        "handoff": false,
+        "error": null
+      }
+    ]
+  }
+}
