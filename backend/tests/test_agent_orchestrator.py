@@ -403,8 +403,11 @@ def test_card_offer_without_product_does_not_claim_block():
 
 
 def test_model_yes_on_a_hedged_reply_asks_again():
-    """The deterministic floor: a model 'yes' on a reply that also says no or 'but' never acts."""
-    for text in ("no", "sí, pero mejor no", "sim, mas espere"):
+    """The deterministic floor: a model 'yes' on a reply that also says no or 'but' never acts.
+
+    A reply that is only "no" is not here: it is a plain decline (see the bare-no tests below).
+    """
+    for text in ("sí, pero mejor no", "sim, mas espere", "no, gracias"):
         ctx = _ctx()
         state = _state()
         llm = FakeLLM(_details(), decisions=["yes"])
@@ -433,7 +436,8 @@ def test_confirm_turn_classifies_before_any_other_tool():
     state, _ = asyncio.run(run_turn(state, "Cafe 25", ctx, llm))  # type: ignore[arg-type]
     assert state.pending_question
     audit_len = len(ctx.cases.list_audit())
-    state, _ = asyncio.run(run_turn(state, "no", ctx, llm))  # type: ignore[arg-type]
+    # A hedged reply, not a bare "no": the model says yes and the hedge floor turns it into a question.
+    state, _ = asyncio.run(run_turn(state, "sí, pero mejor no", ctx, llm))  # type: ignore[arg-type]
     tools = [row.tool for row in ctx.cases.list_audit()]
     assert tools[audit_len] == "classify_reply"
     assert "open_dispute" not in tools
@@ -909,3 +913,47 @@ def test_a_missing_llm_key_is_not_hidden_by_the_clarify_fallback():
     ctx, _ = _two_cafes()
     with pytest.raises(LLMNotConfiguredError):
         asyncio.run(run_turn(_state(), _OPENER, ctx, _NotConfigured(_details(amount=None))))  # type: ignore[arg-type]
+
+
+# ---- a bare "no" declines, whatever the model reads ---------------------------------------------------------------
+
+
+def test_a_bare_no_to_the_card_offer_hands_off_even_if_the_model_reads_it_as_yes():
+    """Live, the classifier read "no" as "yes" in 5 of 60 calls under the D06 wording. The hedge floor then asked
+    again, so the customer was neither blocked nor handed to the fraud team. A plain "no" now declines."""
+    ctx = _ctx(_txn(is_fraud=True))
+    state = _state()
+    llm = FakeLLM(_details(customer_says_not_me=True), decisions=["yes", "yes"])
+    state, _ = asyncio.run(run_turn(state, "No fui yo en Cafe", ctx, llm))  # type: ignore[arg-type]
+    state, _ = asyncio.run(run_turn(state, "sí", ctx, llm))  # type: ignore[arg-type]
+    assert state.phase == Phase.CARD_OFFER
+    state, reply = asyncio.run(run_turn(state, "no", ctx, llm))  # type: ignore[arg-type]
+    assert state.phase == Phase.DONE
+    assert state.confirmation == "no"
+    assert "HO-" in reply
+    assert ctx.cases.get_card_block("P1") is None
+    audit = ctx.cases.list_audit()
+    assert any(a.tool == "create_handoff" and a.outcome == "ok" for a in audit)
+    assert not any(a.tool == "block_card" and a.outcome == "ok" for a in audit)
+
+
+def test_a_bare_no_to_the_transaction_question_opens_nothing():
+    ctx = _ctx()
+    state = _state()
+    llm = FakeLLM(_details(), decisions=["yes", "yes"])
+    state, _ = asyncio.run(run_turn(state, "Cafe 25", ctx, llm))  # type: ignore[arg-type]
+    assert state.phase == Phase.CONFIRM_TXN
+    state, _ = asyncio.run(run_turn(state, "No.", ctx, llm))  # type: ignore[arg-type]
+    assert state.confirmation == "no"
+    assert state.phase != Phase.CONFIRM_ACT
+    assert not any(a.tool == "open_dispute" for a in ctx.cases.list_audit())
+
+
+def test_a_bare_yes_still_needs_the_model_and_the_hedge_floor():
+    """The floor only ever declines. A "yes" is never decided without the model."""
+    ctx = _ctx()
+    state = _state()
+    llm = FakeLLM(_details(), decisions=["no"])
+    state, _ = asyncio.run(run_turn(state, "Cafe 25", ctx, llm))  # type: ignore[arg-type]
+    state, _ = asyncio.run(run_turn(state, "sí", ctx, llm))  # type: ignore[arg-type]
+    assert state.confirmation == "no"  # the model's verdict decides, not the word
