@@ -23,3 +23,5 @@ frontend/tsconfig.tsbuildinfo
 .DS_Store
 # personal scratch notebook (Sebastián), kept out of the repo
 pipeline/notebooks/checks_sebas.ipynb
+# the router training data is small, generated and committed (ml/README.md)
+!ml/router/data/
