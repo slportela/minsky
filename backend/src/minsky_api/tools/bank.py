@@ -2,7 +2,10 @@
 
 Contracts and limits (B4):
 - Every call takes ToolContext (session + db + cases); never a customer_id from the model.
-- Reads use bank.* stores; writes use InMemoryCasesBackend until Postgres cases.* exists.
+- Reads use bank.* stores; writes go through the CasesBackend protocol (Postgres cases.* in compose,
+  in memory in tests and offline evals).
+- Every dispute opened and every handoff also queues a back-office case (tools.casework) with its
+  triage, the verified transaction facts and the open questions, for the agent console.
 - open_dispute and block_card require confirmed=True (orchestrator sets it after explicit YES).
 - open_dispute also enforces the dispute policy itself (policy.disputes.decide on verified facts):
   only rule D09 (eligible) opens a dispute; any other rule is a denial whose reason is the rule id.
@@ -25,11 +28,13 @@ from minsky_api.config import get_settings
 from minsky_api.identity.errors import PermissionDenied
 from minsky_api.identity.session import require_customer
 from minsky_api.policy.disputes import Decision, DisputeFacts, Route, TxnStatus, decide
+from minsky_api.policy.triage import CaseKind
 from minsky_api.store.complaint_stats import ComplaintStatsStore
 from minsky_api.store.errors import StoreError
 from minsky_api.store.models import Transaction
 from minsky_api.store.products import ProductStore
 from minsky_api.store.transactions import TransactionStore
+from minsky_api.tools.casework import enqueue_case
 from minsky_api.tools.context import ToolContext
 from minsky_api.tools.errors import ToolDenied, ToolError
 from minsky_api.tools.schemas import (
@@ -281,6 +286,19 @@ async def open_dispute(ctx: ToolContext, args: OpenDisputeArgs) -> OpenDisputeRe
     verified = ctx.cases.get_dispute(record.dispute_id)
     if verified is None:
         raise ToolError("open_dispute read-back failed")
+    if existing is None:
+        await enqueue_case(
+            ctx,
+            kind=CaseKind.DISPUTE,
+            case_id=verified.dispute_id,
+            customer_id=customer_id,
+            reason=args.reason,
+            rule_id="D09-eligible",
+            txn=txn,
+            customer_facts={"customer_says_not_me": args.customer_says_not_me or None},
+            actions=("dispute_opened",),
+            created_at=verified.created_at,
+        )
     result = OpenDisputeResult(dispute=DisputeView.model_validate(verified), created=existing is None)
     _audit(ctx, tool="open_dispute", args=audit_args, outcome="ok", customer_id=customer_id)
     return result
@@ -333,6 +351,18 @@ async def create_handoff(ctx: ToolContext, args: CreateHandoffArgs) -> CreateHan
         "actions": list(args.actions),
     }
     customer_id = _require_customer(ctx, tool="create_handoff", args=audit_args)
+    # The case's transaction facts come from bank.*, and only for the customer's own transaction.
+    txn: Transaction | None = None
+    txn_id = args.facts.get("transaction_id")
+    if isinstance(txn_id, str) and txn_id:
+        row = await _store(
+            ctx,
+            tool="create_handoff",
+            args=audit_args,
+            customer_id=customer_id,
+            call=lambda: TransactionStore(ctx.db).get(txn_id),
+        )
+        txn = row if row is not None and row.customer_id == customer_id else None
     created = ctx.cases.create_handoff(
         customer_id=customer_id,
         reason=args.reason,
@@ -344,6 +374,18 @@ async def create_handoff(ctx: ToolContext, args: CreateHandoffArgs) -> CreateHan
     verified = ctx.cases.get_handoff(created.handoff_id)
     if verified is None:
         raise ToolError("create_handoff read-back failed")
+    await enqueue_case(
+        ctx,
+        kind=CaseKind.HANDOFF,
+        case_id=verified.handoff_id,
+        customer_id=customer_id,
+        reason=verified.reason,
+        rule_id=verified.rule_id,
+        txn=txn,
+        customer_facts=dict(verified.facts),
+        actions=verified.actions,
+        created_at=verified.created_at,
+    )
     result = CreateHandoffResult(handoff=HandoffView.model_validate(verified))
     _audit(ctx, tool="create_handoff", args=audit_args, outcome="ok", customer_id=customer_id)
     return result

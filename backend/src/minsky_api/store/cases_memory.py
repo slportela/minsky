@@ -1,11 +1,12 @@
-"""In-memory cases.* stand-in until Postgres DDL and SQLModel write stores exist.
+"""Process-local cases.* backend: unit tests, offline evals and runs without Postgres.
 
-Replace with a SQL-backed implementation behind the same methods; tool signatures stay put.
+The Postgres implementation (cases_sql.SqlCasesBackend) has the same methods; tools depend on the
+CasesBackend protocol (store.cases), so they do not know which one is behind them.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from threading import Lock
 from typing import Any
@@ -46,6 +47,64 @@ class CardBlockRecord:
 
 
 @dataclass(frozen=True)
+class CaseRecord:
+    """One unit of back-office work: an automatically opened dispute or a handoff, with its triage."""
+
+    case_id: str  # the dispute_id or handoff_id it tracks
+    kind: str  # policy.triage.CaseKind
+    customer_id: str
+    rule_id: str | None
+    reason: str
+    priority: str  # policy.triage.Priority
+    queue: str  # policy.triage.Queue
+    triage_reason: str
+    due_at: datetime
+    status: str  # "new" | "in_progress" | "resolved"
+    summary: str
+    facts: dict[str, Any]
+    actions: tuple[str, ...]
+    open_questions: tuple[str, ...]
+    expected_resolution_days: float | None
+    created_at: datetime
+    updated_at: datetime
+    assigned_to: str | None = None
+    resolution_note: str | None = None
+
+
+CASE_STATUSES = ("new", "in_progress", "resolved")
+
+
+class CaseTransitionError(ValueError):
+    """A claim or resolve that the case's current state does not allow (the console shows the reason)."""
+
+
+def sort_cases(records: list[CaseRecord]) -> tuple[CaseRecord, ...]:
+    """Open work first, then by priority, then the earliest due time."""
+    from minsky_api.policy.triage import PRIORITY_RANK, Priority
+
+    return tuple(
+        sorted(
+            records,
+            key=lambda r: (r.status == "resolved", PRIORITY_RANK[Priority(r.priority)], r.due_at, r.created_at),
+        )
+    )
+
+
+def claimed(record: CaseRecord, agent_id: str) -> CaseRecord:
+    if record.status == "resolved":
+        raise CaseTransitionError("case_resolved")
+    if record.status == "in_progress" and record.assigned_to != agent_id:
+        raise CaseTransitionError("case_claimed_by_another_agent")
+    return replace(record, status="in_progress", assigned_to=agent_id, updated_at=_now())
+
+
+def resolved(record: CaseRecord, agent_id: str, note: str) -> CaseRecord:
+    if record.status != "in_progress" or record.assigned_to != agent_id:
+        raise CaseTransitionError("claim_the_case_first")
+    return replace(record, status="resolved", resolution_note=note, updated_at=_now())
+
+
+@dataclass(frozen=True)
 class AuditRecord:
     tool: str
     session_id: str
@@ -67,6 +126,7 @@ class InMemoryCasesBackend:
     _handoffs_by_key: dict[tuple[str, str], str] = field(default_factory=dict, repr=False)
     _blocks_by_product: dict[str, CardBlockRecord] = field(default_factory=dict, repr=False)
     _audit: list[AuditRecord] = field(default_factory=list, repr=False)
+    _cases_by_id: dict[str, CaseRecord] = field(default_factory=dict, repr=False)
 
     def create_dispute(self, *, customer_id: str, transaction_id: str, reason: str) -> DisputeRecord:
         key = (customer_id, transaction_id)
@@ -175,3 +235,41 @@ class InMemoryCasesBackend:
     def list_audit(self) -> tuple[AuditRecord, ...]:
         with self._lock:
             return tuple(self._audit)
+
+    def list_audit_for_customer(self, customer_id: str) -> tuple[AuditRecord, ...]:
+        with self._lock:
+            return tuple(a for a in self._audit if a.customer_id == customer_id)
+
+    def enqueue_case(self, record: CaseRecord) -> CaseRecord:
+        """Idempotent on case_id: a retried write returns the case already queued."""
+        with self._lock:
+            return self._cases_by_id.setdefault(record.case_id, record)
+
+    def get_case(self, case_id: str) -> CaseRecord | None:
+        with self._lock:
+            return self._cases_by_id.get(case_id)
+
+    def list_cases(self, *, status: str | None = None, queue: str | None = None) -> tuple[CaseRecord, ...]:
+        with self._lock:
+            records = [
+                r
+                for r in self._cases_by_id.values()
+                if (status is None or r.status == status) and (queue is None or r.queue == queue)
+            ]
+        return sort_cases(records)
+
+    def claim_case(self, case_id: str, agent_id: str) -> CaseRecord | None:
+        with self._lock:
+            record = self._cases_by_id.get(case_id)
+            if record is None:
+                return None
+            self._cases_by_id[case_id] = claimed(record, agent_id)
+            return self._cases_by_id[case_id]
+
+    def resolve_case(self, case_id: str, agent_id: str, note: str) -> CaseRecord | None:
+        with self._lock:
+            record = self._cases_by_id.get(case_id)
+            if record is None:
+                return None
+            self._cases_by_id[case_id] = resolved(record, agent_id, note)
+            return self._cases_by_id[case_id]

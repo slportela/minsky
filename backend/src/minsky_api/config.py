@@ -4,6 +4,7 @@ import os
 from datetime import date
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 
 from pydantic import NonNegativeInt, PositiveFloat, PositiveInt, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -23,6 +24,12 @@ class Settings(BaseSettings):
     max_turns: PositiveInt = 12
     max_clarify_attempts: PositiveInt = 2
     test_sessions: SecretStr | None = None
+    # Back-office agents for /console: JSON mapping credential -> {agent_id, expires_at}. Separate from
+    # customer sessions, so a customer credential can never read the case queue.
+    staff_sessions: SecretStr | None = None
+    # Where cases.* live: "postgres" in the compose stack (survives restarts), "memory" for tests and
+    # direct runs without a database.
+    cases_backend: Literal["memory", "postgres"] = "memory"
     db_pool_size: PositiveInt = 5
     db_max_overflow: NonNegativeInt = 10
     db_pool_timeout: PositiveInt = 30

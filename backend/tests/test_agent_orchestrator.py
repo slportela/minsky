@@ -705,3 +705,32 @@ def test_one_bad_reply_is_retried_and_never_sent():
     assert state.phase == Phase.CONFIRM_TXN
     assert "Bloqueé" not in reply
     assert not any(row.tool in ("block_card", "create_handoff") for row in ctx.cases.list_audit())
+
+
+def test_opened_dispute_is_queued_low_with_verified_facts():
+    ctx = _ctx()
+    state = _state()
+    llm = FakeLLM(_details())
+    for text in ("No reconozco el cargo en Cafe de 25", "sí", "sí"):
+        state, _ = asyncio.run(run_turn(state, text, ctx, llm))  # type: ignore[arg-type]
+    queued = ctx.cases.list_cases()
+    assert len(queued) == 1
+    case = queued[0]
+    assert case.kind == "dispute" and case.priority == "Low" and case.queue == "disputes"
+    assert case.facts["verified"]["merchant"] == "Cafe" and case.facts["verified"]["transaction_id"] == "T1"
+    assert case.open_questions and case.status == "new"
+
+
+def test_fraud_handoff_with_block_is_queued_critical():
+    ctx = _ctx()
+    state = _state()
+    llm = FakeLLM(_details(customer_says_not_me=True), decisions=["yes", "yes"])
+    for text in ("No reconozco el cargo en Cafe de 25, yo no fui", "sí", "sí"):
+        state, _ = asyncio.run(run_turn(state, text, ctx, llm))  # type: ignore[arg-type]
+    queued = ctx.cases.list_cases()
+    assert [c.priority for c in queued] == ["Critical"]
+    case = queued[0]
+    assert case.queue == "fraud" and case.rule_id and case.rule_id.startswith("D06")
+    assert any(a.startswith("card_blocked:") for a in case.actions)
+    assert case.facts["customer_said"]["customer_request"].startswith("No reconozco")
+    assert "did not make" in case.summary
