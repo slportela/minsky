@@ -755,4 +755,28 @@ def test_router_abstains_on_noise_and_keeps_the_default_type():
     llm = FakeLLM(_details())
     state, _ = asyncio.run(run_turn(state, "xq zzv 25", ctx, llm))  # type: ignore[arg-type]
     assert state.router_label is None  # below the val-fitted threshold: abstain, never guess
-    assert state.dispute_reason == "unrecognized_charge"
+    assert state.dispute_reason == "unspecified"
+
+
+def test_the_question_a_yes_authorizes_is_written_by_code():
+    """Whatever the model writes, the stored question names the exact action that a yes will run."""
+    ctx = _ctx()
+    state = _state()
+    llm = _NthSpeech(_details(), n=2, speech=Speech(act="confirm_open", text="¿Te paso con un asesor?"), repeat=1)
+    state, _ = asyncio.run(run_turn(state, "Cafe 25", ctx, llm))  # type: ignore[arg-type]
+    state, reply = asyncio.run(run_turn(state, "sí", ctx, llm))  # type: ignore[arg-type]
+    assert state.phase == Phase.CONFIRM_ACT
+    assert reply.endswith("¿Abro el reclamo por este cargo? Responde sí o no.")
+    assert state.pending_question == reply
+
+
+def test_classifier_and_customer_disagreement_becomes_an_open_question():
+    """The router reads 'not me' but the customer's words (extraction) do not: the agent must ask."""
+    ctx = _ctx()
+    state = _state()
+    llm = FakeLLM(_details(customer_says_not_me=False))
+    for text in ("No reconozco este cargo de 25 en Cafe, no sé qué es", "sí", "sí"):
+        state, _ = asyncio.run(run_turn(state, text, ctx, llm))  # type: ignore[arg-type]
+    assert state.dispute_reason == "unrecognized_charge"  # the router's confident reading
+    case = ctx.cases.list_cases()[0]
+    assert any("confirm with the customer" in q for q in case.open_questions)

@@ -104,13 +104,25 @@ def test_compose_speech_allows_a_verified_open_and_an_offer_to_block():
     assert opened.text.startswith("Quedó abierto")
     offer = asyncio.run(
         compose_speech(
-            RecordingLLM("offer_block", "¿Quieres que bloquee la tarjeta del cargo T1? Regla D06."),  # type: ignore[arg-type]
+            RecordingLLM("offer_block", "Alguien podría estar usando tu tarjeta."),  # type: ignore[arg-type]
             language="es",
             allowed=("offer_block",),
-            facts={"transaction_id": "T1", "rule_id": "D06"},
+            facts={"reason": "x"},
         )
     )
     assert offer.act == "offer_block"
+
+
+def test_compose_speech_rejects_an_internal_rule_id():
+    with pytest.raises(RuntimeError, match="rule id"):
+        asyncio.run(
+            compose_speech(
+                RecordingLLM("offer_block", "Esto parece fraude (D06-possible-fraud)."),  # type: ignore[arg-type]
+                language="es",
+                allowed=("offer_block",),
+                facts={"reason": "x"},
+            )
+        )
 
 
 def test_compose_speech_rejects_a_confirm_or_clarify_that_drops_facts():

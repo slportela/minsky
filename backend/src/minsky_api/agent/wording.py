@@ -89,3 +89,21 @@ def fallback_sentence(language: str, facts: dict[str, object]) -> str:
     if not parts:
         parts.append("Pronto, registramos a sua solicitação." if pt else "Listo, registramos tu solicitud.")
     return " ".join(parts)
+
+
+# The question a "yes" authorizes is written by code, never by the model, so the customer always
+# consents to exactly the action that runs (AGENTS rule 1). Appended to the model's sentence.
+_QUESTIONS = {
+    "es": {
+        "confirm_open": "¿Abro el reclamo por este cargo? Responde sí o no.",
+        "offer_block": "¿Bloqueo tu tarjeta ahora? Responde sí o no.",
+    },
+    "pt": {
+        "confirm_open": "Posso abrir a contestação desta cobrança? Responda sim ou não.",
+        "offer_block": "Posso bloquear o seu cartão agora? Responda sim ou não.",
+    },
+}
+
+
+def confirm_question(act: str, language: str) -> str:
+    return _QUESTIONS[_lang(language)][act]

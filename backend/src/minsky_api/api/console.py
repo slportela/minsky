@@ -8,7 +8,8 @@ recorded here, never a system one. Auth is a staff credential, separate from cus
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+import asyncio
+from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any
 from uuid import uuid4
 
@@ -23,6 +24,7 @@ from minsky_api.store.cases import CasesBackend
 from minsky_api.store.cases_memory import CaseRecord, CaseTransitionError
 
 router = APIRouter(prefix="/api/console", tags=["console"])
+CONVERSATION_WINDOW = timedelta(minutes=30)  # longer than any conversation within the turn budget
 
 
 class _Out(BaseModel):
@@ -118,11 +120,13 @@ def _summary(record: CaseRecord, now: datetime) -> CaseSummary:
 
 
 def _detail(record: CaseRecord, cases: CasesBackend, now: datetime) -> CaseDetail:
-    # The case's own trail: this customer's tool calls from the case's creation window, newest last.
+    # The case's own trail: the customer's tool calls in the conversation window that produced it, including
+    # the write that created the case (audited just after it).
+    window_start, window_end = record.created_at - CONVERSATION_WINDOW, record.created_at + timedelta(minutes=1)
     audit = tuple(
         AuditEntry(tool=a.tool, outcome=a.outcome, reason=a.reason, at=a.at)
         for a in cases.list_audit_for_customer(record.customer_id)
-        if a.at <= record.created_at
+        if window_start <= a.at <= window_end
     )[-25:]
     return CaseDetail(
         case=_summary(record, now),
@@ -150,8 +154,9 @@ async def list_cases(
         return staff
     cases: CasesBackend = request.app.state.cases
     now = datetime.now(UTC)
-    records = cases.list_cases(status=status, queue=queue)
-    open_records = [r for r in cases.list_cases() if r.status != "resolved"]
+    # The case store is synchronous: keep its calls off the event loop.
+    records = await asyncio.to_thread(cases.list_cases, status=status, queue=queue)
+    open_records = [r for r in await asyncio.to_thread(cases.list_cases) if r.status != "resolved"]
     stats = QueueStats(
         open_cases=len(open_records),
         overdue=sum(1 for r in open_records if r.due_at < now),
@@ -169,10 +174,10 @@ async def get_case(
     if isinstance(staff, JSONResponse):
         return staff
     cases: CasesBackend = request.app.state.cases
-    record = cases.get_case(case_id)
+    record = await asyncio.to_thread(cases.get_case, case_id)
     if record is None:
         return _error(ErrorCode.CASE_NOT_FOUND, "unknown case_id", 404)
-    return _detail(record, cases, datetime.now(UTC))
+    return await asyncio.to_thread(_detail, record, cases, datetime.now(UTC))
 
 
 @router.post("/cases/{case_id}/claim", response_model=None)
@@ -184,12 +189,12 @@ async def claim_case(
         return staff
     cases: CasesBackend = request.app.state.cases
     try:
-        record = cases.claim_case(case_id, staff.agent_id)
+        record = await asyncio.to_thread(cases.claim_case, case_id, staff.agent_id)
     except CaseTransitionError as exc:
         return _error(ErrorCode.CASE_CONFLICT, str(exc), 409)
     if record is None:
         return _error(ErrorCode.CASE_NOT_FOUND, "unknown case_id", 404)
-    return _detail(record, cases, datetime.now(UTC))
+    return await asyncio.to_thread(_detail, record, cases, datetime.now(UTC))
 
 
 @router.post("/cases/{case_id}/resolve", response_model=None)
@@ -204,9 +209,9 @@ async def resolve_case(
         return staff
     cases: CasesBackend = request.app.state.cases
     try:
-        record = cases.resolve_case(case_id, staff.agent_id, body.note.strip())
+        record = await asyncio.to_thread(cases.resolve_case, case_id, staff.agent_id, body.note.strip())
     except CaseTransitionError as exc:
         return _error(ErrorCode.CASE_CONFLICT, str(exc), 409)
     if record is None:
         return _error(ErrorCode.CASE_NOT_FOUND, "unknown case_id", 404)
-    return _detail(record, cases, datetime.now(UTC))
+    return await asyncio.to_thread(_detail, record, cases, datetime.now(UTC))

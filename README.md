@@ -14,7 +14,7 @@ Built for the Factored AI & Data Hackathon 2026 on the synthetic LATAM Bank data
 | **What we build** | A chat assistant for **one workflow: dispute intake**. It finds the charge, checks it against a written dispute policy, and then either opens the dispute, explains why there is nothing to dispute, or hands the case to a human (fraud team or dispute agent). |
 | **The key idea** | **Code decides, the AI only understands.** The language model reads the customer's message. Plain, tested code does everything else: who the customer is, which records they may see, whether the charge is disputable, what action to take. |
 | **Business value** | Customers get a case reference in minutes, not a phone queue. Agents only see cases that need judgment, and those arrive already structured. |
-| **How we prove it** | Evals: simulated customers run against the real API, and the result is graded on what actually changed in the database, not on what the bot said. |
+| **How we prove it** | Evals: simulated customers run against the real API, and the result is graded mainly on what changed in the database (disputes, card blocks, handoffs) plus the safety checks, not on how the reply sounds. |
 
 ---
 
@@ -175,7 +175,7 @@ There are **four different time scales**, and each one has its own technology:
 
 | Part | Timing | Volume | Technology | Why this and not something heavier |
 |---|---|---|---|---|
-| **Conversation** | Interactive: one HTTP request per customer message, answered in seconds (p50 1.6 s, p95 3.4 s per scripted dev trial; [report](evals/reports/2026-10-02-live-l2.md)) | ~125 dispute chats/day for this bank, ~5 model calls/min at peak (*assumption-based*, see below) | FastAPI + Postgres, plain request/response | Low volume and request/response by nature. No streaming platform needed: nothing produces a continuous flow of events |
+| **Conversation** | Interactive: one HTTP request per customer message, answered in seconds (p50 1.6 s, p95 3.4 s per scripted dev trial on 2026-10-02, before replies became model-written: each turn now makes more model calls; [report](evals/reports/2026-10-02-live-l2.md)) | ~125 dispute chats/day for this bank, ~5 model calls/min at peak (*assumption-based*, see below) | FastAPI + Postgres, plain request/response | Low volume and request/response by nature. No streaming platform needed: nothing produces a continuous flow of events |
 | **Handoff to humans** | Asynchronous: a person picks it up later | A fraction of the chats | A row in `cases.*` + a console. In production, a queue (SQS) for side jobs | Humans work in minutes or hours; a table plus a queue is enough |
 | **Bank data** (transactions, products, complaint stats) | **Batch.** In the POC, `make pipeline` runs on demand because the dataset is a static snapshot. In production, a schedule (EventBridge) | 4.4M transactions, ~90 s to rebuild silver | S3 + dbt-duckdb → loaded into Postgres | The data changes once per load. DuckDB on one machine handles this size in seconds, so Spark or a cluster would be overkill |
 | **Evals** | Offline, on demand and in CI | Dozens of cases × 3 trials | Our own Python runner | It has to be reproducible and budgeted (the live dev smoke cost about USD 0.01) |
@@ -260,7 +260,7 @@ must_not:          [disclose_other_customer, action_without_confirmation, unveri
 | Missed handoffs | 0/12 | 0/12 |
 | Unsafe outcomes | 0/24 | 0/24 (up to 12 % not ruled out at n=24) |
 
-  Scripted understanding (offline), and failures found on val were fixed, so these are not test-split numbers. Earlier live dev run: 36/36 trials ([report](evals/reports/2026-10-02-live-l2.md)). Still to do: a live run, the locked test split (written by people), a keyword-bot baseline.
+  Scripted understanding (offline), and failures found on val were fixed, so these are not test-split numbers. The labels come from the same policy code Minsky runs, so this checks the wiring on real records more than the policy itself. The last live run (36/36 dev trials, [report](evals/reports/2026-10-02-live-l2.md)) predates the model-written replies and the model yes/no classifier. Still to do: a live run of this version (required eval delta), the locked test split (written by people), hand-labeled cases, a keyword-bot baseline.
 - **Learned component:** the dispute-type classifier scores 81.8 % vs 57.3 % for keyword rules on 600 phrasings it never saw (generated text; [`ml/README.md`](ml/README.md)).
 
 Full strategy: [`docs/evals.md`](docs/evals.md).

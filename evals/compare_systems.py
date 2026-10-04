@@ -42,7 +42,7 @@ class Row:
     observed: str | None
     passed: bool
     outcome_ok: bool
-    safe: bool
+    safe: bool | None  # None when the trial errored before grading
     handoff: bool
     error: str | None
 
@@ -64,8 +64,8 @@ async def _run(case: Case, system: str) -> Row:
         observed=str(observed.value if hasattr(observed, "value") else observed) if observed else None,
         passed=record.status == "passed",
         outcome_ok=bool(components.get("outcome")) or bool(components.get("RewardComponent.OUTCOME")),
-        # Unsafe only when the safety grader ran and failed; errors are counted separately.
-        safe=components.get("safety", components.get("RewardComponent.SAFETY")) is not False,
+        # Unsafe only when the safety grader ran and failed; an errored trial has no safety verdict.
+        safe=None if record.error_class else components.get("safety") is not False,
         handoff=any(t.tool == "create_handoff" and t.outcome == "ok" for t in record.tools),
         error=record.error_class,
     )
@@ -76,7 +76,9 @@ def _rate(numerator: int, n: int) -> dict[str, Any]:
     return {"n": n, "count": numerator, "rate": numerator / n if n else None, "wilson95": interval}
 
 
-def summarize(rows: list[Row]) -> dict[str, Any]:
+def summarize(all_rows: list[Row]) -> dict[str, Any]:
+    # Errored trials have no verdict: they leave every denominator and are reported on their own row.
+    rows = [r for r in all_rows if not r.error]
     n = len(rows)
     needed = [r for r in rows if r.expected in AGENT_NEEDED]
     not_needed = [r for r in rows if r.expected not in AGENT_NEEDED]
@@ -84,7 +86,7 @@ def summarize(rows: list[Row]) -> dict[str, Any]:
     handoffs = sum(1 for r in rows if r.handoff)
     return {
         "cases": n,
-        "errors": sum(1 for r in rows if r.error),
+        "errors": len(all_rows) - n,
         "fully_correct": _rate(sum(r.passed for r in rows), n),
         "correct_outcome": _rate(sum(r.outcome_ok for r in rows), n),
         "handled_without_agent": _rate(n - handoffs, n),
@@ -130,6 +132,7 @@ def render(results: dict[str, dict[str, Any]], split: str, meta: dict[str, Any])
         f"| Unsafe outcomes | {_pct(base['unsafe_outcomes'])} | {_pct(ours['unsafe_outcomes'])} |",
         f"| Agent intake minutes (handoffs × {AGENT_MINUTES_PER_INTAKE} min) | {base['agent_intake_minutes']} | "
         f"{ours['agent_intake_minutes']} |",
+        f"| Trials that errored (excluded above) | {base['errors']} | {ours['errors']} |",
         "",
         "By language (fully correct): "
         + ", ".join(f"{lang} {_pct(cell)}" for lang, cell in ours["by_language"].items())
@@ -152,6 +155,10 @@ def render(results: dict[str, dict[str, Any]], split: str, meta: dict[str, Any])
         "system performance (docs/evals.md).",
         "- val is the selection split: failures found on it are fixed, so these are not held-out test numbers. "
         "The locked test split is still empty and must be written by people (AGENTS rule 4).",
+        "- The labels come from the same policy code (policy.disputes.decide) that Minsky runs, and the outcome is "
+        "read partly from the system's own state. Offline, with scripted understanding, this mostly checks that "
+        "the system wires the policy, tools, handoffs and safety checks correctly on real records; a policy bug "
+        "would not show here. Hand-labeled cases and a live run are what test the policy and the model.",
     ]
     return "\n".join(lines) + "\n"
 
@@ -189,11 +196,15 @@ def main(argv: list[str] | None = None) -> int:
     results, rows = asyncio.run(compare(args.split))
     text = render(results, args.split, meta)
     print(text)
+    errors = sum(result["errors"] for result in results.values())
     if args.report:
         args.report.parent.mkdir(parents=True, exist_ok=True)
         args.report.with_suffix(".md").write_text(text, encoding="utf-8")
         payload = {"meta": meta, "results": results, "rows": {k: [vars(r) for r in v] for k, v in rows.items()}}
         args.report.with_suffix(".json").write_text(json.dumps(payload, indent=2, default=str), encoding="utf-8")
+    if errors:
+        print(f"{errors} trial(s) errored: fix them before quoting this report (e.g. run make gold)")
+        return 1
     return 0
 
 

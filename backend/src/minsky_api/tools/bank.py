@@ -297,22 +297,22 @@ async def open_dispute(ctx: ToolContext, args: OpenDisputeArgs) -> OpenDisputeRe
     verified = ctx.cases.get_dispute(record.dispute_id)
     if verified is None:
         raise ToolError("open_dispute read-back failed")
-    if existing is None:
-        await enqueue_case(
-            ctx,
-            kind=CaseKind.DISPUTE,
-            case_id=verified.dispute_id,
-            customer_id=customer_id,
-            reason=args.reason,
-            rule_id="D09-eligible",
-            txn=txn,
-            customer_facts={
-                "customer_says_not_me": args.customer_says_not_me or None,
-                "dispute_type": args.reason,
-            },
-            actions=("dispute_opened",),
-            created_at=verified.created_at,
-        )
+    # Always (idempotent on case_id): a retry after a failed enqueue must still queue the dispute.
+    await enqueue_case(
+        ctx,
+        kind=CaseKind.DISPUTE,
+        case_id=verified.dispute_id,
+        customer_id=customer_id,
+        reason=args.reason,
+        rule_id="D09-eligible",
+        txn=txn,
+        customer_facts={
+            "customer_says_not_me": args.customer_says_not_me or None,
+            "dispute_type": args.reason,
+        },
+        actions=("dispute_opened",),
+        created_at=verified.created_at,
+    )
     result = OpenDisputeResult(dispute=DisputeView.model_validate(verified), created=existing is None)
     _audit(ctx, tool="open_dispute", args=audit_args, outcome="ok", customer_id=customer_id)
     return result

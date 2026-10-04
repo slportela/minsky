@@ -33,7 +33,7 @@ class ConversationState:
     rule_id: str | None = None
     route: str | None = None
     customer_says_not_me: bool = False
-    dispute_reason: str = "unrecognized_charge"
+    dispute_reason: str = "unspecified"  # set from the router only when it is confident
     # The learned router's reading of the first message (a suggestion for the back office, never a decision).
     router_label: str | None = None
     router_confidence: float | None = None

@@ -16,7 +16,12 @@ from minsky_api.store.db import dispose_engine
 
 def _cases_backend(settings: Settings) -> CasesBackend:
     if settings.cases_backend == "postgres":
-        backend = SqlCasesBackend.from_url(settings.database_url)
+        backend = SqlCasesBackend.from_url(
+            settings.database_url,
+            pool_size=settings.db_pool_size,
+            max_overflow=settings.db_max_overflow,
+            pool_timeout=settings.db_pool_timeout,
+        )
         backend.ensure_schema()  # fail at startup, not on the first customer write
         return backend
     return InMemoryCasesBackend()

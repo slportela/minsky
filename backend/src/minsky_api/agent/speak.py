@@ -54,6 +54,7 @@ _FUTURE_WORDS = (
 )
 _FUTURE = re.compile(_FUTURE_WORDS + r"\s+$")
 _FUTURE_INSIDE = re.compile(rf"\b{_FUTURE_WORDS}\b")
+_RULE_ID = re.compile(r"\bD0\d\b")  # rule ids stay internal: the customer hears the reason instead
 # References the customer needs to keep. Rule ids stay internal: the customer hears the reason instead.
 _ID_FACTS = ("dispute_id", "handoff_id", "existing_dispute_id")
 _ACT_FACTS: dict[str, tuple[str, ...]] = {
@@ -156,6 +157,8 @@ async def compose_speech(
     dropped = _dropped_fact(parsed.act, parsed.text, facts)
     if dropped is not None:
         raise RuntimeError(f"compose_speech: reply drops {dropped}")
+    if _RULE_ID.search(parsed.text):
+        raise RuntimeError("compose_speech: reply exposes an internal rule id")
     unsupported = _unsupported_claim(parsed.text, facts)
     if unsupported is not None:
         raise RuntimeError(f"compose_speech: unverified {unsupported}")

@@ -146,12 +146,20 @@ class SqlCasesBackend:
         self._sqlite = engine.dialect.name == "sqlite"
 
     @classmethod
-    def from_url(cls, url: str) -> SqlCasesBackend:
+    def from_url(
+        cls, url: str, *, pool_size: int = 5, max_overflow: int = 5, pool_timeout: int = 30
+    ) -> SqlCasesBackend:
         sync_url = to_sync_url(url)
         if sync_url.startswith("sqlite"):
             engine = create_engine(sync_url, poolclass=StaticPool, connect_args={"check_same_thread": False})
         else:
-            engine = create_engine(sync_url, pool_size=5, max_overflow=5, pool_pre_ping=True)
+            engine = create_engine(
+                sync_url,
+                pool_size=pool_size,
+                max_overflow=max_overflow,
+                pool_timeout=pool_timeout,
+                pool_pre_ping=True,
+            )
         return cls(engine)
 
     def ensure_schema(self) -> None:

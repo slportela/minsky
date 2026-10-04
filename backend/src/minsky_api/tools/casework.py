@@ -53,9 +53,19 @@ def verified_transaction_facts(txn: Transaction) -> dict[str, Any]:
     }
 
 
-def _open_questions(kind: CaseKind, reason: str, rule_id: str | None) -> tuple[str, ...]:
+_DISAGREEMENT = (
+    "The classifier read this as an unrecognized charge, but the customer did not say they did not make it: "
+    "confirm with the customer whether they made the charge."
+)
+
+
+def _open_questions(
+    kind: CaseKind, reason: str, rule_id: str | None, customer_facts: dict[str, Any] | None = None
+) -> tuple[str, ...]:
+    facts = customer_facts or {}
+    disagree = facts.get("dispute_type") == "unrecognized_charge" and not facts.get("customer_says_not_me")
     if kind == CaseKind.DISPUTE:
-        return _D09_QUESTIONS
+        return _D09_QUESTIONS + ((_DISAGREEMENT,) if disagree else ())
     if rule_id and rule_id[:3] in _OPEN_QUESTIONS:
         return _OPEN_QUESTIONS[rule_id[:3]]
     return _OPEN_QUESTIONS.get(reason, ("Review the conversation summary and contact the customer.",))
@@ -142,7 +152,7 @@ async def enqueue_case(
         summary=_summary(kind, reason, rule_id, {**verified, **customer_facts}, card_blocked),
         facts=facts,
         actions=actions,
-        open_questions=_open_questions(kind, reason, rule_id),
+        open_questions=_open_questions(kind, reason, rule_id, customer_facts),
         expected_resolution_days=await _expected_days(ctx, decision.priority.value),
         created_at=created_at,
         updated_at=created_at,

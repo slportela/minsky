@@ -8,7 +8,7 @@ from minsky_api.agent.extract import DisputeDetails, extract_dispute_details
 from minsky_api.agent.language import LanguageDetector, default_language_detector
 from minsky_api.agent.speak import Speech, compose_speech
 from minsky_api.agent.state import ConversationState, Phase
-from minsky_api.agent.wording import fallback_sentence, human_amount, human_date, policy_reason
+from minsky_api.agent.wording import confirm_question, fallback_sentence, human_amount, human_date, policy_reason
 from minsky_api.config import get_settings
 from minsky_api.identity.session import SessionState
 from minsky_api.llm.client import LLM
@@ -264,13 +264,15 @@ async def _apply_policy(ctx: ToolContext, state: ConversationState, llm: LLM) ->
     route = decision.route
     if route == Route.OPEN_DISPUTE.value:
         speech = await _speak(state, llm, ("confirm_open",), rule_id=decision.rule_id)
-        return _ask(state, Phase.CONFIRM_ACT, _accept(state, speech))
+        question = f"{_accept(state, speech)} {confirm_question('confirm_open', _lang(state))}"
+        return _ask(state, Phase.CONFIRM_ACT, question)
     if route == Route.ESCALATE_FRAUD.value and not decision.offer_card_block:
         # Not a card charge (e.g. a transfer): nothing to block, straight to the fraud team.
         return await _handoff(ctx, state, llm, reason="possible_fraud", rule_id=decision.rule_id)
     if route == Route.ESCALATE_FRAUD.value:
         speech = await _speak(state, llm, ("offer_block",), rule_id=decision.rule_id)
-        return _ask(state, Phase.CARD_OFFER, _accept(state, speech))
+        question = f"{_accept(state, speech)} {confirm_question('offer_block', _lang(state))}"
+        return _ask(state, Phase.CARD_OFFER, question)
     if route == Route.ESCALATE_AGENT.value:
         return await _handoff(ctx, state, llm, reason="policy_escalate_agent", rule_id=decision.rule_id)
     if route == Route.REFUSE.value:

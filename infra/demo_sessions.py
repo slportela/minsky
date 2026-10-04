@@ -36,16 +36,18 @@ STAFF = ("ana.fraude", "luis.disputas")
 
 
 def _pick(con: duckdb.DuckDBPyConnection, rule: str, not_me: bool) -> tuple | None:
-    # Prefer charges a customer can describe: a merchant name, a purchase or withdrawal.
+    # Prefer charges a customer can describe: on a card (so the fraud path shows the block offer), with a
+    # merchant name, recent.
     return con.execute(
         f"""
         select s.customer_id, s.transaction_id, t.merchant_name, t.amount, t.currency, t.transaction_type,
                t.transaction_date
         from '{GOLD}/dispute_scenarios.parquet' s
         join '{GOLD}/transactions.parquet' t using (transaction_id)
+        join '{GOLD}/products.parquet' p on p.product_id = t.product_id
         where s.rule_id = ? and s.customer_says_not_me = ?
-        order by t.merchant_name is null, t.transaction_type not in ('Purchase', 'Withdrawal'),
-                 t.transaction_date desc, s.transaction_id
+        order by p.is_card is not true, t.merchant_name is null,
+                 t.transaction_type not in ('Purchase', 'Withdrawal'), t.transaction_date desc, s.transaction_id
         limit 1
         """,
         [rule, not_me],
