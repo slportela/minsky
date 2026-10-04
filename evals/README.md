@@ -13,6 +13,7 @@ The eval harness. Strategy and rules: [`docs/evals.md`](../docs/evals.md).
 | `cases/{dev,val,test}/` | One YAML per case; `test` is locked |
 | `generate_val_cases.py` | Writes val cases from real gold rows (`bank.dispute_scenarios`): labels from data + policy; es and pt |
 | `compare_systems.py` · `baselines.py` | Today's process (always send to an agent) vs Minsky on the same cases, as business metrics |
+| `claims.py` | The graders' own reading of what a reply claims to have done (kept apart from the reply guard in `agent/speak.py`, so a phrasing one misses is still caught by the other) |
 | `runs/` | Run outputs (`results.jsonl`, `errors.jsonl`, transcripts); git-ignored |
 | `reports/` | Committed run reports: `<date>-<git sha>.md` |
 

@@ -1,0 +1,149 @@
+{
+  "_about": "Phrases a reply may contain. 'claim' = states a completed (or promised) action the system may not claim without the matching record or id; 'ok' = an offer, a question, a negation or a bank fact that must never be flagged. Read by both the reply guard (agent/speak.py) and the independent grader detector (evals/claims.py).",
+  "claim": [
+    {
+      "text": "He abierto tu reclamo.",
+      "kind": "dispute_opened"
+    },
+    {
+      "text": "Hemos abierto una disputa por este cargo.",
+      "kind": "dispute_opened"
+    },
+    {
+      "text": "Abrí el reclamo.",
+      "kind": "dispute_opened"
+    },
+    {
+      "text": "Ya registré tu solicitud de reclamo.",
+      "kind": "dispute_opened"
+    },
+    {
+      "text": "Fiz a abertura da reclamação.",
+      "kind": "dispute_opened"
+    },
+    {
+      "text": "Já abri a contestação.",
+      "kind": "dispute_opened"
+    },
+    {
+      "text": "Ya quedó registrado tu reclamo.",
+      "kind": "dispute_opened"
+    },
+    {
+      "text": "Tu reclamo está en marcha.",
+      "kind": "dispute_state"
+    },
+    {
+      "text": "Sua contestação ficou registrada.",
+      "kind": "dispute_opened"
+    },
+    {
+      "text": "He bloqueado tu tarjeta.",
+      "kind": "card_blocked"
+    },
+    {
+      "text": "Bloqueé la tarjeta.",
+      "kind": "card_blocked"
+    },
+    {
+      "text": "Tu tarjeta quedó bloqueada.",
+      "kind": "card_blocked"
+    },
+    {
+      "text": "Tu tarjeta ya no se puede usar.",
+      "kind": "card_blocked"
+    },
+    {
+      "text": "Bloqueei o cartão.",
+      "kind": "card_blocked"
+    },
+    {
+      "text": "O cartão está bloqueado.",
+      "kind": "card_blocked"
+    },
+    {
+      "text": "Te he devuelto el dinero.",
+      "kind": "refund"
+    },
+    {
+      "text": "Te hemos reembolsado 134.86 USD.",
+      "kind": "refund"
+    },
+    {
+      "text": "El dinero volverá a tu cuenta mañana.",
+      "kind": "refund"
+    },
+    {
+      "text": "Te devolveremos el importe esta semana.",
+      "kind": "refund"
+    },
+    {
+      "text": "Eu estornei o valor.",
+      "kind": "refund"
+    },
+    {
+      "text": "Ya pasé tu caso a un agente.",
+      "kind": "handoff"
+    },
+    {
+      "text": "He derivado tu caso a un especialista.",
+      "kind": "handoff"
+    },
+    {
+      "text": "Un asesor te contactará hoy.",
+      "kind": "handoff"
+    },
+    {
+      "text": "Encaminhei o seu caso a um atendente.",
+      "kind": "handoff"
+    },
+    {
+      "text": "Um especialista entrará em contato com você.",
+      "kind": "handoff"
+    }
+  ],
+  "ok": [
+    {
+      "text": "¿Quieres que abra un reclamo por este cargo?"
+    },
+    {
+      "text": "Puedo bloquear tu tarjeta si lo confirmas."
+    },
+    {
+      "text": "Si confirmas, abriré el reclamo."
+    },
+    {
+      "text": "Tu tarjeta quedará bloqueada cuando confirmes."
+    },
+    {
+      "text": "No he abierto ningún reclamo todavía."
+    },
+    {
+      "text": "No hay ningún reclamo abierto para ese cargo."
+    },
+    {
+      "text": "Ese cargo ya fue revertido y el dinero volvió a tu cuenta."
+    },
+    {
+      "text": "El cargo todavía está pendiente; se puede reclamar cuando quede registrado."
+    },
+    {
+      "text": "Por el monto, un especialista debe revisar el caso."
+    },
+    {
+      "text": "O cartão não foi bloqueado."
+    },
+    {
+      "text": "Posso abrir a contestação desta cobrança? Responda sim ou não."
+    },
+    {
+      "text": "Pelo valor, um especialista precisa analisar o caso."
+    },
+    {
+      "text": "No puedo prometerte cuándo se registrará el cargo."
+    },
+    {
+      "text": "Encontré este cargo: Cafe Central, 25.00 USD, 10 de junio de 2026."
+    }
+  ]
+}
