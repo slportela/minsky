@@ -262,6 +262,9 @@ async def _apply_policy(ctx: ToolContext, state: ConversationState, llm: LLM) ->
     if route == Route.OPEN_DISPUTE.value:
         speech = await _speak(state, llm, ("confirm_open",), rule_id=decision.rule_id)
         return _ask(state, Phase.CONFIRM_ACT, _accept(state, speech))
+    if route == Route.ESCALATE_FRAUD.value and not decision.offer_card_block:
+        # Not a card charge (e.g. a transfer): nothing to block, straight to the fraud team.
+        return await _handoff(ctx, state, llm, reason="possible_fraud", rule_id=decision.rule_id)
     if route == Route.ESCALATE_FRAUD.value:
         speech = await _speak(state, llm, ("offer_block",), rule_id=decision.rule_id)
         return _ask(state, Phase.CARD_OFFER, _accept(state, speech))

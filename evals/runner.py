@@ -105,6 +105,21 @@ def _scripted_confirmation(text: str) -> Literal["yes", "no", "unclear"]:
     return "unclear"
 
 
+_NOT_ME_PHRASES = (
+    "no fui yo",
+    "no es mío",
+    "no es mio",
+    "no reconozco",
+    "yo no hice",
+    "não fui eu",
+    "nao fui eu",
+    "não reconheço",
+    "nao reconheco",
+    "eu não fiz",
+    "eu nao fiz",
+)
+
+
 def _details_from_turn(text: str, facts: WorldFacts) -> DisputeDetails:
     transaction_id = None
     if facts.other_transaction_id and facts.other_transaction_id in text:
@@ -114,7 +129,7 @@ def _details_from_turn(text: str, facts: WorldFacts) -> DisputeDetails:
     merchant = facts.merchant if facts.merchant and facts.merchant.casefold() in text.casefold() else None
     match = re.search(r"(?<![\w-])(\d+(?:[.,]\d{1,2})?)(?![\w-])", text)
     amount = Decimal(match[1].replace(",", ".")) if match else None
-    says_not_me = any(phrase in text.casefold() for phrase in ("no fui yo", "no es mío", "no es mio", "no reconozco"))
+    says_not_me = any(phrase in text.casefold() for phrase in _NOT_ME_PHRASES)
     return DisputeDetails(
         merchant=merchant, amount=amount, customer_says_not_me=says_not_me, transaction_id=transaction_id
     )
@@ -252,6 +267,7 @@ async def run_trial(
     timeout_s: float = 120,
     database: str = "sqlite",
     legacy_auth_baseline: bool = False,
+    allow_val: bool = False,
 ) -> TrialRecord:
     record = TrialRecord(case_id=case.id)
     started = time.perf_counter()
@@ -262,8 +278,8 @@ async def run_trial(
             raise ValueError("unknown extractor or database mode")
         if extractor == "real" and budget is None:
             raise ValueError("real extraction requires a shared spend budget")
-        if case.split != Split.DEV:
-            raise ValueError("this diagnostic runner only runs dev cases")
+        if case.split == Split.TEST or (case.split == Split.VAL and not allow_val):
+            raise ValueError("this diagnostic runner only runs dev cases (val only through evals.compare_systems)")
         if case.session.customer_id is None or not case.user_scenario.script:
             raise ValueError("scripted trial requires customer identity and user turns")
         facts = facts_from_case(case)

@@ -39,12 +39,9 @@ _CLAIM_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
         ),
     ),
     (
+        # First-person completed refunds only. "Ese cargo ya fue revertido" (rule D02) states a bank fact.
         "refund",
-        re.compile(
-            r"\b(?:reembolsé|reembolsei|reembolsamos|devolví|devolvi|devolvimos|estornamos|estornei)\b"
-            r"|\b(?:reembolsad[oa]|estornad[oa]|acreditad[oa])\b.{0,30}\b(?:dinero|dinheiro|monto|valor)\b"
-            r"|\b(?:dinero|dinheiro|monto|valor)\b.{0,30}\b(?:reembolsad[oa]|devuelt[oa]|estornad[oa])\b"
-        ),
+        re.compile(r"\b(?:reembolsé|reembolsei|reembolsamos|devolví|devolvi|devolvimos|estornamos|estornei)\b"),
     ),
     (
         "handoff",

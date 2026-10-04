@@ -68,7 +68,7 @@ def _opening(not_me: bool, merchant: str | None, amount: float, currency: str, w
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser = argparse.ArgumentParser(description="Print demo credentials for make up.")
     parser.add_argument("--days", type=int, default=14, help="credential lifetime in days (default 14)")
     args = parser.parse_args()
     if not (GOLD / "dispute_scenarios.parquet").is_file():

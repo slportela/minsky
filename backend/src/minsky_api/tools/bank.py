@@ -233,11 +233,22 @@ async def evaluate_dispute(ctx: ToolContext, args: EvaluateDisputeArgs) -> Evalu
         says_not_me=args.customer_says_not_me,
     )
     existing = ctx.cases.get_dispute_by_transaction(customer_id=customer_id, transaction_id=txn.transaction_id)
+    offer_block = decision.offer_card_block
+    if offer_block:
+        # Never offer what cannot be done: a transfer or a payment from an account has no card to block.
+        product = await _store(
+            ctx,
+            tool="evaluate_dispute",
+            args=audit_args,
+            customer_id=customer_id,
+            call=lambda: ProductStore(ctx.db).get(txn.product_id),
+        )
+        offer_block = product is not None and product.customer_id == customer_id and product.is_card is True
     result = EvaluateDisputeResult(
         transaction_id=txn.transaction_id,
         rule_id=decision.rule_id,
         route=decision.route.value,
-        offer_card_block=decision.offer_card_block,
+        offer_card_block=offer_block,
         existing_dispute_id=existing.dispute_id if existing else None,
     )
     _audit(

@@ -10,6 +10,10 @@ import json
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
+from pathlib import Path
+from typing import Any
+
+import duckdb
 
 from evals.fixtures import FixtureBank
 from evals.schema import Case, Outcome
@@ -68,8 +72,8 @@ class MemoryBank(FixtureBank):
 def facts_from_case(case: Case) -> WorldFacts:
     info = case.user_scenario.known_info
     label_source = info.get("label_source", "policy")
-    if label_source not in {"policy", "tool_denial", "authentication"}:
-        raise ValueError(f"{case.id}: label_source must be policy, tool_denial, or authentication")
+    if label_source not in {"policy", "tool_denial", "authentication", "data"}:
+        raise ValueError(f"{case.id}: label_source must be policy, tool_denial, authentication or data")
     if label_source == "tool_denial":
         _require(info, "other_customer_id", "other_transaction_id")
     elif label_source == "policy":
@@ -114,6 +118,11 @@ def check_label(case: Case, facts: WorldFacts) -> None:
         if expected != Outcome.REFUSE:
             raise ValueError("authentication denial must expect refuse")
         return
+    if facts.label_source == "data":
+        # Ambiguity is a fact of the customer's records: several charges match what they said.
+        if expected != Outcome.CLARIFY or int(case.user_scenario.known_info.get("matching_charges", "0")) < 2:
+            raise ValueError(f"{case.id}: a data-labeled case must expect clarify over two or more matching charges")
+        return
     if facts.label_source == "tool_denial":
         if expected != Outcome.CLARIFY:
             raise ValueError(f"{case.id}: a transaction the customer does not own must expect clarify, not {expected}")
@@ -126,10 +135,35 @@ def check_label(case: Case, facts: WorldFacts) -> None:
         raise ValueError(f"{case.id}: policy route {decision.route} expects {from_policy}, case says {expected}")
 
 
+GOLD = Path(__file__).resolve().parents[1] / "data" / "lake" / "gold"
+
+
+def _gold_world(customer_id: str) -> MemoryBank:
+    """The customer's real records from the gold Parquet (make gold): search runs over their history."""
+    if not (GOLD / "transactions.parquet").is_file():
+        raise ValueError("world: gold needs data/lake/gold (make silver and make gold)")
+    con = duckdb.connect()
+
+    def rows(table: str) -> list[dict[str, Any]]:
+        cursor = con.execute(f"select * from '{GOLD}/{table}.parquet' where customer_id = ?", [customer_id])
+        names = [column[0] for column in cursor.description]
+        return [dict(zip(names, values, strict=True)) for values in cursor.fetchall()]
+
+    transactions = [Transaction(**row) for row in rows("transactions")]
+    products = {row["product_id"]: Product(**row) for row in rows("products")}
+    stats = {row["customer_id"]: CustomerComplaintStats(**row) for row in rows("customer_complaint_stats")}
+    con.close()
+    if not transactions:
+        raise ValueError(f"{customer_id}: no gold transactions")
+    return MemoryBank(transactions, stats, products, customer_id=customer_id)
+
+
 def build_bank(case: Case, facts: WorldFacts) -> MemoryBank:
     customer_id = case.session.customer_id
     if not customer_id:
         raise ValueError(f"{case.id}: customer_id is required")
+    if case.user_scenario.known_info.get("world") == "gold":
+        return _gold_world(customer_id)
     transactions: list[Transaction] = []
     products: dict[str, Product] = {}
     stats: dict[str, CustomerComplaintStats] = {}
