@@ -1,0 +1,216 @@
+"""Degraded mode over HTTP: when the model is unavailable the customer is handed off, not shown a 500.
+
+docs/architecture.md, principle 5: "Degrade to a human, never to a guess." The fallback never claims an
+action beyond the handoff it created, and it names that handoff so the customer can quote it.
+"""
+
+from __future__ import annotations
+
+import re
+from contextlib import asynccontextmanager
+from unittest.mock import MagicMock
+from uuid import UUID
+
+import httpx2
+import openai
+import pytest
+from fastapi.testclient import TestClient
+
+from minsky_api.agent.memory import ConversationStore
+from minsky_api.agent.state import Phase
+from minsky_api.config import get_settings
+from minsky_api.llm.client import ModelMismatchError, ModelOutputError
+from minsky_api.main import create_app
+from minsky_api.store.cases_memory import InMemoryCasesBackend
+from minsky_api.tools.errors import ToolError
+
+_HANDOFF = re.compile(r"HO-[0-9a-f]{12}")
+_REQUEST = httpx2.Request("POST", "https://llm.invalid/v1/responses")
+
+
+def _handoff_id(reply: str) -> str:
+    match = _HANDOFF.search(reply)
+    assert match, reply
+    return match.group(0)
+
+
+AUTH = {"Authorization": "Bearer token-c1"}
+
+
+def _provider_errors() -> list[BaseException]:
+    return [
+        openai.APITimeoutError(request=_REQUEST),
+        openai.APIConnectionError(request=_REQUEST),
+        openai.RateLimitError("slow down", response=httpx2.Response(429, request=_REQUEST), body=None),
+        openai.InternalServerError("upstream", response=httpx2.Response(500, request=_REQUEST), body=None),
+        ModelMismatchError("asked for gpt-6-luna, got something-else"),
+        ModelOutputError("the model returned a reply that does not fit the schema"),
+    ]
+
+
+class _Turn:
+    """What the faked orchestrator does on the next call: succeed, or mutate the state and then fail."""
+
+    def __init__(self) -> None:
+        self.failure: Exception | None = None
+        self.partial_txn: str | None = None
+
+
+@pytest.fixture
+def harness(monkeypatch):
+    monkeypatch.setenv(
+        "MINSKY_TEST_SESSIONS",
+        '{"token-c1":{"customer_id":"C1","expires_at":"2099-01-01T00:00:00Z"}}',
+    )
+    get_settings.cache_clear()
+    app = create_app()
+    app.state.cases = InMemoryCasesBackend()
+    app.state.conversations = ConversationStore()
+    turn = _Turn()
+
+    @asynccontextmanager
+    async def fake_session():
+        yield MagicMock()
+
+    async def fake_run_turn(state, text, ctx, llm):
+        state.turn_count += 1
+        state.messages.append(("user", text))
+        if turn.partial_txn:
+            state.selected_txn_id = turn.partial_txn  # progress of a turn that then fails
+        if turn.failure is not None:
+            raise turn.failure
+        state.messages.append(("agent", "ok"))
+        return state, "ok"
+
+    monkeypatch.setattr("minsky_api.api.chat.run_turn", fake_run_turn)
+    monkeypatch.setattr("minsky_api.api.chat.LLM", MagicMock)
+    monkeypatch.setattr("minsky_api.api.chat.session", fake_session)
+    # a 500 must show up as a status code here, not as an exception raised into the test
+    with TestClient(app, raise_server_exceptions=False) as client:
+        yield app, client, turn
+    get_settings.cache_clear()
+
+
+def _post(client, text, conversation_id=None):
+    body = {"messages": [{"user": text}]}
+    if conversation_id:
+        body["conversation_id"] = conversation_id
+    return client.post("/api/chat/turn", json=body, headers=AUTH)
+
+
+@pytest.mark.parametrize("failure", _provider_errors(), ids=lambda e: type(e).__name__)
+def test_model_failure_hands_off_instead_of_failing(harness, failure):
+    app, client, turn = harness
+    turn.failure = failure
+    response = _post(client, "No reconozco un cargo de 25.00 USD")
+    assert response.status_code == 200, response.text
+    reply = response.json()["messages"][-1]["agent"]
+    handoff = app.state.cases.get_handoff(_handoff_id(reply))
+    assert handoff is not None and handoff.customer_id == "C1"
+    assert handoff.reason == "assistant_unavailable"
+
+
+def test_reply_is_spanish_by_default_and_names_no_other_action(harness):
+    _app, client, turn = harness
+    turn.failure = openai.APITimeoutError(request=_REQUEST)
+    reply = _post(client, "No reconozco un cargo").json()["messages"][-1]["agent"]
+    assert "problema técnico" in reply
+    for claim in ("abrí", "reclamo abierto", "bloque", "reembols", "devol"):
+        assert claim not in reply.lower()
+
+
+def test_reply_follows_a_portuguese_message(harness):
+    _app, client, turn = harness
+    turn.failure = openai.APITimeoutError(request=_REQUEST)
+    reply = _post(client, "Não reconheço uma cobrança de 25.00 USD").json()["messages"][-1]["agent"]
+    assert "problema técnico" in reply and "Tive" in reply
+    assert "Encaminhei" in reply
+
+
+def test_handoff_carries_identifiers_not_the_customer_text(harness):
+    app, client, turn = harness
+    turn.failure = openai.APIConnectionError(request=_REQUEST)
+    secret = "mi tarjeta termina en 4242 y vivo en la calle Falsa 123"
+    reply = _post(client, secret).json()["messages"][-1]["agent"]
+    handoff = app.state.cases.get_handoff(_handoff_id(reply))
+    assert "4242" not in repr(handoff.facts) and "Falsa" not in repr(handoff.facts)
+    assert handoff.facts["failure"] == "APIConnectionError"
+    assert handoff.facts["phase"] == "understand"
+
+
+def test_state_is_the_one_before_the_failed_turn(harness):
+    app, client, turn = harness
+    turn.failure = openai.APITimeoutError(request=_REQUEST)
+    turn.partial_txn = "T-PARTIAL"  # the failed turn had already set this on the live state
+    response = _post(client, "hola")
+    state = app.state.conversations.get(UUID(response.json()["conversation_id"]))
+    assert state.phase == Phase.DONE
+    assert state.selected_txn_id is None
+    assert [role for role, _ in state.messages] == ["user", "agent"]
+    reply = response.json()["messages"][-1]["agent"]
+    assert app.state.cases.get_handoff(_handoff_id(reply)).facts["transaction_id"] is None
+
+
+def test_failure_on_a_later_turn_keeps_the_history(harness):
+    app, client, turn = harness
+    first = _post(client, "hola")
+    assert first.status_code == 200
+    conversation_id = first.json()["conversation_id"]
+    turn.failure = openai.RateLimitError("slow down", response=httpx2.Response(429, request=_REQUEST), body=None)
+    body = {
+        "conversation_id": conversation_id,
+        "messages": [*first.json()["messages"], {"user": "sigo aquí"}],
+    }
+    second = client.post("/api/chat/turn", json=body, headers=AUTH)
+    assert second.status_code == 200, second.text
+    texts = [next(iter(m.values())) for m in second.json()["messages"]]
+    assert texts[:3] == ["hola", "ok", "sigo aquí"] and "problema técnico" in texts[3]
+
+
+def test_if_the_handoff_cannot_be_created_the_answer_is_an_honest_503(harness, monkeypatch):
+    app, client, turn = harness
+    turn.failure = openai.APITimeoutError(request=_REQUEST)
+
+    def broken(**_kwargs):
+        raise RuntimeError("password=hunter2 connection refused")
+
+    monkeypatch.setattr(app.state.cases, "create_handoff", broken)
+    response = _post(client, "hola")
+    assert response.status_code == 503
+    assert "hunter2" not in response.text and "refused" not in response.text
+
+
+def test_other_failures_keep_their_status(harness):
+    _app, client, turn = harness
+    turn.failure = ToolError("bank read failed")
+    assert _post(client, "hola").status_code == 502
+    turn.failure = RuntimeError("unexpected orchestration state")
+    assert _post(client, "hola").status_code == 503
+
+
+def test_language_is_portuguese_only_on_portuguese_signals():
+    from minsky_api.agent.degraded import language_of
+
+    assert language_of(["No reconozco este cargo"]) == "es"
+    assert language_of(["Hola, quiero disputar un cargo"]) == "es"
+    assert language_of(["Não reconheço esta cobrança"]) == "pt"
+    assert language_of(["hola", "tenho uma dúvida"]) == "pt"
+
+
+@pytest.mark.asyncio
+async def test_the_handoff_is_idempotent_per_conversation_and_turn():
+    from uuid import uuid4
+
+    from minsky_api.agent.degraded import hand_off_on_outage
+    from minsky_api.agent.state import ConversationState
+    from minsky_api.identity.session import SessionState, ToolSession
+    from minsky_api.tools.context import ToolContext
+
+    cases = InMemoryCasesBackend()
+    session = ToolSession(session_id="s1", state=SessionState.VALID, customer_id="C1")
+    ctx = ToolContext(session=session, db=MagicMock(), cases=cases)
+    before = ConversationState(conversation_id=uuid4(), customer_id="C1")
+    failure = openai.APITimeoutError(request=_REQUEST)
+    _, first = await hand_off_on_outage(ctx, before, "hola", failure)
+    _, again = await hand_off_on_outage(ctx, before, "hola", failure)
+    assert _handoff_id(first) == _handoff_id(again)
