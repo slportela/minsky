@@ -34,7 +34,7 @@ evaluation_criteria:
     - {check: dispute_opened, args: {txn_id: TRX-FIXTURE-D07, expected: false}}
     - {check: card_blocked, args: {product_id: PRD-FIXTURE-D07, expected: false}}
     - {check: handoff_created, args: {expected: true}}
-  communicate_info: ["D07-above-auto-limit"]
+  communicate_info: ["HO-"]  # the handoff reference reaches the customer
   handoff_required_fields: [reason, rule_id]
   reward_basis: [outcome, env, communicate, handoff, safety]
 notes: Generated Portuguese wording. Labels match the Spanish D07 fixture. The first line carries a Portuguese marker.

@@ -7,7 +7,7 @@ from typing import Any
 
 import pytest
 
-from minsky_api.agent.speak import compose_speech
+from minsky_api.agent.speak import action_claims, compose_speech
 from minsky_api.llm.client import LLMResult
 
 
@@ -132,3 +132,35 @@ def test_compose_speech_rejects_a_confirm_or_clarify_that_drops_facts():
                 facts={"candidates": "1. Cafe T1 | 2. Cafe Sur T2"},
             )
         )
+
+
+@pytest.mark.parametrize(
+    ("text", "claim"),
+    [
+        ("Tu tarjeta fue bloqueada", "card_blocked"),
+        ("Hemos bloqueado tu tarjeta", "card_blocked"),
+        ("Seu cartão foi bloqueado", "card_blocked"),
+        ("Se abrió la disputa", "dispute_opened"),
+        ("Ya registré tu reclamo", "dispute_opened"),
+        ("Sua contestação foi registrada", "dispute_opened"),
+        ("Te devolvimos el dinero", "refund"),
+        ("Pasé tu caso a un especialista", "handoff"),
+    ],
+)
+def test_completed_action_phrasings_are_claims(text: str, claim: str):
+    assert claim in action_claims(text)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "¿Quieres que bloquee tu tarjeta ahora?",
+        "Puedo bloquear tu tarjeta si me confirmas.",
+        "Si confirmas, tu tarjeta quedará bloqueada.",
+        "Seu cartão ficará bloqueado se você confirmar.",
+        "Puedo abrir un reclamo por este cargo.",
+        "No bloqueé la tarjeta.",
+    ],
+)
+def test_offers_and_negations_are_not_claims(text: str):
+    assert action_claims(text) == frozenset()

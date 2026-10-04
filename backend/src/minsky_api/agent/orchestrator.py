@@ -8,6 +8,7 @@ from minsky_api.agent.extract import DisputeDetails, extract_dispute_details
 from minsky_api.agent.language import LanguageDetector, default_language_detector
 from minsky_api.agent.speak import Speech, compose_speech
 from minsky_api.agent.state import ConversationState, Phase
+from minsky_api.agent.wording import fallback_sentence, human_amount, human_date, policy_reason
 from minsky_api.config import get_settings
 from minsky_api.identity.session import SessionState
 from minsky_api.llm.client import LLM
@@ -38,6 +39,12 @@ from minsky_api.tools.schemas import (
 
 # A bare number picks a candidate. Yes/no is a model decision, not a token list.
 _PICK = re.compile(r"^\s*(\d+)\s*$")
+# Deterministic floor under the model's "yes": a reply that also says no, cancel or "but" is not a clear
+# yes, so the system asks again instead of acting. It can only turn a yes into a question, never the reverse.
+_HEDGE = re.compile(
+    r"\b(?:no|não|nao|nunca|cancel\w*|espera|espere|aguarde|pero|mas|porém|todavia|mejor|melhor|tal vez|talvez)\b",
+    re.IGNORECASE,
+)
 
 
 def _lang(state: ConversationState) -> str:
@@ -47,37 +54,33 @@ def _lang(state: ConversationState) -> str:
 
 
 def _public_facts(state: ConversationState, **extra: object) -> dict[str, object]:
-    raw: dict[str, object] = {"rule_id": state.rule_id, "transaction_id": state.selected_txn_id}
+    """Facts the model may phrase. The rule id becomes its plain-language reason; ids stay internal."""
+    rule_id = extra.pop("rule_id", state.rule_id)
+    raw: dict[str, object] = {"reason": policy_reason(rule_id if isinstance(rule_id, str) else None, _lang(state))}
     raw.update(extra)
     return {key: value for key, value in raw.items() if value is not None}
 
 
-def _txn_facts(txn: TransactionView) -> dict[str, object]:
-    when = txn.transaction_date.date().isoformat() if txn.transaction_date else None
+def _txn_facts(txn: TransactionView, language: str) -> dict[str, object]:
     return {
-        "transaction_id": txn.transaction_id,
         "merchant": txn.merchant_name,
-        "amount_usd": str(txn.amount_usd),
-        "when": when,
+        "amount": human_amount(txn.amount_usd),
+        "when": human_date(txn.transaction_date.date(), language) if txn.transaction_date else None,
     }
 
 
+_SPEAK_ATTEMPTS = 2  # bounded: one retry when a reply fails the checks, then the error surfaces
+
+
 async def _speak(state: ConversationState, llm: LLM, allowed: tuple[str, ...], **facts: object) -> Speech:
-    return await compose_speech(llm, language=_lang(state), allowed=allowed, facts=_public_facts(state, **facts))
-
-
-def _fallback_text(language: str, facts: dict[str, object]) -> str:
-    """Ids from a write that already happened, used when the model cannot phrase the result."""
-    bits: list[str] = []
-    for key in ("dispute_id", "existing_dispute_id", "handoff_id", "rule_id", "transaction_id"):
-        value = facts.get(key)
-        if isinstance(value, str) and value:
-            bits.append(value)
-    if facts.get("card_blocked") is True:
-        bits.append("tarjeta bloqueada" if language == "es" else "cartão bloqueado")
-    body = " ".join(bits)
-    lead = "Ficou registrado." if language == "pt" else "Quedó registrado."
-    return f"{lead} {body}".strip()
+    public = _public_facts(state, **facts)
+    for attempt in range(_SPEAK_ATTEMPTS):
+        try:
+            return await compose_speech(llm, language=_lang(state), allowed=allowed, facts=public)
+        except RuntimeError:
+            if attempt == _SPEAK_ATTEMPTS - 1:
+                raise
+    raise AssertionError("unreachable")
 
 
 async def _speak_verified(state: ConversationState, llm: LLM, allowed: tuple[str, ...], **facts: object) -> str:
@@ -85,12 +88,12 @@ async def _speak_verified(state: ConversationState, llm: LLM, allowed: tuple[str
     language = _lang(state)
     public = _public_facts(state, **facts)
     try:
-        speech = await compose_speech(llm, language=language, allowed=allowed, facts=public)
+        speech = await _speak(state, llm, allowed, **facts)
     except Exception:
         if public.get("card_blocked") is True:
             state.claims_card_blocked = True
         state.acts.append(allowed[0])
-        return _fallback_text(language, public)
+        return fallback_sentence(language, public)
     return _accept(state, speech)
 
 
@@ -148,16 +151,31 @@ async def _handoff(
             idempotency_key=f"{state.conversation_id}:{state.turn_count}",
             reason=reason,
             rule_id=rule_id,
-            facts={
-                "transaction_id": state.selected_txn_id,
-                "route": state.route,
-            },
+            facts=_handoff_facts(state),
             actions=actions,
         ),
     )
     state.phase = Phase.DONE
     state.pending_question = None
     return await _speak_verified(state, llm, ("handoff",), handoff_id=result.handoff.handoff_id, rule_id=rule_id)
+
+
+def _handoff_facts(state: ConversationState, **extra: object) -> dict[str, object]:
+    """What the agent needs: the selected transaction (verified again by the tool) and what the customer said.
+
+    Customer statements are labeled as claims; the tool adds the verified transaction facts itself.
+    """
+    details = state.search_details.model_dump(mode="json", exclude_none=True, exclude_defaults=True)
+    facts: dict[str, object] = {
+        "transaction_id": state.selected_txn_id,
+        "route": state.route,
+        "customer_request": next((text for role, text in state.messages if role == "user"), None),
+        "customer_says_not_me": state.customer_says_not_me or None,
+        "customer_search_details": details or None,
+        "language": state.language,
+    }
+    facts.update(extra)
+    return {key: value for key, value in facts.items() if value is not None}
 
 
 async def _get_owned_txn(ctx: ToolContext, transaction_id: str) -> TransactionView | None:
@@ -189,10 +207,12 @@ async def _search(ctx: ToolContext, details: DisputeDetails) -> list[Transaction
     return list(found.transactions)
 
 
-def _candidate_list(txns: list[TransactionView]) -> str:
-    return " | ".join(
-        f"{index}. {txn.merchant_name or '?'} {txn.transaction_id}" for index, txn in enumerate(txns, start=1)
-    )
+def _candidate_list(txns: list[TransactionView], language: str) -> str:
+    lines = []
+    for index, txn in enumerate(txns, start=1):
+        when = human_date(txn.transaction_date.date(), language) if txn.transaction_date else "?"
+        lines.append(f"{index}. {txn.merchant_name or '?'}, {human_amount(txn.amount_usd)}, {when}")
+    return "\n".join(lines)
 
 
 async def _after_candidates(
@@ -214,7 +234,7 @@ async def _after_candidates(
         state.clarify_count += 1
         if state.clarify_count > get_settings().max_clarify_attempts:
             return await _handoff(ctx, state, llm, reason="clarify_exhausted")
-        speech = await _speak(state, llm, ("clarify",), candidates=_candidate_list(txns))
+        speech = await _speak(state, llm, ("clarify",), candidates=_candidate_list(txns, _lang(state)))
         state.phase = Phase.CLARIFY
         state.candidate_txn_ids = [t.transaction_id for t in txns]
         state.pending_question = None
@@ -223,7 +243,7 @@ async def _after_candidates(
     state.selected_txn_id = txn.transaction_id
     state.selected_product_id = txn.product_id
     state.candidate_txn_ids = [txn.transaction_id]
-    speech = await _speak(state, llm, ("confirm_txn",), **_txn_facts(txn))
+    speech = await _speak(state, llm, ("confirm_txn",), **_txn_facts(txn, _lang(state)))
     return _ask(state, Phase.CONFIRM_TXN, _accept(state, speech))
 
 
@@ -254,7 +274,7 @@ async def _apply_policy(ctx: ToolContext, state: ConversationState, llm: LLM) ->
                 idempotency_key=f"{state.conversation_id}:{state.turn_count}",
                 reason="policy_refuse",
                 rule_id=decision.rule_id,
-                facts={"transaction_id": state.selected_txn_id, "route": state.route},
+                facts=_handoff_facts(state),
                 actions=(),
             ),
         )
@@ -298,7 +318,7 @@ async def _phase_clarify(ctx: ToolContext, state: ConversationState, text: str, 
                 return await _after_candidates(ctx, state, [], llm)
             state.selected_txn_id = txn.transaction_id
             state.selected_product_id = txn.product_id
-            speech = await _speak(state, llm, ("confirm_txn",), **_txn_facts(txn))
+            speech = await _speak(state, llm, ("confirm_txn",), **_txn_facts(txn, _lang(state)))
             return _ask(state, Phase.CONFIRM_TXN, _accept(state, speech))
     details = await extract_dispute_details(llm, text)
     state.customer_says_not_me = state.customer_says_not_me or details.customer_says_not_me
@@ -321,8 +341,11 @@ async def _remember_decision(ctx: ToolContext, state: ConversationState, text: s
         ClassifyReplyArgs(question=state.pending_question, text=text),
         llm,
     )
-    state.confirmation = result.decision
-    return result.decision
+    decision = result.decision
+    if decision == "yes" and _HEDGE.search(text):
+        decision = "unclear"
+    state.confirmation = decision
+    return decision
 
 
 async def _ask_again(state: ConversationState, llm: LLM) -> str:
@@ -400,7 +423,7 @@ async def _phase_card_offer(ctx: ToolContext, state: ConversationState, text: st
                 idempotency_key=f"{state.conversation_id}:{state.turn_count}",
                 reason="possible_fraud",
                 rule_id=state.rule_id,
-                facts={"transaction_id": state.selected_txn_id, "card_blocked": blocked_ok},
+                facts=_handoff_facts(state, card_blocked=blocked_ok),
                 actions=tuple(actions),
             ),
         )

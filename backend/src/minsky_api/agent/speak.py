@@ -16,34 +16,52 @@ from pydantic import BaseModel, ConfigDict, Field
 from minsky_api.agent.prompts import render
 from minsky_api.llm.client import LLM
 
-# Completed actions only. Offers ("bloquee", "derivo", "abrir") stay out of these patterns.
+# Completed actions only. Offers ("bloquee", "puedo bloquear", "derivo", "abrir") stay out of these
+# patterns; a participle after a future or conditional ("quedará bloqueada") is an offer, not a claim.
+_CARD = r"(?:tarjeta|tarjetas|cartão|cartao|cartões|cartoes)"
+_CASE = r"(?:reclamo|reclamos|disputa|disputas|reclamação|reclamacao|contestação|contestacao|caso)"
 _CLAIM_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
     (
         "card_blocked",
-        re.compile(r"\bbloqueé\b|\bbloqueei\b|\btarjeta bloqueada\b|\bcartão bloqueado\b|\bcartao bloqueado\b"),
+        re.compile(
+            r"\bbloque(?:é|ei|amos|aron|ou|aram)\b"
+            rf"|\b{_CARD}\b.{{0,40}}\bbloquead[oa]s?\b"
+            rf"|\bbloquead[oa]s?\b.{{0,20}}\b{_CARD}\b"
+            r"|\bhemos bloqueado\b"
+        ),
     ),
     (
         "dispute_opened",
         re.compile(
-            r"\b(?:abrí|abri)\b.{0,40}\b(?:reclamo|disputa|reclama)\b"
-            r"|\babiert[oa]\b.{0,30}\b(?:reclamo|disputa)\b"
-            r"|\b(?:reclamo|disputa|reclama)\b.{0,30}\babert"
+            rf"\b(?:abrí|abri|abrimos|registré|registrei|registramos)\b.{{0,40}}\b{_CASE}\b"
+            rf"|\b{_CASE}\b.{{0,40}}\b(?:abiert[oa]s?|abert[oa]s?|registrad[oa]s?|creado|criad[oa])\b"
+            rf"|\b(?:se abrió|foi abert[oa]|se registró|foi registrad[oa])\b.{{0,30}}\b{_CASE}\b"
         ),
     ),
     (
         "refund",
-        re.compile(r"\breembolsé\b|\breembolsei\b|\bdevolví\b|\bdevolvi\b"),
+        re.compile(
+            r"\b(?:reembolsé|reembolsei|reembolsamos|devolví|devolvi|devolvimos|estornamos|estornei)\b"
+            r"|\b(?:reembolsad[oa]|estornad[oa]|acreditad[oa])\b.{0,30}\b(?:dinero|dinheiro|monto|valor)\b"
+            r"|\b(?:dinero|dinheiro|monto|valor)\b.{0,30}\b(?:reembolsad[oa]|devuelt[oa]|estornad[oa])\b"
+        ),
     ),
     (
         "handoff",
-        re.compile(r"\bderivé\b|\bencaminhei\b"),
+        re.compile(r"\b(?:derivé|encaminhei|transferí|transferi|pasé tu caso|passei o seu caso)\b"),
     ),
 )
-_NEGATION = re.compile(r"(?:no|não|nao|sin|sem)\s+$")
-_ID_FACTS = ("transaction_id", "dispute_id", "handoff_id", "rule_id", "existing_dispute_id")
+_NEGATION = re.compile(r"(?:no|não|nao|sin|sem|nunca)\s+$")
+_FUTURE_WORDS = (
+    r"(?:quedará|quedaría|será|sería|estará|estaría|ficará|ficaria|vai ficar|va a quedar|podemos|puedo|posso)"
+)
+_FUTURE = re.compile(_FUTURE_WORDS + r"\s+$")
+_FUTURE_INSIDE = re.compile(rf"\b{_FUTURE_WORDS}\b")
+# References the customer needs to keep. Rule ids stay internal: the customer hears the reason instead.
+_ID_FACTS = ("dispute_id", "handoff_id", "existing_dispute_id")
 _ACT_FACTS: dict[str, tuple[str, ...]] = {
     "clarify": ("candidates",),
-    "confirm_txn": ("merchant", "amount_usd", "when"),
+    "confirm_txn": ("merchant", "amount", "when"),
 }
 
 Act = Literal[
@@ -73,8 +91,8 @@ def action_claims(text: str) -> frozenset[str]:
     found: set[str] = set()
     for name, pattern in _CLAIM_PATTERNS:
         for match in pattern.finditer(folded):
-            window = folded[max(0, match.start() - 16) : match.start()]
-            if _NEGATION.search(window):
+            window = folded[max(0, match.start() - 24) : match.start()]
+            if _NEGATION.search(window) or _FUTURE.search(window) or _FUTURE_INSIDE.search(match.group(0)):
                 continue
             found.add(name)
     return frozenset(found)
