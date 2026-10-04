@@ -54,5 +54,5 @@ asyncio_default_fixture_loop_scope = "function"
 [tool.pyright]
 venvPath = "."
 venv = ".venv"
-include = ["evals", "tests", "backend/src", "backend/tests"]
+include = ["evals", "tests", "backend/src", "backend/tests", "ml"]
 pythonVersion = "3.12"

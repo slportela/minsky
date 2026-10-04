@@ -7,7 +7,7 @@ PROFILE    := $(shell grep '^BRONZE_AWS_PROFILE=' .env 2>/dev/null | cut -d= -f2
 LAKE_URI   := $(patsubst %/bronze,%,$(BRONZE_URI))
 AWS        := AWS_PROFILE=$(PROFILE) aws
 
-.PHONY: help setup lock-check lint typecheck test llm-smoke regression-smoke eval-smoke eval-live-estimate frontend-check eval-check ci up down logs demo-plan demo-apply pipeline bronze mirror silver gold publish docs
+.PHONY: help setup lock-check lint typecheck test llm-smoke regression-smoke eval-smoke eval-live-estimate frontend-check eval-check router ci up down logs demo-plan demo-apply pipeline bronze mirror silver gold publish docs
 
 EVAL_CAP_USD ?= 1
 
@@ -23,7 +23,7 @@ setup:  ## install Python and frontend dependencies, and git hooks
 
 lint:  ## ruff lint + format check
 	uv run ruff check .
-	uv run ruff format --check evals tests backend
+	uv run ruff format --check evals tests backend ml
 
 typecheck:  ## pyright on typed packages
 	uv run pyright
@@ -49,6 +49,10 @@ eval-live-estimate:  ## estimate real dev smoke; set EVAL_INPUT_RATE and EVAL_OU
 
 regression-smoke:  ## offline chat regressions (scripted extraction; no provider spend)
 	uv run python -m evals.regression_smoke --output evals/runs/pr24-regressions.json
+
+router:  ## train and evaluate the learned router; writes ml/reports and the backend artifact
+	uv run python -m ml.router.generate
+	uv run python -m ml.router.train
 
 lock-check:  ## lockfiles resolve only from public registries (a private mirror breaks setup for everyone else)
 	@bad=$$( grep -nE '(registry|url) = "https://' uv.lock | grep -vE '"https://(pypi\.org|files\.pythonhosted\.org)/'; \

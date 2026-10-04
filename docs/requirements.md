@@ -36,7 +36,7 @@ Status: ✅ done · 🟡 partial · ⬜ planned · ⚠️ risk or gap
 | P4.1 | Repeatable data preparation with contracts, quality checks, lineage | Dictionary → generated silver models + tests; gold read models with contracts; dbt lineage; bronze manifest | `pipeline/`, `read_models.md` | ✅ |
 | P4.2 | Update and freshness policy | Incremental bronze; atomic gold loads recorded in `ops.load_runs`; freshness alarm in production | `pipeline/`, `read_models.md`, `architecture.md` | 🟡 recorded, not alarmed |
 | P4.3 | If data is static, demonstrate update correctness with a labeled test fixture | Late and corrected partition fixture | — | ⬜ |
-| P4.4 | Evaluate at least one learned component against a baseline | Router ladder | `ml/README.md` | ⬜ |
+| P4.4 | Evaluate at least one learned component against a baseline | Router ladder: majority → keyword rules → TF-IDF + logistic regression, same splits, abstain threshold fitted on val | `ml/README.md`, `ml/reports/` | 🟡 offline on generated text (held-out template family); handwritten set is an unreviewed draft; orchestrator integration pending |
 | P4.5 | Valid labels, no leakage, justified representations, metrics, thresholds, splits | Customer + time splits; leakage check; threshold on val | `ml/README.md`, `evals.md` | ⬜ |
 | P5.1 | Evaluate on held-out cases | Locked test split | `evals.md` | 🟡 twelve draft dev cases × three live trials, 36/36; held-out evaluation pending |
 | P5.2 | Cover incorrect or missing data, expired sessions, unauthorized access, prompt injection, tool failures, multilingual ambiguity | Red-team and failure suites; fault injection in cases | `evals/schema.py` | 🟡 live auth, ambiguity, tool-error and fraud controls; injection and multilingual suites pending |
@@ -83,4 +83,4 @@ Status: ✅ done · 🟡 partial · ⬜ planned · ⚠️ risk or gap
 | J2 | AI engineering: backend, frontend, deployment | FastAPI, Next.js, POC on AWS + target architecture | 🟡 chat UI + orchestrator implemented; console, live smoke, deployment pending |
 | J3 | Data analytics: data quality and insights | `known_issues.md` + `disputes_findings.md` + results by slice | 🟡 |
 | J4 | Data engineering: extraction and transformation | Bronze → silver → gold pipeline with contracts, loaded atomically into Postgres | ✅ |
-| J5 | ML: model selection, optimization, implementation, **tracking** | Router ladder; every training run writes a committed report (git SHA, data snapshot, splits, params, metrics, model hash) (ADR 0007) | ⬜ |
+| J5 | ML: model selection, optimization, implementation, **tracking** | Router ladder; every training run writes a committed report (git SHA, data snapshot, splits, params, metrics, model hash) (ADR 0007) | 🟡 `make router` writes `ml/reports/<run>.{json,md}` and the backend artifact; trained on generated text only |

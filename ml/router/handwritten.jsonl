@@ -1,0 +1,80 @@
+{"text": "no reconozco esto", "label": "not_me", "lang": "es", "note": "very short", "provenance": "team-written-draft"}
+{"text": "oigan me llegó un mensaje de que compré algo en una tienda en línea y yo ni la conozco", "label": "not_me", "lang": "es", "note": "indirect", "provenance": "team-written-draft"}
+{"text": "Tengo un movimiento que no sé de dónde salió, $3,400 en algo llamado PAYU*SERV", "label": "not_me", "lang": "es", "note": "unknown descriptor", "provenance": "team-written-draft"}
+{"text": "me clonaron la tarjeta creo, hay compras en otra ciudad", "label": "not_me", "lang": "es", "note": "", "provenance": "team-written-draft"}
+{"text": "Buenas, mi tarjeta la tengo yo pero aparecen dos compras que no hice en Uber", "label": "not_me", "lang": "es", "note": "two cues (two charges, not duplicate)", "provenance": "team-written-draft"}
+{"text": "ese cargo no es mio, nunca he ido a ese lugar", "label": "not_me", "lang": "es", "note": "", "provenance": "team-written-draft"}
+{"text": "che, me aparece un consumo en dólares que no hice", "label": "not_me", "lang": "es", "note": "AR", "provenance": "team-written-draft"}
+{"text": "Mi esposa y yo revisamos y ninguno de los dos hizo esa compra del sábado", "label": "not_me", "lang": "es", "note": "indirect", "provenance": "team-written-draft"}
+{"text": "alguien está usando mi cuenta, hay un pago que yo no mandé", "label": "not_me", "lang": "es", "note": "", "provenance": "team-written-draft"}
+{"text": "no reconheço essa compra", "label": "not_me", "lang": "pt", "note": "very short", "provenance": "team-written-draft"}
+{"text": "Gente, apareceu uma compra no meu cartão que eu não fiz, o que eu faço?", "label": "not_me", "lang": "pt", "note": "", "provenance": "team-written-draft"}
+{"text": "Acho que fui vítima de golpe, tem um pix que eu não fiz", "label": "not_me", "lang": "pt", "note": "", "provenance": "team-written-draft"}
+{"text": "tem uma cobrança de uma loja que eu nunca ouvi falar", "label": "not_me", "lang": "pt", "note": "indirect", "provenance": "team-written-draft"}
+{"text": "Hola, no reconheço una compra de R$ 200 en mi tarjeta", "label": "not_me", "lang": "es", "note": "code-switching", "provenance": "team-written-draft"}
+{"text": "meu cartão foi roubado ontem e já tem compras que não são minhas", "label": "not_me", "lang": "pt", "note": "", "provenance": "team-written-draft"}
+{"text": "No fui yo! me sale un cargo de Netflix y no tengo Netflix", "label": "not_me", "lang": "es", "note": "unknown merchant", "provenance": "team-written-draft"}
+{"text": "me cobraron más de lo que decía el menú", "label": "wrong_amount", "lang": "es", "note": "indirect", "provenance": "team-written-draft"}
+{"text": "La gasolina fue de 800 y en la app me sale 1,800", "label": "wrong_amount", "lang": "es", "note": "", "provenance": "team-written-draft"}
+{"text": "el cargo es por otro monto, no por el que yo pagué", "label": "wrong_amount", "lang": "es", "note": "", "provenance": "team-written-draft"}
+{"text": "pagué 25.37 en el súper y me aparecen 253.70", "label": "wrong_amount", "lang": "es", "note": "decimal shift", "provenance": "team-written-draft"}
+{"text": "Me cobraron la propina incluida y otra vez aparte, el total está inflado", "label": "wrong_amount", "lang": "es", "note": "two cues (again, but wrong amount)", "provenance": "team-written-draft"}
+{"text": "el taxi me cobró 4 veces lo que marcaba el taxímetro", "label": "wrong_amount", "lang": "es", "note": "two cues ('veces')", "provenance": "team-written-draft"}
+{"text": "Hola, el precio era con descuento y me cobraron el precio completo", "label": "wrong_amount", "lang": "es", "note": "indirect", "provenance": "team-written-draft"}
+{"text": "monto incorrecto en la compra de ayer", "label": "wrong_amount", "lang": "es", "note": "short", "provenance": "team-written-draft"}
+{"text": "me cobraron en dólares y era en pesos, el monto no tiene nada que ver", "label": "wrong_amount", "lang": "es", "note": "", "provenance": "team-written-draft"}
+{"text": "o valor cobrado não é o que eu paguei", "label": "wrong_amount", "lang": "pt", "note": "", "provenance": "team-written-draft"}
+{"text": "Paguei 50 reais no restaurante e na fatura veio 500", "label": "wrong_amount", "lang": "pt", "note": "", "provenance": "team-written-draft"}
+{"text": "cobraram a mais na farmácia", "label": "wrong_amount", "lang": "pt", "note": "short", "provenance": "team-written-draft"}
+{"text": "O desconto não foi aplicado e cobraram o valor cheio", "label": "wrong_amount", "lang": "pt", "note": "indirect", "provenance": "team-written-draft"}
+{"text": "a corrida do uber saiu bem mais cara que o app mostrou", "label": "wrong_amount", "lang": "pt", "note": "indirect", "provenance": "team-written-draft"}
+{"text": "me cobraron R$ 120 y el valor era R$ 90, por favor", "label": "wrong_amount", "lang": "es", "note": "code-switching", "provenance": "team-written-draft"}
+{"text": "Tá errado o valor da compra de ontem", "label": "wrong_amount", "lang": "pt", "note": "short", "provenance": "team-written-draft"}
+{"text": "me cobraron doble", "label": "duplicate", "lang": "es", "note": "very short", "provenance": "team-written-draft"}
+{"text": "pasé la tarjeta, dio error, la volví a pasar y ahora tengo los dos cobros", "label": "duplicate", "lang": "es", "note": "indirect", "provenance": "team-written-draft"}
+{"text": "Hay dos cargos idénticos del mismo día en el cine", "label": "duplicate", "lang": "es", "note": "", "provenance": "team-written-draft"}
+{"text": "el pago de la luz se me descontó dos veces este mes", "label": "duplicate", "lang": "es", "note": "", "provenance": "team-written-draft"}
+{"text": "Solo fui una vez al restaurante pero me cobraron como si hubiera ido dos", "label": "duplicate", "lang": "es", "note": "indirect", "provenance": "team-written-draft"}
+{"text": "cargo repetido", "label": "duplicate", "lang": "es", "note": "very short", "provenance": "team-written-draft"}
+{"text": "Me aparece la misma compra tres veces", "label": "duplicate", "lang": "es", "note": "triplicate", "provenance": "team-written-draft"}
+{"text": "la mensualidad del gimnasio se cobró doble", "label": "duplicate", "lang": "es", "note": "", "provenance": "team-written-draft"}
+{"text": "cobrança duplicada", "label": "duplicate", "lang": "pt", "note": "very short", "provenance": "team-written-draft"}
+{"text": "A maquininha deu erro e passaram de novo, agora tem duas compras iguais", "label": "duplicate", "lang": "pt", "note": "indirect", "provenance": "team-written-draft"}
+{"text": "fui cobrado duas vezes pelo mesmo uber", "label": "duplicate", "lang": "pt", "note": "", "provenance": "team-written-draft"}
+{"text": "A conta de luz foi debitada em dobro", "label": "duplicate", "lang": "pt", "note": "", "provenance": "team-written-draft"}
+{"text": "me cobraram a mesma assinatura duas vezes no mesmo mês", "label": "duplicate", "lang": "pt", "note": "", "provenance": "team-written-draft"}
+{"text": "hola, me cobraram duas vezes la misma compra", "label": "duplicate", "lang": "es", "note": "code-switching", "provenance": "team-written-draft"}
+{"text": "Tenho dois débitos iguais da mesma loja, só comprei uma vez", "label": "duplicate", "lang": "pt", "note": "", "provenance": "team-written-draft"}
+{"text": "el súper me cobró dos veces y además el monto estaba mal", "label": "duplicate", "lang": "es", "note": "two intents (duplicate first)", "provenance": "team-written-draft"}
+{"text": "compré unos tenis en línea hace un mes y nunca llegaron", "label": "not_received", "lang": "es", "note": "", "provenance": "team-written-draft"}
+{"text": "me prometieron la devolución hace 15 días y nada", "label": "not_received", "lang": "es", "note": "indirect", "provenance": "team-written-draft"}
+{"text": "Pagué el curso y nunca me dieron acceso", "label": "not_received", "lang": "es", "note": "service", "provenance": "team-written-draft"}
+{"text": "cancelé el vuelo y no me han devuelto el dinero", "label": "not_received", "lang": "es", "note": "refund", "provenance": "team-written-draft"}
+{"text": "No me llegó el pedido", "label": "not_received", "lang": "es", "note": "short", "provenance": "team-written-draft"}
+{"text": "pagué la instalación del internet y nunca vinieron", "label": "not_received", "lang": "es", "note": "service", "provenance": "team-written-draft"}
+{"text": "Devolví el producto a la tienda y el reembolso no aparece", "label": "not_received", "lang": "es", "note": "refund", "provenance": "team-written-draft"}
+{"text": "el boleto del concierto se pagó pero nunca me mandaron las entradas", "label": "not_received", "lang": "es", "note": "", "provenance": "team-written-draft"}
+{"text": "compré e não chegou", "label": "not_received", "lang": "pt", "note": "very short", "provenance": "team-written-draft"}
+{"text": "Paguei a encomenda faz três semanas e nada de chegar", "label": "not_received", "lang": "pt", "note": "", "provenance": "team-written-draft"}
+{"text": "o estorno da loja nunca caiu na minha conta", "label": "not_received", "lang": "pt", "note": "refund", "provenance": "team-written-draft"}
+{"text": "Cancelei a assinatura e não me devolveram o valor", "label": "not_received", "lang": "pt", "note": "refund", "provenance": "team-written-draft"}
+{"text": "paguei o serviço de mudança e eles não apareceram", "label": "not_received", "lang": "pt", "note": "service", "provenance": "team-written-draft"}
+{"text": "la tienda dice que ya me devolvió pero yo no veo nada", "label": "not_received", "lang": "es", "note": "indirect", "provenance": "team-written-draft"}
+{"text": "Hola, paguei un pedido y nunca llegó", "label": "not_received", "lang": "es", "note": "code-switching", "provenance": "team-written-draft"}
+{"text": "a loja fechou e eu tinha pago um produto que nunca recebi", "label": "not_received", "lang": "pt", "note": "", "provenance": "team-written-draft"}
+{"text": "hola", "label": "out_of_scope", "lang": "es", "note": "greeting only", "provenance": "team-written-draft"}
+{"text": "Quiero hablar con un humano", "label": "out_of_scope", "lang": "es", "note": "human, no dispute", "provenance": "team-written-draft"}
+{"text": "¿cuánto me queda de saldo?", "label": "out_of_scope", "lang": "es", "note": "", "provenance": "team-written-draft"}
+{"text": "necesito un préstamo para un carro", "label": "out_of_scope", "lang": "es", "note": "", "provenance": "team-written-draft"}
+{"text": "me mudé, ¿cómo cambio mi domicilio?", "label": "out_of_scope", "lang": "es", "note": "", "provenance": "team-written-draft"}
+{"text": "¿me pueden mandar mi estado de cuenta?", "label": "out_of_scope", "lang": "es", "note": "statement, no dispute", "provenance": "team-written-draft"}
+{"text": "quiero ver las compras que hice en Uber este mes", "label": "out_of_scope", "lang": "es", "note": "merchant, no dispute", "provenance": "team-written-draft"}
+{"text": "¿por qué rechazaron mi tarjeta en el súper?", "label": "out_of_scope", "lang": "es", "note": "declined, not charged", "provenance": "team-written-draft"}
+{"text": "Gracias, eso era todo", "label": "out_of_scope", "lang": "es", "note": "", "provenance": "team-written-draft"}
+{"text": "qual o meu saldo?", "label": "out_of_scope", "lang": "pt", "note": "", "provenance": "team-written-draft"}
+{"text": "Quero um cartão adicional para minha filha", "label": "out_of_scope", "lang": "pt", "note": "", "provenance": "team-written-draft"}
+{"text": "como faço um pix?", "label": "out_of_scope", "lang": "pt", "note": "", "provenance": "team-written-draft"}
+{"text": "Quero falar com alguém do banco", "label": "out_of_scope", "lang": "pt", "note": "human, no dispute", "provenance": "team-written-draft"}
+{"text": "vocês têm empréstimo consignado?", "label": "out_of_scope", "lang": "pt", "note": "", "provenance": "team-written-draft"}
+{"text": "¿cuál es el horario de atención?", "label": "out_of_scope", "lang": "es", "note": "", "provenance": "team-written-draft"}
+{"text": "asdf qwer", "label": "out_of_scope", "lang": "es", "note": "gibberish", "provenance": "team-written-draft"}
