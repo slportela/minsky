@@ -114,6 +114,15 @@
       "output_usd_per_million": "0.50",
       "pricing_basis": "operator-supplied uncached token rates (evals/model_prices.py, standard/short-context, 2026-10-04); not an invoice",
       "note": "evals/runs/smoke-3a3f783b4b05: 3/6 passed, dispute-clarify-retain-merchant-es on a3b3577; 6 trials with compose_speech capture (diagnostic wrapper outside the repo)"
+    },
+    "2026-10-04-live-dev-25ffd8d": {
+      "cap_usd": "1",
+      "reserved_usd": "0.2601721",
+      "usage_cost_usd": "0.0181753",
+      "input_usd_per_million": "0.10",
+      "output_usd_per_million": "0.50",
+      "pricing_basis": "operator-supplied uncached token rates (evals/model_prices.py, standard/short-context, 2026-10-04); not an invoice",
+      "note": "evals/runs/smoke-5a0d9c9ca15c: 48/48 passed on feat/submission-gaps 25ffd8d (clarify fix, prompt v5)"
     }
   },
   "usage_cost_usd": "0.0124252",
