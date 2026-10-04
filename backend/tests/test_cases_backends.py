@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
 
@@ -11,13 +12,21 @@ from minsky_api.store.cases import CasesBackend
 from minsky_api.store.cases_memory import CaseRecord, CaseTransitionError, InMemoryCasesBackend
 from minsky_api.store.cases_sql import SqlCasesBackend
 
+# Set MINSKY_TEST_POSTGRES_URL (a throwaway database) to run the same contract against real Postgres.
+_POSTGRES_URL = os.environ.get("MINSKY_TEST_POSTGRES_URL")
 
-@pytest.fixture(params=["memory", "sql"])
+
+@pytest.fixture(params=["memory", "sql", *(["postgres"] if _POSTGRES_URL else [])])
 def cases(request: pytest.FixtureRequest) -> Iterator[CasesBackend]:
     if request.param == "memory":
         yield InMemoryCasesBackend()
         return
-    backend = SqlCasesBackend.from_url("sqlite+pysqlite:///:memory:")
+    url = _POSTGRES_URL if request.param == "postgres" else "sqlite+pysqlite:///:memory:"
+    assert url is not None
+    backend = SqlCasesBackend.from_url(url)
+    if request.param == "postgres":
+        with backend._engine.begin() as conn:  # pyright: ignore[reportPrivateUsage]
+            conn.exec_driver_sql("DROP SCHEMA IF EXISTS cases CASCADE")
     backend.ensure_schema()
     yield backend
     backend.dispose()

@@ -59,4 +59,13 @@ uv run python -m evals.compare_systems --split val             # today's process
 make router                                                    # retrain and re-evaluate the learned router (~2 min)
 ```
 
+The case store's contract tests run on memory and SQLite by default. To run them on the compose Postgres, in a
+separate database (they drop and recreate its `cases` schema, so never point them at `minsky`):
+
+```bash
+docker compose exec postgres createdb -U minsky cases_test
+MINSKY_TEST_POSTGRES_URL=postgresql+psycopg://minsky:minsky@localhost:5433/cases_test \
+  uv run pytest backend/tests/test_cases_backends.py
+```
+
 The comparison and the router report are committed in `evals/reports/` and `ml/reports/`. Both are offline: a live run with the model key (`evals/README.md`, "Real extraction") is still needed before quoting them as system performance.
