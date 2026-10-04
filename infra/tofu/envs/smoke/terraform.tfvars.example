@@ -1,0 +1,7 @@
+region = "us-east-1"
+availability_zone = "us-east-1a"
+# Replace with the operator's current public IPv4 /32; this example cannot be used for SSH.
+ssh_cidrs = ["192.0.2.1/32"]
+# Confirm both ids and the regional price through Lightsail before apply.
+bundle_id = "small_3_0"
+blueprint_id = "ubuntu_22_04"

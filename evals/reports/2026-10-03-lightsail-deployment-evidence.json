@@ -1,0 +1,61 @@
+{
+  "recorded_at": "2026-10-03T04:19:45.689565+00:00",
+  "source_revision": "19cd16d",
+  "profile": "personal",
+  "region": "us-east-1",
+  "bundle_verification": {
+    "instance": {
+      "id": "small_3_0",
+      "monthly_usd": 12,
+      "ram_gb": 2,
+      "disk_gb": 60
+    },
+    "cdn": {
+      "id": "small_1_0",
+      "monthly_usd": 2.5,
+      "transfer_gb": 50
+    }
+  },
+  "plan": {
+    "creates": 5,
+    "changes": 0,
+    "deletes": 0
+  },
+  "offline_tests": {
+    "mocked_plans_passed": 2,
+    "ci_passed": true,
+    "compose_verified": true
+  },
+  "apply": {
+    "succeeded": false,
+    "reason": "Lightsail instance limit 0; CreateInstances rejected",
+    "resources_created": [
+      "static_ip"
+    ],
+    "instance_created": false,
+    "cdn_created": false
+  },
+  "fallback_ec2_standard_vcpu_quota": 0,
+  "cleanup": {
+    "destroy_applied": true,
+    "static_ip_deleted": true,
+    "verified_remaining": {
+      "instances": 0,
+      "static_ips": 0,
+      "distributions": 0
+    }
+  },
+  "models_called": 0,
+  "browser_smoke_performed": false,
+  "image_build": {
+    "api_amd64": "succeeded",
+    "frontend_amd64": "failed: build daemon returned EOF during Next.js compilation"
+  },
+  "cost_limitation": "No VM/CDN created. An unattached static IP existed briefly; any prorated charge and tax require billing verification, not an assumed zero invoice.",
+  "local_recovery": {
+    "containers_running": 4,
+    "postgres_healthy": true,
+    "https_health_http": 200,
+    "https_chat_http": 200
+  }
+}
