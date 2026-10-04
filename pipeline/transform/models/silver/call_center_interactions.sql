@@ -76,9 +76,9 @@ checked as (
             case when "has_transcript" is null then 'not_null:has_transcript' end,
             case when "has_recording" is null then 'not_null:has_recording' end,
             case when "interaction_type" not in ('Inbound Call', 'Outbound Call', 'Chat', 'Email', 'Video') then 'undocumented_value:interaction_type' end,
-            case when "channel" not in ('Phone', 'Web Chat', 'WhatsApp', 'Email', 'App') then 'undocumented_value:channel' end,
-            case when "reason_category" not in ('Transactional', 'Product', 'Technical', 'Commercial', 'Complaint') then 'undocumented_value:reason_category' end,
-            case when "detected_sentiment" not in ('Positive', 'Neutral', 'Negative', 'Very Negative') then 'undocumented_value:detected_sentiment' end,
+            case when "channel" not in ('Phone', 'Web Chat', 'WhatsApp', 'Email', 'App', 'Web') then 'undocumented_value:channel' end,
+            case when "reason_category" not in ('Transactional', 'Product', 'Technical', 'Commercial', 'Complaint', 'Retention') then 'undocumented_value:reason_category' end,
+            case when "detected_sentiment" not in ('Positive', 'Neutral', 'Negative', 'Very Negative', 'Very Positive') then 'undocumented_value:detected_sentiment' end,
             case when "sentiment_score" not between -1 and 1 then 'out_of_range:sentiment_score' end
         ], x -> x is not null) as _dq_issues
     from typed
