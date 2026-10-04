@@ -1,6 +1,6 @@
 # 0012. A second AWS account of the same owner for demo compute
 
-- Status: accepted for the demo hosting; deployment pending
+- Status: accepted for the demo hosting; smoke deployed 2026-10-04, final retained demo pending
 - Date: 2026-10-04
 - Extends: 0001 (hosting only; data, models and the lake are unchanged)
 
@@ -57,3 +57,27 @@ This is not the production target. Production keeps the single-account design in
 - How we would know it was wrong: the apply fails on a Free-plan restriction (use the EC2
   fallback), or the primary account's quotas are restored first (the smoke can return there,
   which needs a fresh plan).
+
+## Outcome (2026-10-04)
+
+The OpenTofu apply of `envs/smoke` was **denied**: the Free plan runs under an AWS-managed
+service control policy that explicitly denies Lightsail `CreateInstances` and `AllocateStaticIp`
+through the API, even for an administrator user (nothing was created; state stayed empty). The
+same actions succeeded from the Lightsail console, so the stack was built by hand:
+
+- Lightsail instance (2 GB, dual-stack, Ubuntu 22.04) in **us-east-2** (Ohio), created in the console;
+  a static IPv4 attached; firewall set by CLI to SSH from one operator /32 only, no IPv6 SSH, HTTP open.
+- Docker, Compose 2.39.4 and the two linux/amd64 images were installed and built **on the VM**
+  (swap added), which also resolved the failed cross-build on the workstation.
+- The six gold read models (4,425,008 transactions among them) were loaded into the Compose
+  PostgreSQL through an SSH tunnel with `pipeline/load_gold.py`; counts matched the source.
+- The CDN was created by CLI in us-east-1 (Lightsail distributions are managed there) with the
+  Ohio instance as origin.
+
+Defects found by creating real resources, none visible to the provider-mocked tests, fixed in the
+module: the launch script runs under dash (`set -o pipefail` aborted it), the API rejects
+`default_ttl = 0`, and it rejects the forwarded-headers option `all` (an allow-list that includes
+`Authorization` and `Host` is used; `Content-Type` and POST `Authorization` are forwarded by default).
+
+The module was not applied as written, so the deployed stack is not reproducible from `envs/smoke`
+alone. Moving to the paid plan (credits are kept) would lift the policy and allow the module to apply.
