@@ -5,13 +5,31 @@ from __future__ import annotations
 from minsky_api.agent.prompts import render
 from minsky_api.tools.schemas import TransactionView
 
+# Maps the bank's transaction_type to a Spanish noun phrase (article + noun).
+# Unknown or null types fall back to "este movimiento".
+_TXN_LABEL: dict[str, str] = {
+    "Transfer": "esta transferencia",
+    "Withdrawal": "este retiro",
+    "Payment": "este pago",
+    "Purchase": "esta compra",
+    "Deposit": "este depósito",
+    "Adjustment": "este ajuste",
+}
+
+
+def txn_label(transaction_type: str | None) -> str:
+    """Return Spanish article + noun for a transaction type, e.g. 'esta transferencia'."""
+    if transaction_type is None:
+        return "este movimiento"
+    return _TXN_LABEL.get(transaction_type, "este movimiento")
+
 
 def ask_confirm_txn(txn: TransactionView) -> str:
-    merchant = txn.merchant_name or "comercio desconocido"
     when = txn.transaction_date.date().isoformat() if txn.transaction_date else "fecha desconocida"
     return render(
         "agent.reply.confirm_txn.j2",
-        merchant=merchant,
+        txn_label=txn_label(txn.transaction_type),
+        merchant=txn.merchant_name,
         amount_usd=txn.amount_usd,
         when=when,
         transaction_id=txn.transaction_id,
@@ -79,8 +97,8 @@ def out_of_scope_handoff(*, handoff_id: str) -> str:
     return render("agent.reply.out_of_scope.j2", handoff_id=handoff_id)
 
 
-def already_done() -> str:
-    return render("agent.reply.already_done.j2")
+def already_done(*, rule_id: str | None = None, route: str | None = None) -> str:
+    return render("agent.reply.already_done.j2", rule_id=rule_id, route=route)
 
 
 def aborted() -> str:

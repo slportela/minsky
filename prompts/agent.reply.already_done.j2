@@ -1,2 +1,10 @@
-{# version: 1 owner: agent #}
-Esta conversación ya terminó. Si necesitas otro reclamo, inicia una conversación nueva.
+{#
+version: 2
+owner: agent
+changed: 2026-10-04 D03 pending: say so honestly; no invented posting date; offer to try later or escalate
+#}
+{% if rule_id == "D03-pending-not-posted" -%}
+Ese movimiento sigue pendiente de registro. Este sistema no tiene fecha de acreditación y no puede estimarla. Puedes consultar de nuevo más tarde o escribir "asesor" si quieres hablar con una persona.
+{%- else -%}
+Esta conversación ya terminó. Si tienes otro reclamo, inicia una conversación nueva.
+{%- endif %}

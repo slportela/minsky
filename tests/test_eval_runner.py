@@ -25,6 +25,7 @@ SCRIPTED = (
     "dispute-policy-failure-retry-es",
     "dispute-fraud-block-es",
     "dispute-fraud-no-block-es",
+    "dispute-transfer-null-merchant-es",
 )
 
 

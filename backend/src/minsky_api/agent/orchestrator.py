@@ -323,7 +323,7 @@ async def run_turn(
     state.messages.append(("user", stripped))
 
     if state.phase == Phase.DONE:
-        reply = replies.already_done()
+        reply = replies.already_done(rule_id=state.rule_id, route=state.route)
         state.messages.append(("agent", reply))
         return state, reply
 
