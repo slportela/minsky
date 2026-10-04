@@ -1,7 +1,9 @@
 """LATAM Bank data dictionary (Factored Datathon 2026, dataset v1.0.0).
 
 Transcribed from kickoff_docs/LATAM_Bank_Complete_Data_Dictionary.pdf.
-`rows` are the documented approximate counts; `enums` are the documented allowed values.
+`rows` are the documented approximate counts; `enums` are the documented allowed values, plus four
+values the data carries but the PDF omits (products.product_type Insurance, call_center_interactions
+channel Web, reason_category Retention, detected_sentiment Very Positive): see docs/known_issues.md.
 """
 
 TABLES = {
@@ -50,6 +52,7 @@ TABLES = {
             "product_type": [
                 "Checking Account", "Savings Account", "Credit Card", "Debit Card",
                 "Personal Loan", "Mortgage", "Investment",
+                "Insurance",
             ],
             "currency": ["MXN", "COP", "ARS", "USD"],
             "product_status": ["Active", "Blocked", "Closed", "Suspended"],
@@ -161,9 +164,9 @@ TABLES = {
         ],
         "enums": {
             "interaction_type": ["Inbound Call", "Outbound Call", "Chat", "Email", "Video"],
-            "channel": ["Phone", "Web Chat", "WhatsApp", "Email", "App"],
-            "reason_category": ["Transactional", "Product", "Technical", "Commercial", "Complaint"],
-            "detected_sentiment": ["Positive", "Neutral", "Negative", "Very Negative"],
+            "channel": ["Phone", "Web Chat", "WhatsApp", "Email", "App", "Web"],
+            "reason_category": ["Transactional", "Product", "Technical", "Commercial", "Complaint", "Retention"],
+            "detected_sentiment": ["Positive", "Neutral", "Negative", "Very Negative", "Very Positive"],
         },
         "ranges": {"sentiment_score": (-1, 1)},
     },

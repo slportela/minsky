@@ -143,7 +143,7 @@ The dictionary lists English values; several columns hold Spanish ones:
 | `call_center_interactions.detected_sentiment` | Muy Positivo | 18,973 | Very Positive |
 | `call_center_interactions.channel` | Web | 3,395 | Web (not mapped: ambiguous with "Web Chat") |
 
-**Handling:** kept, translated where unambiguous, and flagged per row as `undocumented_value:<column>` in `_dq_issues`; dbt `accepted_values` tests warn.
+**Handling:** kept and translated where unambiguous. These four values are consistent in the data, so they were added to the `enums` of `pipeline/data_dictionary.py` (the PDF is incomplete, not the data) and are no longer flagged as `undocumented_value:<column>` in `_dq_issues`. Their meaning is inferred from the name: the dataset does not define them. `Retention` is also a documented value of `marketing_campaigns.campaign_objective`. `Web` is kept apart from `Web Chat` because the two cannot be told apart from the data. Any other value outside the dictionary is still flagged, and the dbt `accepted_values` tests still warn.
 
 ### Mexico operates in USD; no MXN in products or transactions
 
