@@ -1,0 +1,76 @@
+{
+  "time": "2026-10-03T00:41:33.521489+00:00",
+  "origin": "https://localhost",
+  "tls": "certificate and hostname verified with explicit local CA; system trust unchanged",
+  "model": "gpt-6-luna",
+  "browser_test": false,
+  "checks": [
+    {
+      "check": "/api/health",
+      "http": 200
+    },
+    {
+      "check": "/chat",
+      "http": 200
+    },
+    {
+      "check": "anonymous denied",
+      "http": 401
+    }
+  ],
+  "transcripts": [
+    {
+      "scenario": "eligible",
+      "conversation_id": "7b087099-dfe0-4632-ac7b-d0cfed3d24b0",
+      "turns": [
+        {
+          "user": "Quiero disputar el monto incorrecto de la transacción TRX-0RAALW8UANFSPYOEGLP3.",
+          "agent": "Encontré este cargo: comercio desconocido, 246.32 USD, 2026-06-13 (ref. TRX-0RAALW8UANFSPYOEGLP3). ¿Es este el que quieres disputar? Responde sí para confirmar, o no para cancelar.",
+          "http": 200
+        },
+        {
+          "user": "sí",
+          "agent": "Según la política (D09-eligible), puedo abrir el reclamo del cargo TRX-0RAALW8UANFSPYOEGLP3 de forma automática. ¿Confirmas que lo abra? Responde sí para confirmar, o no para cancelar.",
+          "http": 200
+        },
+        {
+          "user": "sí",
+          "agent": "Listo: abrí el reclamo DSP-228d0b90793d (regla D09-eligible). Te avisaremos del avance. ¿Necesitas algo más sobre este caso?",
+          "http": 200
+        }
+      ]
+    },
+    {
+      "scenario": "above-limit",
+      "conversation_id": "b2add679-9857-4fbd-bddc-b768db90cbfb",
+      "turns": [
+        {
+          "user": "Quiero disputar el monto incorrecto de la transacción TRX-0XVX8973SXVDQ0VM2IWB.",
+          "agent": "Encontré este cargo: comercio desconocido, 1530.89 USD, 2026-03-13 (ref. TRX-0XVX8973SXVDQ0VM2IWB). ¿Es este el que quieres disputar? Responde sí para confirmar, o no para cancelar.",
+          "http": 200
+        },
+        {
+          "user": "sí",
+          "agent": "Te derivo con un asesor (regla D07-above-auto-limit). Referencia de traspaso: HO-d7bc25d6a7c8.",
+          "http": 200
+        }
+      ]
+    },
+    {
+      "scenario": "search-miss",
+      "conversation_id": "a46ca4f8-ac24-409a-9d47-7c36c066fa64",
+      "turns": [
+        {
+          "user": "Quiero disputar un cargo en ComercioInexistenteSmoke9281 por 999999.",
+          "agent": "No encontré un cargo que coincida. ¿Puedes darme el comercio, el monto o la fecha con más detalle?",
+          "http": 200
+        }
+      ]
+    }
+  ],
+  "usage_cost_usd": null,
+  "reserved_total_usd": "0.2385836",
+  "limitation": "References observed in HTTP replies; in-memory case state not independently inspected in this run. Browser and system CA trust pending.",
+  "reserved_this_run_usd": "0.0300000",
+  "provider_usage_unknown": true
+}
