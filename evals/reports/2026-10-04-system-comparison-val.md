@@ -1,6 +1,6 @@
 # Today's process vs Minsky (val split, offline)
 
-Run 2026-10-04T14:11:33+00:00 · commit e6a5024 · 24 cases × 1 trial · scripted extraction (offline: decisions, handoffs and safety, not language understanding). Intervals are Wilson 95 %.
+Run 2026-10-04T19:48:39+00:00 · commit e4fb8a3 · 24 cases × 1 trial · scripted extraction (offline: decisions, handoffs and safety, not language understanding). Intervals are Wilson 95 %.
 
 | Metric | Always send to an agent (today) | Minsky |
 |---|---|---|
