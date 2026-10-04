@@ -20,7 +20,8 @@ FastAPI service for dispute intake: the orchestrator, the policy, the mock bank 
    │  ├─▶ policy/      decide(facts) → route + rule id (pure, no I/O)
    │  └─▶ guardrails/  output checks: every fact grounded in tool results, reply language
    ▼
- store/          async SQLModel reads over bank.*; InMemoryCasesBackend for disputes/handoffs/blocks/audit
+ store/          async SQLModel reads over bank.*; cases.* (disputes, handoffs, blocks, audit, case queue)
+                 in Postgres (SqlCasesBackend) or in memory (tests), behind the CasesBackend protocol
  observability/  one trace per turn: model calls, tool calls, policy decisions, versions
 ```
 
@@ -28,7 +29,7 @@ FastAPI service for dispute intake: the orchestrator, the policy, the mock bank 
 
 - `policy/` has no I/O and no model calls. It is tested rule by rule (`tests/test_policy_disputes.py`).
 - `tools/` never take a customer id from the model: they read it from the session. Every tool has a denial test. Plain async + Pydantic (no LangGraph); `open_dispute` / `block_card` require `confirmed=True`. `classify_reply` classifies a reply to a confirmation the system already sent, checks the session, writes an audit row, and does not act.
-- `store/` reads `bank.*` by entity key (async, pooled). Customer authorization is checked once in identity/tools, not on every store query. Postgres `cases.*` is not wired yet; tools write through `InMemoryCasesBackend`.
+- `store/` reads `bank.*` by entity key (async, pooled). Customer authorization is checked once in identity/tools, not on every store query. Writes go through the `CasesBackend` protocol: `SqlCasesBackend` (Postgres `cases.*`, `MINSKY_CASES_BACKEND=postgres`, the compose default) or `InMemoryCasesBackend` (tests, offline evals). Every dispute and handoff also queues a triaged back-office case (`tools/casework.py`, `policy/triage.py`), served to agents by `api/console.py` with staff credentials (`MINSKY_STAFF_SESSIONS`, ADR 0012).
 - `identity/` resolves a server-provisioned, expiring bearer credential to `ToolSession`; customer ids
   from headers or conversation text do not authenticate (ADR 0009). OTP/Cognito are pending.
   Conversations are customer-bound; history validation and state commit are serialized per conversation.

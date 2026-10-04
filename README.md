@@ -83,6 +83,7 @@ make down              # stop it (data is kept)
 make help              # all targets
 ```
 
+- **Full demo from an empty checkout** (data, demo credentials, chat and agent console): [`docs/demo.md`](docs/demo.md).
 - `make up` serves the web app and API through Caddy with a self-signed certificate. It exposes Postgres on `localhost:5433` (`POSTGRES_HOST_PORT`).
 - Optional trace viewer: `docker compose --profile observability up -d phoenix` → http://localhost:6006 (set `OTEL_EXPORTER_OTLP_ENDPOINT=http://phoenix:6006` in `.env`).
 
