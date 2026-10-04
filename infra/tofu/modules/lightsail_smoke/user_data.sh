@@ -1,6 +1,7 @@
 #!/bin/bash
 # Bootstrap only: transfer prebuilt amd64 images and runtime configuration over SSH.
-set -euo pipefail
+# Lightsail runs launch scripts under /bin/sh (dash), ignoring this shebang: no bash-only options.
+set -eu
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
 apt-get install -y docker.io curl ca-certificates

@@ -15,15 +15,17 @@ run "remote_smoke" {
       aws_lightsail_distribution.smoke.origin[0].protocol_policy == "http-only" &&
       aws_lightsail_distribution.smoke.default_cache_behavior[0].behavior == "dont-cache" &&
       aws_lightsail_distribution.smoke.cache_behavior_settings[0].minimum_ttl == 0 &&
-      aws_lightsail_distribution.smoke.cache_behavior_settings[0].default_ttl == 0 &&
-      aws_lightsail_distribution.smoke.cache_behavior_settings[0].maximum_ttl == 0 &&
+      aws_lightsail_distribution.smoke.cache_behavior_settings[0].default_ttl == 1 &&
+      aws_lightsail_distribution.smoke.cache_behavior_settings[0].maximum_ttl == 1 &&
       aws_lightsail_distribution.smoke.cache_behavior_settings[0].allowed_http_methods == "GET,HEAD,OPTIONS,PUT,PATCH,POST,DELETE" &&
       aws_lightsail_distribution.smoke.cache_behavior_settings[0].cached_http_methods == "GET,HEAD" &&
-      aws_lightsail_distribution.smoke.cache_behavior_settings[0].forwarded_headers[0].option == "all" &&
+      aws_lightsail_distribution.smoke.cache_behavior_settings[0].forwarded_headers[0].option == "allow-list" &&
+      contains(aws_lightsail_distribution.smoke.cache_behavior_settings[0].forwarded_headers[0].headers_allow_list, "Authorization") &&
+      contains(aws_lightsail_distribution.smoke.cache_behavior_settings[0].forwarded_headers[0].headers_allow_list, "Host") &&
       aws_lightsail_distribution.smoke.cache_behavior_settings[0].forwarded_cookies[0].option == "all" &&
       aws_lightsail_distribution.smoke.cache_behavior_settings[0].forwarded_query_strings[0].option
     )
-    error_message = "Keep HTTP origin, no caching, all request headers/cookies/queries and all API methods."
+    error_message = "Keep HTTP origin, no caching, Authorization and Host forwarded, all cookies/queries and all API methods."
   }
 }
 run "reject_public_ssh" {

@@ -43,11 +43,14 @@ resource "aws_lightsail_distribution" "smoke" {
   cache_behavior_settings {
     allowed_http_methods = "GET,HEAD,OPTIONS,PUT,PATCH,POST,DELETE"
     cached_http_methods  = "GET,HEAD"
-    minimum_ttl          = 0
-    default_ttl          = 0
-    maximum_ttl          = 0
+    # The real API rejects default_ttl = 0 and the headers option "all" (found on a real create).
+    # dont-cache above keeps responses uncached; POST keeps Content-Type and Authorization by default.
+    minimum_ttl = 0
+    default_ttl = 1
+    maximum_ttl = 1
     forwarded_headers {
-      option = "all"
+      option             = "allow-list"
+      headers_allow_list = ["Authorization", "Host", "Origin", "Accept", "Accept-Language", "Referer"]
     }
     forwarded_cookies { option = "all" }
     forwarded_query_strings { option = true }

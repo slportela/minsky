@@ -63,7 +63,8 @@ unchanged; use the separate `infra/tofu/envs/smoke` state.
 
 ### Prepare and verify
 
-Use a confirmed profile from our own account; never organizer credentials. Agents must
+Use a confirmed profile from our own account (for the smoke, the second account of ADR 0012;
+the primary account has zero compute quotas); never organizer credentials. Agents must
 not inspect `.env`. Confirm regional `get-bundles`, `get-blueprints` and distribution
 bundles before apply; example ids are not proof of account availability. Set the region
 and a matching AZ and replace the example SSH CIDR with the operator's public IPv4 /32.

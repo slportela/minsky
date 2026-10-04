@@ -16,7 +16,7 @@ Status: ✅ done · 🟡 partial · ⬜ planned · ⚠️ risk or gap
 | S6 | Interactions in Spanish **and Portuguese**; report language and data limitations (PS, KO) | es + pt suites; Portuguese is generated and labeled; limitation stated | `evals.md`, `known_issues.md` | ⚠️ Spanish replies only; Portuguese implementation pending; no pt source data |
 | S7 | Working prototype + evidence of production readiness + honest remaining work (PS) | POC on EC2; target architecture; POC → production map | `architecture.md`, `poc_to_prod.md` | 🟡 docs |
 | D1 | Public repo `factored-hackathon-2026-<team>` (KO) | Rename or new repo before submission; remove private links from history | — | ⚠️ history has a private link |
-| D2 | Link to the deployed tool (KO) | Temporary Lightsail CDN → Compose smoke; final link must stay up until 2026-10-16 | `infra/README.md`, ADR 0011 | 🟡 configuration validated with mocked plans; apply blocked by own-account Lightsail/EC2 zero quotas; no VM or CDN deployed; public smoke and final retained demo pending |
+| D2 | Link to the deployed tool (KO) | Temporary Lightsail CDN → Compose smoke; final link must stay up until 2026-10-16 | `infra/README.md`, ADR 0011, ADR 0012 | 🟡 configuration validated with mocked plans; the primary account has zero compute quotas, so ADR 0012 moves the compute to a second account of the same owner (default quotas; real plan: 5 creates); smoke stack deployed by hand 2026-10-04 (VM + CDN, HTTPS, auth denials and no-cache verified; model chat turn not yet verified in a browser); final retained demo and teardown pending |
 | D3 | 4-6 slides (KO) | — | — | ⬜ |
 | D4 | Short video: working solution + core architecture decisions (KO) | — | — | ⬜ |
 
