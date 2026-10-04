@@ -13,12 +13,15 @@ from minsky_api.tools.bank import (
     get_transactions,
     open_dispute,
 )
+from minsky_api.tools.confirm import classify_reply
 from minsky_api.tools.context import ToolContext
 from minsky_api.tools.errors import ToolDenied, ToolError
 from minsky_api.tools.schemas import (
     BlockCardArgs,
     BlockCardResult,
     CardBlockView,
+    ClassifyReplyArgs,
+    ClassifyReplyResult,
     CreateHandoffArgs,
     CreateHandoffResult,
     DisputeView,
@@ -41,6 +44,8 @@ __all__ = [
     "BlockCardArgs",
     "BlockCardResult",
     "CardBlockView",
+    "ClassifyReplyArgs",
+    "ClassifyReplyResult",
     "CreateHandoffArgs",
     "CreateHandoffResult",
     "DisputeView",
@@ -61,6 +66,7 @@ __all__ = [
     "ToolError",
     "TransactionView",
     "block_card",
+    "classify_reply",
     "create_handoff",
     "evaluate_dispute",
     "get_dispute",

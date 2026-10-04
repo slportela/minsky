@@ -2,6 +2,8 @@
 
 Factored AI & Data Hackathon 2026: an **AI-first banking customer-service system** for **transaction-dispute intake** on the LATAM Bank dataset (synthetic; Mexico, Colombia, Argentina; 2023-06-17 to 2026-06-17). Submission deadline 2026-10-05.
 
+The source text is Spanish. Portuguese and mixed customer turns are generated drafts. The reply language follows the first customer message, and the model writes the sentence from the allowed step and the verified facts. The limitation is in [`docs/known_issues.md`](docs/known_issues.md) under "Spanish only".
+
 ## Read in this order
 
 ```

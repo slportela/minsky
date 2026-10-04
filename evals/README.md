@@ -75,4 +75,4 @@ The gateway excludes Caddy/TLS; those require a final deployed-stack check.
 
 The exact sequence and remaining checks are in [`docs/integrated_smoke.md`](../docs/integrated_smoke.md).
 Model credentials must come from a securely configured inherited environment. Agents do not read `.env`.
-Portuguese, complete safety graders, held-out numbers, persistent writes and deployed smoke remain pending.
+Generated Portuguese drafts and their limitation are in [`docs/known_issues.md`](../docs/known_issues.md). Complete safety graders, held-out numbers, persistent writes and deployed smoke remain pending.

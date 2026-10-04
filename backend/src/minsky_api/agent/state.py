@@ -34,6 +34,15 @@ class ConversationState:
     route: str | None = None
     customer_says_not_me: bool = False
     dispute_reason: str = "unrecognized_charge"
+    # Set from the first customer message; later turns reuse it.
+    language: str | None = None
+    # Model decision for the confirm turn in progress (yes, no, unclear). Code acts only on yes.
+    confirmation: str | None = None
+    # Acts the model chose on each turn, in order. Graders read this instead of fixed sentences.
+    acts: list[str] = field(default_factory=list)
+    claims_card_blocked: bool = False
+    # Text of the confirmation question already sent. None unless phase is a confirm phase.
+    pending_question: str | None = None
     search_details: DisputeDetails = field(default_factory=DisputeDetails)
     # Last user/agent texts for the HTTP contract (server-owned history).
     messages: list[tuple[str, str]] = field(default_factory=list)  # ("user"|"agent", text)

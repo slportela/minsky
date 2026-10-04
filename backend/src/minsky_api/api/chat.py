@@ -121,8 +121,8 @@ async def _authenticated_turn(
         return _error(ErrorCode.CONVERSATION_FORBIDDEN, str(exc), 403)
     except (ToolDenied, ToolError) as exc:
         return _error(ErrorCode.TOOL_FAILURE, str(exc), 502)
-    except RuntimeError as exc:
-        return _error(ErrorCode.SERVICE_UNAVAILABLE, str(exc), 503)
+    except RuntimeError:
+        return _error(ErrorCode.SERVICE_UNAVAILABLE, "the assistant could not complete this turn", 503)
 
     history: list[UserMessage | AgentMessage] = []
     for role, text in state.messages:

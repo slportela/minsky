@@ -5,6 +5,7 @@ import pytest
 from evals.metrics import (
     Rate,
     cost_per,
+    language_rates,
     mean_over_tasks,
     pass_at_k,
     pass_hat_k,
@@ -48,6 +49,14 @@ def test_wilson_interval_contains_estimate_and_handles_empty():
 def test_zero_event_upper_bound_is_close_to_rule_of_three():
     assert zero_event_upper_bound(100) == pytest.approx(3 / 100, rel=0.05)
     assert zero_event_upper_bound(0) is None
+
+
+def test_language_rates_keep_denominators_and_empty_is_not_defined():
+    rates = language_rates([("pt", 1, 2), ("mixed", 0, 0)])
+    assert rates["pt"] == Rate(1, 2)
+    assert str(rates["pt"]).startswith("50.0% (1/2")
+    assert rates["mixed"].value is None
+    assert str(rates["mixed"]).startswith("not defined")
 
 
 def test_rate_reports_not_defined_and_upper_bound():
