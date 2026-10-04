@@ -143,12 +143,222 @@ alone do not prove them. Record source/image revision and results before reporti
 record apply time/deletion deadline, monitor usage and execute cleanup; disabled
 distributions or stopped VMs are not deletion. The six-hour/USD 5 limits are operational.
 
-Delete this **temporary** deployment within six hours. Preserve evidence, then review and
-apply `tofu plan -destroy -out=destroy.tfplan` / `tofu apply destroy.tfplan` in the smoke
-environment; verify CDN, instance and IP deletion through AWS. Stopping the VM does not
-stop billing. D2 remains partial: the final demo still needs availability through October 16
-and a separately approved lifetime/budget. One short local ARM64 capacity probe is recorded
-in `evals/reports/2026-10-03-memory-smoke.md`; deployed amd64 and sustained load are pending.
+When this Tofu apply path becomes available: delete the deployment within six hours.
+Preserve evidence, then review and apply `tofu plan -destroy -out=destroy.tfplan` /
+`tofu apply destroy.tfplan` in the smoke environment; verify CDN, instance and IP deletion
+through AWS. Stopping the VM does not stop billing. One short local ARM64 capacity probe is
+recorded in `evals/reports/2026-10-03-memory-smoke.md`; deployed amd64 capacity under load
+remains pending. The stack currently deployed was built by hand; see the next section.
+
+## Smoke stack built by hand (2026-10-04)
+
+The OpenTofu apply of `envs/smoke` was denied by the Free plan's AWS-managed service control
+policy (`CreateInstances` and `AllocateStaticIp` through the Lightsail API are blocked; console
+and permitted CLI calls succeeded). The stack was created by hand on 2026-10-04 using the second
+AWS account of the same owner (ADR 0012), and is retained for the demo window. It is not
+reproducible from `envs/smoke` alone; moving to a paid plan (credits are kept) would lift the
+policy restriction and allow the module to apply. Report:
+`evals/reports/2026-10-04-lightsail-second-account.md`.
+
+### Resource inventory
+
+| Resource | Name | Region / AZ | Details |
+|---|---|---|---|
+| Lightsail instance | minsky-smoke | us-east-2 / us-east-2a | small_3_0: 2 GB / 2 vCPU / 60 GB SSD; Ubuntu 22.04; dual-stack |
+| Static IPv4 | minsky-1 | us-east-2 | attached to minsky-smoke |
+| Lightsail CDN distribution | minsky-smoke-cdn | us-east-1 | small_1_0 (USD 2.50/month); HTTP-only origin (Ohio instance); HTTPS viewer |
+
+No IPs, account IDs or CDN domains are recorded in version control.
+
+### Rebuild steps
+
+These steps were not re-run end to end after the initial build.
+Placeholders: `<VM_IP>` static IPv4 of the instance; `<OPERATOR_CIDR>` operator public IPv4 /32;
+`<KEY_FILE>` path to the Lightsail SSH private key; `<POSTGRES_PASSWORD>` strong random password.
+
+1. **Create the Lightsail instance in the AWS console** (the API is blocked by org policy).
+   Account: second account (ADR 0012), profile `minsky-new`.
+   Region: `us-east-2`. Blueprint: Ubuntu 22.04 LTS. Bundle: `small_3_0` (2 GB / 2 vCPU / 60 GB).
+   Networking: dual-stack (IPv4 + IPv6). Name: `minsky-smoke`. Attach your SSH key pair.
+
+2. **Allocate and attach a static IPv4 in the console.**
+   Name: `minsky-1`. Attach to `minsky-smoke`. Record the IP as `<VM_IP>`.
+
+3. **Set the firewall by CLI** (these calls are not blocked by org policy):
+   ```bash
+   AWS_PROFILE=minsky-new AWS_PAGER="" aws lightsail put-instance-public-ports \
+     --region us-east-2 --instance-name minsky-smoke \
+     --port-infos '[
+       {"fromPort":22,"toPort":22,"protocol":"tcp",
+        "cidrs":["<OPERATOR_CIDR>"],"ipv6Cidrs":[]},
+       {"fromPort":80,"toPort":80,"protocol":"tcp",
+        "cidrs":["0.0.0.0/0"],"ipv6Cidrs":["::/0"]}
+     ]'
+   ```
+   SSH is restricted to one operator /32 over IPv4 only; no IPv6 SSH; HTTP open.
+
+4. **Install Docker and Compose on the VM.**
+   The script installs packages and writes under `/usr/local` and `/opt`, so it needs root, and
+   over SSH you are `ubuntu`: run it with `sudo`. It is POSIX-compatible (Lightsail runs launch
+   scripts under `dash` and ignores the shebang), so `bash` is not required.
+   ```bash
+   ssh -i <KEY_FILE> ubuntu@<VM_IP> "sudo bash -s" \
+     < infra/tofu/modules/lightsail_smoke/user_data.sh
+   ```
+   Reconnect after bootstrap; verify `id -nG` includes `docker` and
+   `docker compose version` reports the pinned release (2.39.4).
+
+5. **Add a 2 GB swapfile** (the VM has no swap by default):
+   ```bash
+   ssh -i <KEY_FILE> ubuntu@<VM_IP> \
+     "sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile \
+      && sudo mkswap /swapfile && sudo swapon /swapfile \
+      && echo '/swapfile swap swap defaults 0 0' | sudo tee -a /etc/fstab"
+   ```
+
+6. **Copy the source to the VM** using `git archive`:
+   ```bash
+   git archive HEAD -- pyproject.toml uv.lock backend prompts frontend \
+     infra/caddy compose.yaml compose.demo.yaml \
+   | ssh -i <KEY_FILE> ubuntu@<VM_IP> \
+     "sudo mkdir -p /opt/minsky/src \
+      && sudo tar -xf - -C /opt/minsky/src \
+      && sudo chown -R ubuntu:ubuntu /opt/minsky/src"
+   ```
+
+7. **Build the images on the VM.** The workstation cannot cross-build the Next.js
+   frontend for `linux/amd64`; build on the VM instead:
+   ```bash
+   ssh -i <KEY_FILE> ubuntu@<VM_IP> \
+     "cd /opt/minsky/src \
+      && docker build -f backend/Dockerfile -t minsky-api:smoke . \
+      && docker build -t minsky-web:smoke frontend"
+   ```
+
+8. **Provision config files** at `/opt/minsky/`, all mode `0600`, owned by `ubuntu`.
+   Never upload the workstation `.env`, AWS profiles, organizer credentials or primary-account keys.
+   - `images.env`: `MINSKY_API_IMAGE=minsky-api:smoke`; `MINSKY_WEB_IMAGE=minsky-web:smoke`; `AWS_REGION=us-east-2`
+   - `db.env`: `POSTGRES_PASSWORD=<POSTGRES_PASSWORD>`
+   - `runtime.env`: `MINSKY_LLM_API_KEY=<MODEL_KEY>` (ADR 0008) and
+     `MINSKY_TEST_SESSIONS='{"<TOKEN>":{"customer_id":"<ID>","expires_at":"<ISO8601>"}}'` with one
+     random token per synthetic customer, expiring ≤ two weeks ahead (`backend/README.md`,
+     "Trusted test sessions"). Use exactly these names: `compose.yaml` interpolates only the
+     variables its `environment:` block references, and `--env-file` does not rename or inject others.
+   - `test-tokens.txt`: bearer tokens from `MINSKY_TEST_SESSIONS`, one per line, labeled with scenario
+
+9. **Start the Compose stack:**
+   ```bash
+   ssh -i <KEY_FILE> ubuntu@<VM_IP> \
+     "cd /opt/minsky/src \
+      && docker compose \
+           --env-file ../images.env --env-file ../db.env --env-file ../runtime.env \
+           -f compose.yaml -f compose.demo.yaml up -d"
+   ```
+
+10. **Load the gold read models** via an SSH port-forward tunnel to the Postgres container.
+    Neither `compose.yaml` nor `compose.demo.yaml` publishes PostgreSQL on the host, so
+    `localhost:5432` on the VM does not exist. Tunnel to the container's address on the Compose
+    network instead (this is how the 2026-10-04 load was done). The user is the Compose default
+    `minsky`, and the loader must run from a checkout that has `data/warehouse.duckdb`:
+    ```bash
+    PGIP=$(ssh -i <KEY_FILE> ubuntu@<VM_IP> \
+      "docker inspect minsky-postgres-1 -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'")
+    PW=$(ssh -i <KEY_FILE> ubuntu@<VM_IP> "grep '^POSTGRES_PASSWORD=' /opt/minsky/db.env | cut -d= -f2-")
+    ssh -i <KEY_FILE> -f -N -L 15433:$PGIP:5432 ubuntu@<VM_IP>
+    GOLD_DATABASE_URL="postgresql://minsky:$PW@127.0.0.1:15433/minsky" \
+      uv run python pipeline/load_gold.py
+    pkill -f "15433:$PGIP:5432"   # close the tunnel when it finishes
+    ```
+    Publishing the port on `127.0.0.1` of the VM with a Compose override would also work, but it was
+    not tried.
+    Expected duration: approximately 18 minutes, most of it in transactions.
+    Verify counts: customers 150,000; products 400,000; transactions 4,425,008;
+    customer_complaint_stats 150,000; resolution_benchmarks 26; dispute_scenarios 160.
+
+11. **Create the CDN distribution by CLI** (Lightsail distributions are always managed in us-east-1):
+    ```bash
+    AWS_PROFILE=minsky-new AWS_PAGER="" aws lightsail create-distribution \
+      --region us-east-1 \
+      --distribution-name minsky-smoke-cdn \
+      --bundle-id small_1_0 \
+      --origin '{"name":"minsky-smoke","regionName":"us-east-2","protocolPolicy":"http-only"}' \
+      --default-cache-behavior '{"behavior":"dont-cache"}' \
+      --cache-behavior-settings '{
+        "defaultTTL":1,"minimumTTL":0,"maximumTTL":1,
+        "allowedHTTPMethods":"allow-all",
+        "cachedHTTPMethods":"GET-HEAD",
+        "forwardedCookies":{"option":"all"},
+        "forwardedQueryStrings":{"option":true},
+        "forwardedHeaders":{
+          "option":"allow-list",
+          "headersAllowList":["Authorization","Host","Origin","Accept","Accept-Language","Referer"]
+        }
+      }'
+    ```
+    Known API restrictions: `defaultTTL 0` is rejected by the API (use `1`); `forwardedHeaders`
+    option `"all"` is also rejected (use `"allow-list"`). `Content-Type` and POST `Authorization`
+    are forwarded by default.
+
+### Teardown
+
+> **NOT EXECUTED; operator-run after the demo window. Suggested after 2026-10-16.**
+
+Notes before deleting:
+- Test tokens expire 2026-10-17; there is no harm in deleting the stack before expiry.
+- The model key lives only on the VM and is permanently deleted with the instance.
+- The Free plan closes the account when credits run out (approximately USD 180 remaining
+  at 2026-10-04; plan ends 2027-04-04 at the latest). There is no automatic deletion and
+  no hard spending cap. Stopping the VM does not stop billing; only deletion does.
+
+Delete in this order:
+
+```bash
+# 1. Delete the CDN distribution (managed in us-east-1).
+#    The CDN may take several minutes to disable; the delete call may be rejected while
+#    the distribution state is IN_PROGRESS. Re-run the get-distributions check below
+#    until the distribution is gone before continuing.
+AWS_PROFILE=minsky-new AWS_PAGER="" \
+  aws lightsail delete-distribution \
+    --region us-east-1 \
+    --distribution-name minsky-smoke-cdn
+
+# 2. Detach the static IP from the instance.
+AWS_PROFILE=minsky-new AWS_PAGER="" \
+  aws lightsail detach-static-ip \
+    --region us-east-2 \
+    --static-ip-name minsky-1
+
+# 3. Release the static IP.
+AWS_PROFILE=minsky-new AWS_PAGER="" \
+  aws lightsail release-static-ip \
+    --region us-east-2 \
+    --static-ip-name minsky-1
+
+# 4. Delete the instance.
+AWS_PROFILE=minsky-new AWS_PAGER="" \
+  aws lightsail delete-instance \
+    --region us-east-2 \
+    --instance-name minsky-smoke
+```
+
+Verify deletion (all commands must return an empty list):
+
+```bash
+# CDN gone (us-east-1)
+AWS_PROFILE=minsky-new AWS_PAGER="" \
+  aws lightsail get-distributions --region us-east-1 \
+    --query 'distributions[?name==`minsky-smoke-cdn`]'
+
+# Static IP gone (us-east-2)
+AWS_PROFILE=minsky-new AWS_PAGER="" \
+  aws lightsail get-static-ips --region us-east-2 \
+    --query 'staticIps[?name==`minsky-1`]'
+
+# Instance gone (us-east-2)
+AWS_PROFILE=minsky-new AWS_PAGER="" \
+  aws lightsail get-instances --region us-east-2 \
+    --query 'instances[?name==`minsky-smoke`]'
+```
 
 ## Production
 
