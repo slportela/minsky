@@ -25,6 +25,14 @@ SCRIPTED = (
     "dispute-policy-failure-retry-es",
     "dispute-fraud-block-es",
     "dispute-fraud-no-block-es",
+    # policy-boundary cases added by eval/policy-boundary-cases
+    "dispute-outside-window-es",
+    "dispute-outside-window-fraud-es",
+    "dispute-repeat-complainer-es",
+    "dispute-boundary-500-es",
+    "dispute-boundary-120d-es",
+    "dispute-flagged-fraud-es",
+    "dispute-reversed-small-es",
 )
 
 

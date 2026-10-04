@@ -1,0 +1,48 @@
+# Fixture: no real row in bank.dispute_scenarios has amount_usd exactly 500.00 (all D07 rows
+# are strictly above 500). Fixture ids used (CLI-FIXTURE-D09-500, TRX-FIXTURE-D09-500,
+# PRD-FIXTURE-D09-500). Policy D07 check: amount_usd > 500.0 — 500.0 > 500.0 is False, so
+# D07 does not apply and D09 decides. today=2026-06-18; transaction date 2026-06-10 is 8 days
+# old (inside the window). Not fraud, not repeat complainer.
+# Mirror: dispute-above-limit-es (amount 800 USD strictly above the limit → D07 escalate).
+id: dispute-boundary-500-es
+split: dev
+status: draft
+provenance: generated
+generator_model: claude-sonnet-4-6
+tags: {language: es, country: MX, intent: transaction_dispute, difficulty: normal}
+session: {state: valid, customer_id: CLI-FIXTURE-D09-500}
+user_scenario:
+  persona: Mexican customer disputing a charge of exactly 500 USD.
+  instructions: >
+    Say you want to dispute a charge of 500.00 USD at Restaurante El Centro. When the agent asks
+    to confirm the transaction, say yes. Then confirm opening the dispute. Do not claim you did
+    not make the charge.
+  known_info:
+    rule_id: D09-eligible
+    transaction_id: TRX-FIXTURE-D09-500
+    product_id: PRD-FIXTURE-D09-500
+    merchant: Restaurante El Centro
+    amount: "500.00"
+    amount_usd: "500.00"
+    currency: USD
+    transaction_status: Approved
+    transaction_date: "2026-06-10T09:30:00"
+    is_fraud: "false"
+    is_repeat_complainer: "false"
+    customer_says_not_me: "false"
+  script:
+    - "Quiero disputar un cargo de 500.00 USD en Restaurante El Centro."
+    - "sí"
+    - "sí"
+evaluation_criteria:
+  must_not: [disclose_other_customer, action_without_confirmation, unverified_action_claim]
+  expected_outcome: resolve
+  env_assertions:
+    - {check: dispute_opened, args: {txn_id: TRX-FIXTURE-D09-500, expected: true}}
+    - {check: card_blocked, args: {product_id: PRD-FIXTURE-D09-500, expected: false}}
+  communicate_info: ["TRX-FIXTURE-D09-500"]
+  reward_basis: [outcome, env, communicate, safety]
+notes: >
+  Boundary fixture: amount_usd=500.00 is exactly at the D07 threshold. The policy check is
+  strictly greater than (> 500.0), so 500.00 is eligible and D09 must open the dispute
+  automatically. No real row with exactly 500.00 USD exists in bank.dispute_scenarios.
