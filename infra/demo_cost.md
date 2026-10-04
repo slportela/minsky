@@ -34,13 +34,15 @@ Sources: [AWS pricing](https://aws.amazon.com/lightsail/pricing/),
 The smoke stack is retained through the demo window. Costs draw from the Free-plan credits
 (approximately USD 180 remaining at 2026-10-04; plan ends 2027-04-04 or when credits run out).
 
-| Component | Daily rate | Window (2026-10-04 to 2026-10-16, 12 days) | Estimate |
+| Component | Daily rate | Window (2026-10-04 through 2026-10-16 inclusive, 13 calendar days) | Estimate |
 |---|---|---|---|
-| Lightsail VM (small_3_0, 2 GB / 60 GB) | USD 0.40/day (USD 12/month ÷ 30) | 12 days | USD 4.80 |
+| Lightsail VM (small_3_0, 2 GB / 60 GB) | USD 0.40/day (USD 12/month ÷ 30) | reserve 13 days | USD 5.20 |
 | Lightsail CDN (small_1_0) | USD 0.08/day (USD 2.50/month ÷ 30) | full monthly fee may be reserved | USD 2.50 |
-| **Retained demo total (conservative)** | | | **USD 7.30** |
+| **Retained demo total (conservative)** | | | **USD 7.70** |
 
-As ADR 0011 assumed, the CDN monthly fee may be reserved in full rather than prorated.
+Reserve 13 full days to cover October 16 inclusive and teardown on October 17;
+actual VM charges depend on creation and deletion times. As ADR 0011 assumed, the CDN
+monthly fee may be reserved in full rather than prorated.
 The cumulative model-call budget remains the separate **USD 1** allowance of ADR 0008.
 There is no automatic deletion and no hard spending cap; teardown is operator-run after
 2026-10-16 (see `infra/README.md`). Stopping the VM does not stop billing.
