@@ -734,3 +734,25 @@ def test_fraud_handoff_with_block_is_queued_critical():
     assert any(a.startswith("card_blocked:") for a in case.actions)
     assert case.facts["customer_said"]["customer_request"].startswith("No reconozco")
     assert "did not make" in case.summary
+
+
+def test_router_sets_the_dispute_type_but_not_the_route():
+    ctx = _ctx()
+    state = _state()
+    llm = FakeLLM(_details())
+    state, _ = asyncio.run(run_turn(state, "Me cobraron dos veces la misma compra en Cafe", ctx, llm))  # type: ignore[arg-type]
+    assert state.router_label == "duplicate" and state.dispute_reason == "duplicate_charge"
+    for text in ("sí", "sí"):
+        state, _ = asyncio.run(run_turn(state, text, ctx, llm))  # type: ignore[arg-type]
+    case = ctx.cases.list_cases()[0]
+    assert case.reason == "duplicate_charge" and "duplicate charge" in case.summary
+    assert state.rule_id == "D09-eligible"  # the policy still decides
+
+
+def test_router_abstains_on_noise_and_keeps_the_default_type():
+    ctx = _ctx()
+    state = _state()
+    llm = FakeLLM(_details())
+    state, _ = asyncio.run(run_turn(state, "xq zzv 25", ctx, llm))  # type: ignore[arg-type]
+    assert state.router_label is None  # below the val-fitted threshold: abstain, never guess
+    assert state.dispute_reason == "unrecognized_charge"

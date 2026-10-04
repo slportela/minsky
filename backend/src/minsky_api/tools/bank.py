@@ -306,7 +306,10 @@ async def open_dispute(ctx: ToolContext, args: OpenDisputeArgs) -> OpenDisputeRe
             reason=args.reason,
             rule_id="D09-eligible",
             txn=txn,
-            customer_facts={"customer_says_not_me": args.customer_says_not_me or None},
+            customer_facts={
+                "customer_says_not_me": args.customer_says_not_me or None,
+                "dispute_type": args.reason,
+            },
             actions=("dispute_opened",),
             created_at=verified.created_at,
         )

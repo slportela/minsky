@@ -13,6 +13,7 @@ from minsky_api.config import get_settings
 from minsky_api.identity.session import SessionState
 from minsky_api.llm.client import LLM
 from minsky_api.policy.disputes import Route
+from minsky_api.router.classifier import classify
 from minsky_api.tools.bank import (
     block_card,
     create_handoff,
@@ -173,6 +174,8 @@ def _handoff_facts(state: ConversationState, **extra: object) -> dict[str, objec
         "customer_says_not_me": state.customer_says_not_me or None,
         "customer_search_details": details or None,
         "language": state.language,
+        "dispute_type_suggested": _DISPUTE_TYPE.get(state.router_label or ""),
+        "router_confidence": state.router_confidence if state.router_label else None,
     }
     facts.update(extra)
     return {key: value for key, value in facts.items() if value is not None}
@@ -302,7 +305,26 @@ async def _apply_policy(ctx: ToolContext, state: ConversationState, llm: LLM) ->
     return _accept(state, speech)
 
 
+# Router label -> the dispute type recorded on the case. Only used when the router is confident; it never
+# changes the route (the policy decides) and never replaces the model's reading of "it wasn't me".
+_DISPUTE_TYPE = {
+    "not_me": "unrecognized_charge",
+    "wrong_amount": "wrong_amount",
+    "duplicate": "duplicate_charge",
+    "not_received": "not_received",
+}
+
+
+def _classify_first_message(state: ConversationState, text: str) -> None:
+    prediction = classify(text)
+    state.router_label = None if prediction.abstained else prediction.label
+    state.router_confidence = round(prediction.confidence, 3)
+    if state.router_label in _DISPUTE_TYPE:
+        state.dispute_reason = _DISPUTE_TYPE[state.router_label]
+
+
 async def _phase_understand(ctx: ToolContext, state: ConversationState, text: str, llm: LLM) -> str:
+    _classify_first_message(state, text)
     details = await extract_dispute_details(llm, text)
     state.customer_says_not_me = details.customer_says_not_me
     if details.out_of_scope:

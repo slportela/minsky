@@ -67,8 +67,13 @@ def _summary(kind: CaseKind, reason: str, rule_id: str | None, facts: dict[str, 
         when = (facts.get("transaction_date") or "")[:10]
         charge = f" the {facts.get('amount_usd')} USD charge at {facts.get('merchant') or 'an unknown merchant'}"
         charge += f" on {when}" if when else ""
+    kind_of = str(facts.get("dispute_type") or facts.get("dispute_type_suggested") or "").replace("_", " ")
+    type_note = f" Type: {kind_of} (learned router, suggestion)." if kind_of else ""
     if kind == CaseKind.DISPUTE:
-        return f"Customer disputes{charge}. Dispute opened automatically under rule {rule_id or 'D09-eligible'}."
+        return (
+            f"Customer disputes{charge}. Dispute opened automatically under rule {rule_id or 'D09-eligible'}."
+            + type_note
+        )
     says_not_me = facts.get("customer_says_not_me") is True
     lead = {
         "possible_fraud": "Possible fraud: the customer says they did not make",
@@ -86,7 +91,7 @@ def _summary(kind: CaseKind, reason: str, rule_id: str | None, facts: dict[str, 
         text += " Card blocked with the customer's explicit confirmation."
     if rule_id:
         text += f" Policy rule {rule_id}."
-    return text
+    return text + type_note
 
 
 async def _expected_days(ctx: ToolContext, priority: str) -> float | None:

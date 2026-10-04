@@ -34,6 +34,9 @@ class ConversationState:
     route: str | None = None
     customer_says_not_me: bool = False
     dispute_reason: str = "unrecognized_charge"
+    # The learned router's reading of the first message (a suggestion for the back office, never a decision).
+    router_label: str | None = None
+    router_confidence: float | None = None
     # Set from the first customer message; later turns reuse it.
     language: str | None = None
     # Model decision for the confirm turn in progress (yes, no, unclear). Code acts only on yes.
