@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 from unittest.mock import MagicMock
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from fastapi.testclient import TestClient
@@ -151,3 +151,29 @@ def test_runtime_failure_hides_the_internal_reason(app_and_client, monkeypatch):
     assert response.json()["code"] == "service_unavailable"
     assert "compose_speech" not in response.text
     assert "unverified" not in response.text
+
+
+def test_a_new_conversation_runs_the_mode_chosen_at_its_start(app_and_client, monkeypatch):
+    app, client = app_and_client
+
+    async def fake_agentic_turn(state, text, ctx, llm):
+        state.phase = Phase.DONE
+        state.messages.append(("user", text))
+        state.messages.append(("agent", "ok-agentic"))
+        return state, "ok-agentic"
+
+    monkeypatch.setattr("minsky_api.api.chat.run_agentic_turn", fake_agentic_turn)
+    headers = {"Authorization": "Bearer token-c1"}
+
+    monkeypatch.setenv("MINSKY_AGENT_MODE", "agentic")
+    get_settings.cache_clear()
+    agentic = client.post("/api/chat/turn", json={"messages": [{"user": "hola"}]}, headers=headers)
+    assert agentic.json()["messages"][-1] == {"agent": "ok-agentic"}
+    stored = app.state.conversations.get(UUID(agentic.json()["conversation_id"]))
+    assert stored is not None and stored.mode == "agentic"
+
+    # flipping the setting does not move a running conversation into the other mode's phases
+    monkeypatch.setenv("MINSKY_AGENT_MODE", "workflow")
+    get_settings.cache_clear()
+    workflow = client.post("/api/chat/turn", json={"messages": [{"user": "hola"}]}, headers=headers)
+    assert workflow.json()["messages"][-1] == {"agent": "ok-poc"}

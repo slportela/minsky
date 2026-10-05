@@ -15,6 +15,7 @@ from minsky_api.store.models import Transaction
 
 _MIN_LIMIT = 1
 _MAX_LIMIT = 100
+_MAX_HISTORY = 500  # a customer's whole history is small (max 150 in three years); beyond this is a data bug
 
 
 def _like_pattern(text: str) -> str:
@@ -58,3 +59,20 @@ class TransactionStore(BaseStore):
             statement = statement.where(col(Transaction.transaction_date) < date_to + timedelta(days=1))
         statement = statement.order_by(col(Transaction.transaction_date).desc()).limit(limit)
         return await self._list(statement)
+
+    async def list_history(self, customer_id: str) -> tuple[Transaction, ...]:
+        """All of a customer's transactions, newest first, in every status: the search agent's whole world.
+
+        Older charges and declined or reversed ones are included on purpose: the dispute policy, not the
+        search, decides what can be disputed. More than _MAX_HISTORY rows is refused, not silently cut.
+        """
+        statement = (
+            select(Transaction)
+            .where(col(Transaction.customer_id) == customer_id)
+            .order_by(col(Transaction.transaction_date).desc())
+            .limit(_MAX_HISTORY + 1)
+        )
+        rows = await self._list(statement)
+        if len(rows) > _MAX_HISTORY:
+            raise ValueError(f"customer has more than {_MAX_HISTORY} transactions")
+        return rows

@@ -14,6 +14,7 @@ from fastapi import APIRouter, Header, Request
 from fastapi.responses import JSONResponse
 from openai import OpenAIError
 
+from minsky_api.agent.agentic import run_agentic_turn
 from minsky_api.agent.degraded import hand_off_on_outage, is_model_failure
 from minsky_api.agent.memory import ConversationStore
 from minsky_api.agent.orchestrator import run_turn
@@ -26,6 +27,7 @@ from minsky_api.api.contracts import (
     ErrorResponse,
     UserMessage,
 )
+from minsky_api.config import get_settings
 from minsky_api.identity.errors import PermissionDenied
 from minsky_api.identity.http import resolve_session
 from minsky_api.identity.session import ToolSession
@@ -93,7 +95,9 @@ async def _authenticated_turn(
     cases: CasesBackend = request.app.state.cases
 
     if body.conversation_id is None:
-        state = ConversationState(conversation_id=conversation_id, customer_id=customer_id)
+        state = ConversationState(
+            conversation_id=conversation_id, customer_id=customer_id, mode=get_settings().agent_mode
+        )
         if len(body.messages) != 1 or not isinstance(body.messages[0], UserMessage):
             return _error(ErrorCode.INVALID_PAYLOAD, "first turn must be a single user message", 400)
         user_text = body.messages[0].text
@@ -118,7 +122,8 @@ async def _authenticated_turn(
     try:
         async with session() as db:
             ctx = ToolContext(session=tool_session, db=db, cases=cases)
-            state, _reply = await run_turn(state, user_text, ctx, llm)
+            turn = run_agentic_turn if state.mode == "agentic" else run_turn
+            state, _reply = await turn(state, user_text, ctx, llm)
     except ValueError as exc:
         return _error(ErrorCode.INVALID_PAYLOAD, str(exc), 400)
     except PermissionError as exc:

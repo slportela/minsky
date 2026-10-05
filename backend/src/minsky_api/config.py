@@ -23,6 +23,10 @@ class Settings(BaseSettings):
     # Orchestrator budgets (docs/solution.md): stop runaway chats and clarify loops.
     max_turns: PositiveInt = 12
     max_clarify_attempts: PositiveInt = 2
+    # "workflow": the extract-then-search orchestrator (default, the evaluated baseline). "agentic": a
+    # tool-using agent finds the transaction (docs/agentic_dispute_agent.md). Chosen per new conversation.
+    agent_mode: Literal["workflow", "agentic"] = "workflow"
+    agent_max_tool_calls: PositiveInt = 5  # queries and proposals per customer message
     test_sessions: SecretStr | None = None
     # Back-office agents for /console: JSON mapping credential -> {agent_id, expires_at}. Separate from
     # customer sessions, so a customer credential can never read the case queue.

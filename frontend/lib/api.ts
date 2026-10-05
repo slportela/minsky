@@ -113,7 +113,12 @@ export type CaseDetail = {
   customer_id: string;
   reason: string;
   triage_reason: string;
-  facts: { verified?: Record<string, unknown>; customer_said?: Record<string, unknown> };
+  facts: {
+    verified?: Record<string, unknown>;
+    // Read by code from the bank and the policy (customer profile, the rule, the search); agentic mode only.
+    context?: Record<string, unknown>;
+    customer_said?: Record<string, unknown>;
+  };
   actions: string[];
   open_questions: string[];
   expected_resolution_days: number | null;

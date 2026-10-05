@@ -161,3 +161,34 @@ class ClassifyReplyArgs(_Strict):
 
 class ClassifyReplyResult(_Strict):
     decision: Literal["yes", "no", "unclear"]
+
+
+class QueryTransactionsArgs(_Strict):
+    """A read-only SELECT over the session customer's own transactions (agent.sandbox)."""
+
+    sql: str = Field(min_length=1, max_length=1500)
+
+
+class QueryTransactionsResult(_Strict):
+    columns: tuple[str, ...]
+    rows: tuple[tuple[Any, ...], ...]
+    row_count: int
+    truncated: bool
+    transaction_ids: tuple[str, ...] = ()  # the ids this result showed: only these can be proposed
+
+
+class CustomerProfileView(_Strict):
+    """General facts about the session customer for a person taking over a case. No name, no contact data."""
+
+    customer_id: str
+    segment: str | None = None
+    country: str | None = None
+    customer_status: str | None = None
+    products: dict[str, int] = Field(default_factory=dict)  # product_type -> count
+    complaints_total: int | None = None
+    complaints_last_90d: int | None = None
+    is_repeat_complainer: bool | None = None
+
+
+class GetCustomerProfileResult(_Strict):
+    profile: CustomerProfileView

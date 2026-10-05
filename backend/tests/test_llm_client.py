@@ -10,7 +10,14 @@ from pydantic import BaseModel, SecretStr, ValidationError
 
 from minsky_api.agent.extract import DisputeDetails
 from minsky_api.config import Settings
-from minsky_api.llm.client import LLM, LLMNotConfiguredError, ModelMismatchError, ModelOutputError, model_matches
+from minsky_api.llm.client import (
+    LLM,
+    LLMNotConfiguredError,
+    ModelMismatchError,
+    ModelOutputError,
+    ToolSpec,
+    model_matches,
+)
 
 SETTINGS = Settings(llm_api_key=SecretStr("test-key"), llm_model="gpt-6-luna", llm_max_retries=0)
 
@@ -157,3 +164,63 @@ def test_a_missing_or_blank_api_key_is_not_configured(key):
 def test_negative_retries_are_rejected():
     with pytest.raises(ValidationError):
         Settings(llm_max_retries=-1)
+
+
+def _tool_response(*, status: str = "completed", model: str = "gpt-6-luna-2026-09-22") -> dict:
+    body = _response("", model=model)
+    body["status"] = status
+    body["output"] = [
+        {
+            "type": "function_call",
+            "id": "fc_1",
+            "call_id": "call_1",
+            "name": "query_transactions",
+            "arguments": '{"sql": "SELECT 1"}',
+            "status": "completed",
+        }
+    ]
+    return body
+
+
+_SPEC = [
+    ToolSpec(
+        name="query_transactions",
+        description="Run a query.",
+        parameters={"type": "object", "properties": {"sql": {"type": "string"}}, "required": ["sql"]},
+    )
+]
+
+
+def test_step_returns_the_tool_call_and_sends_the_tools_without_parallel_calls():
+    sent: list[dict] = []
+    items = [{"role": "user", "content": "hola"}]
+    step = asyncio.run(_llm(_tool_response(), sent).step("Sé breve.", items, tools=_SPEC))
+    assert [(c.call_id, c.name, c.arguments) for c in step.tool_calls] == [
+        ("call_1", "query_transactions", '{"sql": "SELECT 1"}')
+    ]
+    assert sent[0]["tools"][0]["name"] == "query_transactions"
+    assert sent[0]["parallel_tool_calls"] is False
+    assert sent[0]["store"] is False
+    assert sent[0]["input"] == items
+
+
+def test_step_returns_plain_text_when_the_model_does_not_call_a_tool():
+    step = asyncio.run(
+        _llm(_response("¿Cuál fue el comercio?"), []).step("x", [{"role": "user", "content": "hola"}], tools=_SPEC)
+    )
+    assert step.text == "¿Cuál fue el comercio?"
+    assert step.tool_calls == ()
+
+
+def test_step_refuses_a_reply_that_was_cut_off():
+    with pytest.raises(ModelOutputError):
+        asyncio.run(
+            _llm(_tool_response(status="incomplete"), []).step("x", [{"role": "user", "content": "hola"}], tools=_SPEC)
+        )
+
+
+def test_step_checks_the_model_that_answered():
+    with pytest.raises(ModelMismatchError):
+        asyncio.run(
+            _llm(_tool_response(model="gpt-5-mini"), []).step("x", [{"role": "user", "content": "hola"}], tools=_SPEC)
+        )
