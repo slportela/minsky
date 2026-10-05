@@ -235,6 +235,7 @@ async def _phase_search(
 ) -> str:
     state.phase = Phase.SEARCH
     state.pending_question = None
+    state.consent_text = None
     state.agent_items.append({"role": "user", "content": text})
     if note:
         state.agent_items.append({"role": "user", "content": f"SISTEMA: {note}"})
@@ -368,6 +369,7 @@ async def _decide(ctx: ToolContext, state: ConversationState, llm: LLM) -> str:
 async def _phase_confirm_dispute(ctx: ToolContext, state: ConversationState, text: str, llm: LLM) -> str:
     decision = await _consent(ctx, state, text, llm)
     if decision == "yes":
+        state.consent_text = text
         if state.customer_says_not_me:
             return await _decide(ctx, state, llm)  # already said they did not make it: no need to ask again
         return _ask(state, Phase.RECOGNIZE, recognize_question(_lang(state)))

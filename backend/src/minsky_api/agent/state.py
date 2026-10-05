@@ -72,3 +72,6 @@ class ConversationState:
     escalation_reason: str | None = None
     existing_dispute_id: str | None = None
     denial_text: str | None = None  # what the customer read when the dispute could not go ahead
+    # The customer's own words that said yes to the card (agent.consent). The write happens one question later
+    # (the recognition answer), so graders read the consent here and not from the turn that ran the tool.
+    consent_text: str | None = None

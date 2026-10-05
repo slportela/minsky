@@ -7,7 +7,7 @@ PROFILE    := $(shell grep '^BRONZE_AWS_PROFILE=' .env 2>/dev/null | cut -d= -f2
 LAKE_URI   := $(patsubst %/bronze,%,$(BRONZE_URI))
 AWS        := AWS_PROFILE=$(PROFILE) aws
 
-.PHONY: demo-reset demo-sessions help setup lock-check lint typecheck test llm-smoke regression-smoke eval-smoke eval-live-estimate frontend-check eval-check router ci model-prices up down logs demo-plan demo-apply pipeline bronze mirror silver gold publish docs freshness-check
+.PHONY: demo-reset demo-sessions help setup lock-check lint typecheck test llm-smoke regression-smoke eval-smoke eval-smoke-agentic eval-live-estimate frontend-check eval-check router ci model-prices up down logs demo-plan demo-apply pipeline bronze mirror silver gold publish docs freshness-check
 
 EVAL_CAP_USD ?= 1
 
@@ -44,6 +44,9 @@ eval-check:  ## validate every eval case and the case set (schema, leakage, cove
 eval-smoke:  ## partial offline dev smoke with durable evidence (scripted extraction)
 	uv run python -m evals.runner --include-drafts
 
+eval-smoke-agentic:  ## the same smoke through the tool-using agent (scripted agent and reactive customer; docs/agentic_dispute_agent.md)
+	uv run python -m evals.runner --include-drafts --agent-mode agentic
+
 # Token prices for the pinned model come from evals/model_prices.py, so one dated table feeds every
 # run instead of a rate retyped per command. The runner still gets both prices as explicit flags.
 # Force a price (a change the table does not have yet) by setting both on the command line:
@@ -68,7 +71,7 @@ lock-check:  ## lockfiles resolve only from public registries (a private mirror 
 		grep -nE '"resolved": "https://' frontend/package-lock.json | grep -v '"https://registry\.npmjs\.org/' ); \
 	if [ -n "$$bad" ]; then echo "$$bad" | head -5; echo "lockfile points at a non-public registry"; exit 1; fi
 
-ci: lock-check lint typecheck test eval-check regression-smoke eval-smoke frontend-check  ## everything a PR must pass (runs locally; no external CI service)
+ci: lock-check lint typecheck test eval-check regression-smoke eval-smoke eval-smoke-agentic frontend-check  ## everything a PR must pass (runs locally; no external CI service)
 
 # ---- Run the system (see infra/README.md) ------------------------------------------------------
 

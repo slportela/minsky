@@ -30,15 +30,18 @@ from evals.budget import SpendBudget
 from evals.evidence import ToolEvidence, TrialRecord
 from evals.graders import TrialGrade, grade_trial
 from evals.metrics import Rate, language_rates
-from evals.schema import Case, Split, Status, load_case
+from evals.schema import Case, Outcome, Split, Status, load_case
 from evals.world import MemoryBank, WorldFacts, build_bank, check_label, facts_from_case
-from minsky_api.agent import orchestrator
+from minsky_api.agent import agentic, orchestrator
 from minsky_api.agent.confirm import Confirmation
 from minsky_api.agent.extract import DisputeDetails
+from minsky_api.agent.language import default_language_detector
 from minsky_api.agent.speak import Speech
+from minsky_api.agent.state import ConversationState, Phase
+from minsky_api.agent.wording import clarify_fallback
 from minsky_api.api import chat as chat_api
 from minsky_api.config import get_settings
-from minsky_api.llm.client import LLM, LLMResult
+from minsky_api.llm.client import LLM, AgentStep, LLMResult, ToolCall
 from minsky_api.main import create_app
 from minsky_api.tools.errors import ToolDenied, ToolError
 
@@ -56,8 +59,25 @@ class ScriptedLLM:
     def __init__(self, facts: WorldFacts) -> None:
         self._facts = facts
 
+    async def step(
+        self, instructions: str, items: list[dict[str, Any]], *, tools: Any = (), **kwargs: Any
+    ) -> AgentStep:
+        """The agentic search, scripted: a rule-based stand-in for the model, not a model."""
+        return _scripted_agent_step(items, self._facts)
+
     async def respond(self, instructions: str, messages: list[dict[str, str]], **kwargs: Any) -> LLMResult[Any]:
         text = messages[-1]["content"]
+        schema = kwargs.get("schema")
+        if schema is not None and schema.__name__ == "_NarrativeOut":
+            narrative = schema(text="The customer wanted to dispute a charge; the conversation is attached.")
+            return LLMResult(
+                text=narrative.model_dump_json(),
+                parsed=narrative,
+                model=SCRIPTED_MODEL,
+                input_tokens=0,
+                output_tokens=0,
+                latency_ms=0,
+            )
         if kwargs.get("schema") is Speech:
             speech = _scripted_speech(text)
             return LLMResult(
@@ -139,6 +159,178 @@ def _details_from_turn(text: str, facts: WorldFacts) -> DisputeDetails:
     )
 
 
+_SYSTEM_NOTE = "SISTEMA:"
+_CALLS = {"n": 0}
+
+
+def _customer_texts(items: list[dict[str, Any]]) -> list[str]:
+    return [
+        str(item["content"])
+        for item in items
+        if item.get("role") == "user" and not str(item["content"]).startswith(_SYSTEM_NOTE)
+    ]
+
+
+def _tool_step(name: str, **arguments: Any) -> AgentStep:
+    _CALLS["n"] += 1
+    call = ToolCall(call_id=f"scripted-{_CALLS['n']}", name=name, arguments=json.dumps(arguments))
+    return AgentStep(text="", tool_calls=(call,), model=SCRIPTED_MODEL, input_tokens=0, output_tokens=0, latency_ms=0)
+
+
+def _text_step(text: str) -> AgentStep:
+    return AgentStep(text=text, tool_calls=(), model=SCRIPTED_MODEL, input_tokens=0, output_tokens=0, latency_ms=0)
+
+
+def _sql_literal(value: str) -> str:
+    return "'" + value.replace("'", "''") + "'"
+
+
+def _query_for(details: DisputeDetails, *, relaxed: bool) -> str | None:
+    """What a careful agent would ask: the id if the customer gave one, else amount (near when relaxed) and merchant."""
+    select = "SELECT transaction_id, merchant_name, amount_usd, transaction_date FROM transactions"
+    if details.transaction_id:
+        # An id has no "near": the same question again would find the same nothing.
+        return None if relaxed else f"{select} WHERE transaction_id = {_sql_literal(details.transaction_id)}"
+    where: list[str] = []
+    if details.amount is not None:
+        amount = float(details.amount)
+        tolerance = max(1.0, amount * 0.05) if relaxed else 0.005
+        where.append(f"abs(amount_usd - {amount}) < {tolerance}")
+    if details.merchant:
+        where.append(f"fold(merchant_name) LIKE {_sql_literal('%' + details.merchant.casefold() + '%')}")
+    return f"{select} WHERE {' AND '.join(where)}" if where else None
+
+
+def _scripted_agent_step(items: list[dict[str, Any]], facts: WorldFacts) -> AgentStep:
+    """One deterministic step of a competent search agent, built only from what the conversation shows.
+
+    It reads the customer's messages like the scripted extractor does, queries (exact first, then near the
+    amount), proposes when exactly one row matches, lists the candidates when several do, and asks for a detail
+    when none does. Its words go through the product's own checks, so a mistake here shows as a refused reply.
+    """
+    texts = _customer_texts(items)
+    language = default_language_detector().detect(texts[0]) if texts else "es"
+    last_user = max((i for i, item in enumerate(items) if item.get("role") == "user"), default=-1)
+    this_turn = items[last_user + 1 :]  # what the agent has done since it was last spoken to
+    queries = [item for item in this_turn if item.get("type") == "function_call"]
+    outputs = [item for item in this_turn if item.get("type") == "function_call_output"]
+
+    if outputs:
+        raw = str(outputs[-1]["output"])
+        if raw.startswith("error:"):
+            return _text_step(clarify_fallback(language, None))
+        found = json.loads(raw)
+        columns, rows = found["columns"], found["rows"]
+        index = columns.index("transaction_id") if "transaction_id" in columns else None
+        if index is not None and len(rows) == 1:
+            not_me = any(phrase in text.casefold() for text in texts for phrase in _NOT_ME_PHRASES)
+            return _tool_step("propose_transaction", transaction_id=rows[0][index], customer_says_not_me=not_me)
+        if index is not None and len(rows) > 1:
+            lines = "\n".join(
+                f"- {r[columns.index('merchant_name')]}, {r[columns.index('amount_usd')]:.2f} USD, "
+                f"{str(r[columns.index('transaction_date')])[:10]}"
+                for r in rows
+            )
+            return _text_step(clarify_fallback(language, lines))
+        if len(queries) == 1:  # nothing matched exactly: look near the amount before asking
+            near = _query_for(_merged_details(texts, facts), relaxed=True)
+            if near is not None:
+                return _tool_step("query_transactions", sql=near)
+        return _text_step(clarify_fallback(language, None))
+
+    exact = _query_for(_merged_details(texts, facts), relaxed=False)
+    return _tool_step("query_transactions", sql=exact) if exact else _text_step(clarify_fallback(language, None))
+
+
+def _merged_details(texts: list[str], facts: WorldFacts) -> DisputeDetails:
+    """What the customer said so far; a later message replaces an earlier amount, as the workflow's merge does."""
+    merged = DisputeDetails()
+    for text in texts:
+        found = _details_from_turn(text, facts)
+        merged = merged.model_copy(
+            update={
+                "merchant": found.merchant or merged.merchant,
+                "amount": found.amount if found.amount is not None else merged.amount,
+                "transaction_id": found.transaction_id or merged.transaction_id,
+            }
+        )
+    return merged
+
+
+class _WorkflowUser:
+    """The case script, one turn per request. This is how every case was written."""
+
+    def __init__(self, script: list[str]) -> None:
+        self._script = script
+
+    def next(self, index: int, state: ConversationState | None, last_status: int | None) -> str | None:
+        return self._script[index] if index < len(self._script) else None
+
+
+_YES_TOKENS = {"sí", "si", "sim", "yes"}
+_NO_TOKENS = {"no", "não", "nao"}
+
+
+def _is_answer(text: str) -> bool:
+    return text.strip().rstrip(".!?").casefold() in _YES_TOKENS | _NO_TOKENS
+
+
+class _ReactiveUser:
+    """A scripted customer for agentic mode, which asks questions the case scripts do not have.
+
+    The case's own informative turns come out in order whenever the agent asks for more detail; every
+    programmatic question is answered from what the persona knows (the case's facts and expected outcome),
+    chosen by the question the conversation is waiting on. It is a diagnostic stand-in, not a simulated person:
+    it never volunteers a fact the case script does not contain.
+    """
+
+    def __init__(self, case: Case, facts: WorldFacts) -> None:
+        script = list(case.user_scenario.script or [])
+        self._opening = script[0]
+        self._details = [t for t in script[1:] if not _is_answer(t)]
+        yes = next((t for t in script if t.strip().rstrip(".!?").casefold() in _YES_TOKENS), "sí")
+        self._yes = yes
+        self._facts = facts
+        self._expected = case.evaluation_criteria.expected_outcome
+        blocks_card = any(
+            a.check == "card_blocked" and str(a.args.get("expected", True)).lower() == "true"
+            for a in case.evaluation_criteria.env_assertions
+        )
+        self._block_card = blocks_card
+        self._last: str | None = None
+        self._limit = len(script) + 6
+
+    def next(self, index: int, state: ConversationState | None, last_status: int | None) -> str | None:
+        if index >= self._limit:
+            return None
+        if index == 0:
+            self._last = self._opening
+            return self._last
+        if last_status is not None and last_status != 200:
+            return self._last  # a failed request: the customer says it again
+        if state is None:
+            return None
+        text = self._answer(state)
+        if text is not None:
+            self._last = text
+        return text
+
+    def _answer(self, state: ConversationState) -> str | None:
+        phase = state.phase
+        if phase == Phase.SEARCH:
+            return self._details.pop(0) if self._details else None
+        if phase == Phase.CONFIRM_DISPUTE:
+            return self._yes if state.selected_txn_id == self._facts.transaction_id else "no"
+        if phase == Phase.RECOGNIZE:
+            return "no" if self._facts.customer_says_not_me else self._yes
+        if phase == Phase.CARD_OFFER:
+            return self._yes if self._block_card else "no"
+        if phase == Phase.OFFER_ESCALATION:
+            # A refusal or a notice is a complete answer; only a case that needs a person asks for one.
+            return self._yes if self._expected == Outcome.ESCALATE else None
+        return None
+
+
 class FaultingLLM:
     """Raise a provider timeout on matching llm_faults before delegating."""
 
@@ -147,11 +339,18 @@ class FaultingLLM:
         self.faults = faults
         self.calls = 0
 
-    async def respond(self, instructions: str, messages: list[dict[str, str]], **kwargs: Any) -> Any:
+    def _maybe_fail(self) -> None:
         self.calls += 1
         if any(item.on_call == self.calls for item in self.faults):
             raise APITimeoutError(request=_LLM_FAULT_REQUEST)
+
+    async def respond(self, instructions: str, messages: list[dict[str, str]], **kwargs: Any) -> Any:
+        self._maybe_fail()
         return await self.inner.respond(instructions, messages, **kwargs)
+
+    async def step(self, instructions: str, items: list[dict[str, Any]], **kwargs: Any) -> Any:
+        self._maybe_fail()
+        return await self.inner.step(instructions, items, **kwargs)
 
 
 class RecordedLLM:
@@ -191,6 +390,36 @@ class RecordedLLM:
             self.budget.account(result.input_tokens, result.output_tokens, allowance)
         return result
 
+    async def step(self, instructions: str, items: list[dict[str, Any]], **kwargs: Any) -> Any:
+        allowance = (
+            self.budget.reserve(instructions, items, kwargs.get("max_output_tokens", 1024)) if self.budget else None
+        )
+        event: dict[str, Any] = {
+            "instructions_sha256": hashlib.sha256(instructions.encode()).hexdigest(),
+            "input": items,
+            "status": "started",
+        }
+        self.record.model_calls.append(event)
+        try:
+            result = await self.inner.step(instructions, items, **kwargs)
+        except BaseException as error:
+            event.update(status="error", error_class=type(error).__name__)
+            raise
+        event.update(
+            {
+                "model": result.model,
+                "input_tokens": result.input_tokens,
+                "output_tokens": result.output_tokens,
+                "latency_ms": result.latency_ms,
+                "text": result.text,
+                "tool_calls": [{"name": c.name, "arguments": c.arguments} for c in result.tool_calls],
+                "status": "completed",
+            }
+        )
+        if self.budget is not None and allowance is not None:
+            self.budget.account(result.input_tokens, result.output_tokens, allowance)
+        return result
+
 
 @contextmanager
 def _patched(
@@ -201,6 +430,7 @@ def _patched(
     case: Case,
     extractor: str,
     budget: SpendBudget | None = None,
+    agent_mode: str = "workflow",
 ) -> Iterator[None]:
     @asynccontextmanager
     async def session() -> AsyncIterator[MemoryBank]:
@@ -216,7 +446,9 @@ def _patched(
     calls: dict[str, int] = {}
 
     def instrument(tool: str, call: Callable[..., Awaitable[Any]]) -> Callable[..., Awaitable[Any]]:
-        async def wrapped(ctx: Any, args: Any = None) -> Any:
+        async def wrapped(ctx: Any, *rest: Any) -> Any:
+            # (ctx, args) for most tools; query_transactions is (ctx, history, args). The args come last.
+            args = rest[-1] if rest else None
             state = current.get("active_state") or current.get("state")
             event = ToolEvidence(
                 tool=tool,
@@ -229,6 +461,7 @@ def _patched(
                 selected_product_id=state.selected_product_id if state else None,
                 user_text=current["text"],
                 confirmation=state.confirmation if state else None,
+                consent_text=state.consent_text if state else None,
             )
             record.tools.append(event)
             calls[tool] = calls.get(tool, 0) + 1
@@ -240,7 +473,7 @@ def _patched(
                     if fault.mode != "error":
                         raise ValueError(f"unsupported fault mode: {fault.mode}")
                     raise ToolError(f"injected {tool} error")
-                result = await call(ctx, args)
+                result = await call(ctx, *rest)
                 event.outcome = "ok"
                 event.result = result.model_dump(mode="json")
                 return result
@@ -257,11 +490,30 @@ def _patched(
         finally:
             current.pop("active_state", None)
 
+    async def traced_run_agentic_turn(*args: Any, **kwargs: Any) -> Any:
+        current["active_state"] = args[0]
+        try:
+            return await agentic.run_agentic_turn(*args, **kwargs)
+        finally:
+            current.pop("active_state", None)
+
     with ExitStack() as stack:
         if bank is not None:
             stack.enter_context(patch.object(chat_api, "session", session))
         stack.enter_context(patch.object(chat_api, "LLM", lambda: RecordedLLM(inner, record, budget)))
         stack.enter_context(patch.object(chat_api, "run_turn", traced_run_turn))
+        stack.enter_context(patch.object(chat_api, "run_agentic_turn", traced_run_agentic_turn))
+        if agent_mode == "agentic":
+            # The agentic module imported these names itself: patch them where they are used.
+            for tool in (
+                "query_transactions",
+                "evaluate_dispute",
+                "open_dispute",
+                "get_dispute",
+                "block_card",
+                "create_handoff",
+            ):
+                stack.enter_context(patch.object(agentic, tool, instrument(tool, getattr(agentic, tool))))
         for tool in (
             "get_transaction",
             "get_transactions",
@@ -289,6 +541,7 @@ async def run_trial(
     database: str = "sqlite",
     legacy_auth_baseline: bool = False,
     allow_val: bool = False,
+    agent_mode: str = "workflow",
 ) -> TrialRecord:
     record = TrialRecord(case_id=case.id)
     started = time.perf_counter()
@@ -297,6 +550,8 @@ async def run_trial(
     try:
         if extractor not in {"scripted", "real"} or database not in {"sqlite", "postgres"}:
             raise ValueError("unknown extractor or database mode")
+        if agent_mode not in {"workflow", "agentic"}:
+            raise ValueError("unknown agent mode")
         if extractor == "real" and budget is None:
             raise ValueError("real extraction requires a shared spend budget")
         if case.split == Split.TEST or (case.split == Split.VAL and not allow_val):
@@ -331,9 +586,14 @@ async def run_trial(
         expected = [
             int(value) for value in case.user_scenario.known_info.get("expected_http_statuses", "").split(",") if value
         ]
-        if expected and len(expected) != len(case.user_scenario.script):
+        if expected and agent_mode == "workflow" and len(expected) != len(case.user_scenario.script):
             raise ValueError("expected status count must match scripted turn count")
-        with patch.dict("os.environ", {"MINSKY_TEST_SESSIONS": mapping}):
+        # Agentic mode asks questions the script does not have, so its requests are not the script's turns:
+        # a reactive customer plays the case. The expected statuses are then read per request.
+        user: _WorkflowUser | _ReactiveUser = (
+            _WorkflowUser(case.user_scenario.script) if agent_mode == "workflow" else _ReactiveUser(case, facts)
+        )
+        with patch.dict("os.environ", {"MINSKY_TEST_SESSIONS": mapping, "MINSKY_AGENT_MODE": agent_mode}):
             get_settings.cache_clear()
             async with app.router.lifespan_context(app):
                 if facts.existing_dispute and facts.transaction_id:
@@ -344,19 +604,21 @@ async def run_trial(
                         reason="opened_in_an_earlier_conversation",
                     )
                 try:
-                    with _patched(bank, facts, record, current, case, extractor, budget):
+                    with _patched(bank, facts, record, current, case, extractor, budget, agent_mode):
                         async with (
                             asyncio.timeout(timeout_s),
                             AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client,
                         ):
-                            for index, turn in enumerate(case.user_scenario.script):
-                                current.update(
-                                    index=index,
-                                    text=turn,
-                                    state=app.state.conversations.get(UUID(conversation_id))
-                                    if conversation_id
-                                    else None,
+                            index = 0
+                            last_status: int | None = None
+                            while True:
+                                stored_now = (
+                                    app.state.conversations.get(UUID(conversation_id)) if conversation_id else None
                                 )
+                                turn = user.next(index, stored_now, last_status)
+                                if turn is None:
+                                    break
+                                current.update(index=index, text=turn, state=stored_now)
                                 body: dict[str, Any] = {"messages": [*history, {"user": turn}]}
                                 if conversation_id:
                                     body["conversation_id"] = conversation_id
@@ -367,14 +629,24 @@ async def run_trial(
                                 record.requests.append(request_evidence)
                                 response = await client.post("/api/chat/turn", json=body, headers=headers)
                                 payload = response.json()
+                                last_status = response.status_code
                                 request_evidence.update(http_status=response.status_code, response=payload)
-                                wanted = (
-                                    401
-                                    if facts.label_source == "authentication"
-                                    else expected[index]
-                                    if expected
-                                    else 200
-                                )
+                                if agent_mode == "agentic" and facts.label_source != "authentication":
+                                    # The case's statuses are per script turn, and agentic mode has other turns. What
+                                    # the case really says is "a tool failure answers 502": read it from the injected
+                                    # fault of this request. A 502 without one still fails the contract.
+                                    fault_fired = any(
+                                        t.turn_index == index and t.outcome == "error" for t in record.tools
+                                    )
+                                    wanted = 502 if fault_fired else 200
+                                else:
+                                    wanted = (
+                                        401
+                                        if facts.label_source == "authentication"
+                                        else expected[index]
+                                        if index < len(expected)
+                                        else 200
+                                    )
                                 if response.status_code != wanted:
                                     if response.status_code >= 500 and any(
                                         call.get("status") == "error" for call in record.model_calls
@@ -387,6 +659,7 @@ async def run_trial(
                                     conversation_id = payload["conversation_id"]
                                     history = payload["messages"]
                                 record.messages = [_pair(item) for item in history]
+                                index += 1
                         stored = (
                             app.state.conversations.get(UUID(conversation_id)) if conversation_id is not None else None
                         )
@@ -439,8 +712,8 @@ async def run_trial(
     return record
 
 
-async def run_case(case: Case) -> TrialGrade:
-    record = await run_trial(case)
+async def run_case(case: Case, *, agent_mode: str = "workflow") -> TrialGrade:
+    record = await run_trial(case, agent_mode=agent_mode)
     if record.grade is None:
         raise RuntimeError(f"{case.id}: {record.error_class}; {record.error_message}")
     return TrialGrade(**record.grade)
@@ -473,6 +746,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--ids", default="")
     parser.add_argument("--output", type=Path, default=None)
     parser.add_argument("--extractor", choices=("scripted", "real"), default="scripted")
+    parser.add_argument(
+        "--agent-mode",
+        choices=("workflow", "agentic"),
+        default="workflow",
+        help="workflow: the extract-then-search orchestrator. agentic: a tool-using agent finds the transaction "
+        "(docs/agentic_dispute_agent.md); the customer is then a reactive script, see _ReactiveUser",
+    )
     parser.add_argument("--trials", type=int, default=1)
     parser.add_argument("--max-cost-usd", type=Decimal)
     parser.add_argument("--input-usd-per-million", type=Decimal)
@@ -516,7 +796,19 @@ def main(argv: list[str] | None = None) -> int:
         estimated = Decimal(0)
         for case in chosen:
             for turn in case.user_scenario.script or []:
-                estimated += budget.cost(len(render("agent.extract.j2").encode()) + len(turn.encode()) + 8256, 256)
+                if args.agent_mode == "agentic":
+                    # Every request may take up to (tool-call budget + 1) agent steps with the conversation so far,
+                    # plus the confirmation check and, on an escalation, the summary. The reactive customer adds
+                    # requests the script does not have: 6 per trial at most (_ReactiveUser).
+                    steps = get_settings().agent_max_tool_calls + 1
+                    prompt = len(render("agent.search.j2", today="2026-06-18").encode()) + len(turn.encode())
+                    estimated += budget.cost(prompt + 8256 + 6000, 1024) * steps
+                    estimated += budget.cost(len(render("agent.confirm.j2").encode()) + 8256, 256)
+                else:
+                    estimated += budget.cost(len(render("agent.extract.j2").encode()) + len(turn.encode()) + 8256, 256)
+            if args.agent_mode == "agentic":
+                estimated += budget.cost(len(render("agent.summary.j2").encode()) + 8256 + 6000, 500)
+                estimated += 6 * budget.cost(len(render("agent.search.j2", today="2026-06-18").encode()) + 14256, 1024)
         estimated *= args.trials
         print(f"Conservative estimate: USD {estimated}; cap: USD {budget.cap_usd}; SDK retries: 0", flush=True)
         if estimated > budget.cap_usd:
@@ -542,6 +834,7 @@ def main(argv: list[str] | None = None) -> int:
         "git_sha": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
         "dirty": bool(subprocess.check_output(["git", "diff", "HEAD", "--name-only"], text=True).strip()),
         "mode": "live-extraction" if args.extractor == "real" else "offline-scripted",
+        "agent_mode": args.agent_mode,
         "model": get_settings().llm_model if args.extractor == "real" else SCRIPTED_MODEL,
         "budget": budget.report() if budget else None,
         "sdk_max_retries": 0 if budget else None,
@@ -573,6 +866,7 @@ def main(argv: list[str] | None = None) -> int:
                     timeout_s=args.timeout_s,
                     database=args.database,
                     legacy_auth_baseline=args.legacy_auth_baseline,
+                    agent_mode=args.agent_mode,
                 )
             )
             (output / f"{case.id}-{trial}.json").write_text(record.model_dump_json(indent=2))

@@ -124,12 +124,12 @@ Where the doc and the policy meet, one case differs from the denial flow: a frau
 3. ✅ The SEARCH loop and `propose_transaction` (`agent/agentic.py`, `prompts/agent.search.j2`).
 4. ✅ Confirm, recognise, policy, denial and escalation reusing `evaluate_dispute`, `open_dispute`, `block_card`, `create_handoff`.
 5. ✅ The summary (`agent/summary.py`, `prompts/agent.summary.j2`), carried into the case queue as `facts.context` (verified) and `facts.customer_said.narrative` (unverified).
-6. ⬜ Eval cases, A/B run on `dev`, error analysis (`/error-analysis`).
+6. 🟡 The eval runner supports agentic mode (`python -m evals.runner --agent-mode agentic`, `make eval-smoke-agentic`): offline, 17 of 17 dev cases pass with a scripted agent and a reactive customer, the same as the workflow. That is a wiring result. ⬜ The live A/B with the real model, new eval cases, and error analysis (`/error-analysis`) are still to do.
 7. ⬜ ADR and the rest of `docs/requirements.md` if adopted.
 
 ## 11. What is not verified
 
-- **No eval delta.** The eval runner scripts the extractor and drives `run_turn`; it does not know agentic mode, and no live model was run. Rule 3 is not satisfied yet, so the mode stays off by default.
+- **No eval delta.** The runner now supports agentic mode, but only offline: the agent is a rule-based stand-in (`_scripted_agent_step`) and the customer a reactive script (`_ReactiveUser`). Both modes pass the same 17 dev cases, which shows the wiring, the sandbox, the policy and the safety checks work end to end, and says nothing about how a model searches. No live model was run. Rule 3 is not satisfied yet, so the mode stays off by default.
 - **Tool calling was tested against a mocked provider only** (`httpx` mock transport), not against the live API. Items are sent without provider ids or reasoning items (`store=False`); that is expected to be valid but has not been seen working.
 - **The text checks may over-reject.** They are the workflow's own (`action_claims`, `ungrounded_number`) over what the agent may say: query results, the customer's words and the date parts of dates in results, plus a check that a capitalised word in mid-sentence (a merchant) is in a query result or the customer's words. A counting phrase, a derived figure or a proper name the agent adds costs a retry, then a code-written question. The first word of a sentence and short all-capital codes are not checked, so a merchant written at the start of a sentence is not verified. Real traffic will say how often good replies are refused.
 - **A reply to the confirmation card that is neither yes nor no goes back to the agent** (a correction such as "no, it was another one for about 80"); an affirmative with extra words ("yes, that one") only gets the plain question again, because only a plain yes authorizes. Unit-tested with a scripted classifier; how the real classifier splits these is not seen.
