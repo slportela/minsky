@@ -14,7 +14,6 @@ from minsky_api.agent.wording import (
     human_amount,
     human_date,
     policy_reason,
-    safe_sentence,
     transaction_noun,
 )
 from minsky_api.tools.schemas import TransactionView
@@ -99,6 +98,13 @@ def _escalation_question(language: str) -> str:
 def offer_escalation_without_match(language: str, reason: str) -> str:
     """The search ended without a transaction to dispute (not found, or outside what the assistant does)."""
     pt = _pt(language)
+    if reason == "unclear":
+        lead = (
+            "Não estou conseguindo avançar com este passo, e peço desculpas pelo incômodo."
+            if pt
+            else "No estoy logrando que avancemos con este paso, y lamento las molestias."
+        )
+        return f"{lead} {_escalation_question(language)}"
     if reason == "out_of_scope":
         if pt:
             return (
@@ -123,19 +129,6 @@ def repeat_offer(language: str, question: str) -> str:
     return f"{'Não ficou claro.' if _pt(language) else 'No me quedó claro.'} {question}"
 
 
-def declined_escalation(language: str) -> str:
-    """The customer said no to a person. Nothing was registered, and the door stays open."""
-    if _pt(language):
-        return (
-            "Tudo bem, não vou passar o seu caso para um atendente. Se lembrar de mais alguma coisa sobre a "
-            "cobrança ou mudar de ideia, escreva aqui e retomamos."
-        )
-    return (
-        "Está bien, no pasaré tu caso a un asesor. Si recuerdas algo más del cargo o cambias de opinión, "
-        "escríbeme y lo retomamos."
-    )
-
-
 def handoff_done(language: str, handoff_id: str, *, card_blocked: bool = False) -> str:
     """A person has the case, read back from the case queue: what they have and what the customer need not do."""
     blocked = f"{fallback_sentence(language, {'card_blocked': True})} " if card_blocked else ""
@@ -148,17 +141,6 @@ def handoff_done(language: str, handoff_id: str, *, card_blocked: bool = False) 
         f"{blocked}Un asesor de nuestro equipo tomará tu caso y ya tiene el resumen de lo que hablamos, así que no "
         f"hace falta que repitas nada. Tu referencia es {handoff_id}."
     )
-
-
-def ask_again(language: str) -> str:
-    return safe_sentence("ask_again", language, {})
-
-
-def already_done(language: str, case_ref: str) -> str:
-    """After a case exists: say so with its real reference. Without one there is nothing to say: the search resumes."""
-    if _pt(language):
-        return f"O seu caso já está registrado com a referência {case_ref}. Se precisar de algo mais, escreva aqui."
-    return f"Tu caso ya quedó registrado con la referencia {case_ref}. Si necesitas algo más, escríbeme aquí."
 
 
 def need_more_detail(language: str) -> str:

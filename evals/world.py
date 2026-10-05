@@ -74,8 +74,10 @@ class MemoryBank(FixtureBank):
 def facts_from_case(case: Case) -> WorldFacts:
     info = case.user_scenario.known_info
     label_source = info.get("label_source", "policy")
-    if label_source not in {"policy", "tool_denial", "authentication", "data", "no_match"}:
-        raise ValueError(f"{case.id}: label_source must be policy, tool_denial, authentication, data or no_match")
+    if label_source not in {"policy", "tool_denial", "authentication", "data", "no_match", "unclear_replies"}:
+        raise ValueError(
+            f"{case.id}: label_source must be policy, tool_denial, authentication, data, no_match or unclear_replies"
+        )
     if label_source == "tool_denial":
         _require(info, "other_customer_id", "other_transaction_id")
     elif label_source == "no_match":
@@ -90,7 +92,7 @@ def facts_from_case(case: Case) -> WorldFacts:
             "transaction_status",
             "transaction_date",
         )
-    elif label_source == "policy":
+    elif label_source in {"policy", "unclear_replies"}:
         _require(
             info,
             "rule_id",
@@ -152,9 +154,14 @@ def check_label(case: Case, facts: WorldFacts) -> None:
     if decision.rule_id != facts.rule_id:
         raise ValueError(f"{case.id}: policy decides {decision.rule_id}, case says {facts.rule_id}")
     if case.llm_faults:
-        # Injected provider outage: facts/rule stay policy-true; only the graded outcome is escalate.
+        # Injected provider outage: facts/rule stay policy-true; the graded outcome is abstain (maintenance message).
+        if expected != Outcome.ABSTAIN:
+            raise ValueError(f"{case.id}: an llm_faults case must expect abstain")
+        return
+    if facts.label_source == "unclear_replies":
+        # The customer never gives a plain yes or no: facts and rule stay policy-true, the outcome is a handoff.
         if expected != Outcome.ESCALATE:
-            raise ValueError(f"{case.id}: an llm_faults case must expect escalate")
+            raise ValueError(f"{case.id}: a case whose customer never answers yes or no must expect escalate")
         return
     from_policy = _ROUTE_OUTCOME[decision.route]
     if expected != from_policy:

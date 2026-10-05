@@ -27,6 +27,12 @@ class Settings(BaseSettings):
     # tool-using agent finds the transaction (docs/agentic_dispute_agent.md). Chosen per new conversation.
     agent_mode: Literal["workflow", "agentic"] = "workflow"
     agent_max_tool_calls: PositiveInt = 5  # queries and proposals per customer message
+    # Replies in a row that are not a plain yes or no to the same question. At this one the conversation goes to a
+    # person instead of asking again: with 3 the customer is told twice how to answer first.
+    max_unclear_replies: PositiveInt = 3
+    # Times the assistant may offer a human agent in one conversation when it cannot identify a charge. A "no" goes
+    # back to asking for the charge; after the last offer the conversation ends without a case.
+    max_handoff_offers: PositiveInt = 2
     test_sessions: SecretStr | None = None
     # Back-office agents for /console: JSON mapping credential -> {agent_id, expires_at}. Separate from
     # customer sessions, so a customer credential can never read the case queue.

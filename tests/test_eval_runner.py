@@ -37,7 +37,12 @@ SCRIPTED = (
     "dispute-fraud-block-es",
     "dispute-fraud-no-block-es",
     "dispute-already-disputed-es",
-    "model-outage-handoff-es",
+    "dispute-natural-reply-then-yes-es",
+    "dispute-unclear-replies-handoff-es",
+    "dispute-offer-declined-then-dispute-es",
+    "dispute-offer-answered-with-the-charge-es",
+    "dispute-follow-up-after-case-es",
+    "model-outage-maintenance-es",
 )
 
 
@@ -480,12 +485,12 @@ class _ProviderLLM:
 
 
 async def test_the_real_extractor_closes_the_client_behind_an_injected_fault(monkeypatch: pytest.MonkeyPatch) -> None:
-    """`python -m evals.runner --extractor real` crashed on model-outage-handoff-es, the last case: the trial closes
+    """`python -m evals.runner --extractor real` crashed on model-outage-maintenance-es, the last case: the trial closes
     the client of its llm, and the fault wrapper around it had none. The exception came out of a `finally`, so it
     ended the whole run and lost the summary and artifacts of every trial before it."""
     _ProviderLLM.instances = []
     monkeypatch.setattr("evals.runner.LLM", _ProviderLLM)
-    record = await run_trial(_case("model-outage-handoff-es"), extractor="real", budget=_BUDGET)
+    record = await run_trial(_case("model-outage-maintenance-es"), extractor="real", budget=_BUDGET)
     assert record.status == "passed", (record.status, record.error_class, record.grade)
     assert len(_ProviderLLM.instances) == 1
     assert _ProviderLLM.instances[0].client.closed is True
@@ -506,10 +511,13 @@ async def test_the_agentic_real_run_survives_the_outage_case_and_closes_its_clie
     """Same crash, agentic mode: the first model call is `step`, and the fault wrapper must fault it too."""
     _ProviderLLM.instances = []
     monkeypatch.setattr("evals.runner.LLM", _ProviderLLM)
-    record = await run_trial(_case("model-outage-handoff-es"), extractor="real", budget=_BUDGET, agent_mode="agentic")
+    record = await run_trial(
+        _case("model-outage-maintenance-es"), extractor="real", budget=_BUDGET, agent_mode="agentic"
+    )
     assert record.status == "passed", (record.status, record.error_class, record.grade)
     assert len(_ProviderLLM.instances) == 1 and _ProviderLLM.instances[0].client.closed is True
-    assert any("HO-" in text for role, text in record.messages if role == "agent")  # the degraded path handed off
+    replies = [text for role, text in record.messages if role == "agent"]
+    assert any("mantenimiento" in text for text in replies) and not any("HO-" in text for text in replies)  # no case
 
 
 # ---------------------------------------------------------------- --workers
@@ -617,3 +625,11 @@ def test_with_workers_a_real_run_shares_one_cap_between_them(
     made.clear()
     assert runner.main([*argv, "--workers", "1"]) == 0
     assert made == []  # one worker keeps the plain in-process budget
+
+
+def test_a_case_whose_customer_never_answers_yes_or_no_must_expect_escalate() -> None:
+    data = yaml.safe_load((CASES / "dev" / "dispute-unclear-replies-handoff-es.yaml").read_text())
+    data["evaluation_criteria"]["expected_outcome"] = "resolve"
+    case = Case.model_validate(data)
+    with pytest.raises(ValueError, match="never answers yes or no must expect escalate"):
+        check_label(case, facts_from_case(case))

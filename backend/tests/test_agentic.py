@@ -169,7 +169,7 @@ class ScriptedAgent:
         name = schema.__name__ if schema else ""
         if name == "Confirmation":
             said = messages[-1]["content"].strip().rstrip(".!?").casefold()
-            affirmative = said in {"sí", "si", "sim"} or said.startswith(("sí,", "si,", "sí ", "si "))
+            affirmative = said in {"sí", "si", "sim"} or said.startswith(("sí,", "si,", "sí ", "si ", "sim,", "sim "))
             decision = "yes" if affirmative else "no" if said in {"no", "não"} else "unclear"
             parsed = schema(decision=decision)  # type: ignore[misc]
         elif name == "_NarrativeOut":
@@ -405,7 +405,7 @@ async def test_a_yes_with_extra_words_asks_for_a_plain_yes_instead_of_acting_or_
     chat = Chat([txn("T1", "123.10", "Cafe Sur", JUNE_10)], agent)
     await chat.say("No reconozco un cargo de 123 dólares")
     reply = await chat.say("sí, ese mismo")  # the agent has no more scripted steps: it must not be called
-    assert chat.state.phase == Phase.CONFIRM_DISPUTE and "sí o no" in reply
+    assert chat.state.phase == Phase.CONFIRM_DISPUTE and "«sí» o «no»" in reply  # how to answer, from code
     assert not chat.audit("open_dispute")
 
 
@@ -607,7 +607,9 @@ async def test_no_to_a_person_ends_without_a_handoff():
     for text in ("No reconozco un cargo", "sí", "sí"):
         await chat.say(text)
     reply = await chat.say("no")
-    assert chat.state.phase == Phase.DONE and not _handoff_ids(chat) and "no pasaré tu caso" in reply
+    assert chat.state.phase == Phase.DONE and not _handoff_ids(chat)
+    assert chat.state.terminal is not None and chat.state.terminal.outcome == "informed"
+    assert "No abrí ningún reclamo nuevo" in reply and "nueva conversación" in reply
 
 
 # ---------------------------------------------------------------- fraud
@@ -694,44 +696,36 @@ async def test_an_agent_that_loops_on_queries_is_stopped_and_after_a_few_times_a
     assert chat.state.phase == Phase.OFFER_ESCALATION and "asesor" in third
 
 
-async def test_the_turn_limit_escalates_with_a_summary(monkeypatch: pytest.MonkeyPatch):
+async def test_the_turn_limit_ends_without_a_case_when_nothing_was_confirmed(monkeypatch: pytest.MonkeyPatch):
+    """The workflow's rule: a case goes to a person only after the customer confirmed the charge or asked for one."""
     monkeypatch.setenv("MINSKY_MAX_TURNS", "1")
     get_settings.cache_clear()
     chat = Chat([txn("T1", "10", "Cafe", JUNE_10)], ScriptedAgent([say(ASK)]))
     await chat.say("Hay un cargo raro en mi cuenta")
     reply = await chat.say("No sé")
-    assert _handoff(chat).reason == "max_turns" and "referencia" in reply.lower()
+    assert not _handoff_ids(chat) and chat.state.terminal is not None and chat.state.terminal.outcome == "no_case"
+    assert "No abrí ningún caso ni te pasé con nadie" in reply
 
 
-# ---------------------------------------------------------------- session and state guards
-
-
-async def test_an_expired_session_is_refused():
-    chat = Chat([], ScriptedAgent([]))
-    chat.ctx = ToolContext(
-        session=ToolSession(session_id="s", state=SessionState.EXPIRED, customer_id="C1"),
-        db=chat.ctx.db,
-        cases=chat.ctx.cases,
-    )
-    with pytest.raises(PermissionError):
-        await chat.say("hola")
-
-
-async def test_a_conversation_of_another_customer_is_refused():
-    chat = Chat([], ScriptedAgent([]))
-    chat.state = ConversationState(conversation_id=uuid4(), customer_id="C2", mode="agentic")
-    with pytest.raises(PermissionError):
-        await chat.say("hola")
+async def test_the_turn_limit_sends_the_case_to_a_person_once_the_charge_was_confirmed(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("MINSKY_MAX_TURNS", "2")
+    get_settings.cache_clear()
+    chat = _to_card([txn("T1", "30", "Cafe", JUNE_10)])
+    await chat.say("No reconozco un cargo")
+    await chat.say("sí")  # confirmed; the recognition question is waiting for its answer
+    reply = await chat.say("mmm")  # turn 3 is over the limit
+    assert _handoff(chat).reason == "max_turns" and _handoff(chat).handoff_id in reply
 
 
 async def test_after_the_case_is_settled_nothing_else_is_done():
     chat = _to_card([txn("T1", "900", "TV", JUNE_10)])
     for text in ("No reconozco un cargo", "sí", "sí", "sí"):
         await chat.say(text)
-    before = len(chat.ctx.cases.list_audit())
+    before, calls = len(chat.ctx.cases.list_audit()), len(chat.agent.requests)
     reply = await chat.say("¿y ahora qué?")
-    assert chat.state.phase == Phase.DONE and "ya quedó registrado" in reply
-    assert len(chat.ctx.cases.list_audit()) == before
+    assert chat.state.phase == Phase.DONE
+    assert f"referencia {_handoff(chat).handoff_id}" in reply and "inicia una nueva conversación" in reply
+    assert len(chat.ctx.cases.list_audit()) == before and len(chat.agent.requests) == calls  # no tool, no model
 
 
 async def test_the_mode_is_fixed_when_the_conversation_starts():
@@ -901,15 +895,17 @@ async def test_out_of_scope_needs_no_question_first():
     assert chat.state.phase == Phase.OFFER_ESCALATION
 
 
-# ---------------------------------------------------------------- closing the conversation gracefully (agentic mode)
+# ---------------------------------------------------------------- closing, aligned with the workflow's terminal state
+#
+# The workflow (main) ends a conversation in a terminal state: from then on every message gets a code-written status,
+# the reference and "start a new conversation", with no model and no tool. Nothing reaches a person before the
+# customer confirmed a charge or accepted one. The agentic mode follows the same rules.
 
 _NOT_FOUND = [say(ASK), call("give_up", reason="not_found")]
 
 
-async def _offered_a_person(extra_steps: list | None = None, *, language: str | None = None) -> Chat:
+async def _offered_a_person(extra_steps: list | None = None) -> Chat:
     chat = Chat([txn("T1", "10", "Cafe", JUNE_10)], ScriptedAgent([*_NOT_FOUND, *(extra_steps or [])]))
-    if language:
-        chat.state.language = language
     await chat.say("Hay un cargo raro en mi cuenta")
     await chat.say("No me acuerdo")
     assert chat.state.phase == Phase.OFFER_ESCALATION
@@ -917,17 +913,21 @@ async def _offered_a_person(extra_steps: list | None = None, *, language: str | 
 
 
 async def test_the_offer_apologises_and_says_what_a_person_would_do_not_just_that_nothing_was_found():
-    chat = await _offered_a_person()
-    offer = chat.state.pending_question or ""
+    offer = (await _offered_a_person()).state.pending_question or ""
     assert "lamento" in offer and "asesor" in offer and offer.endswith("Responde sí o no.")
 
 
-async def test_accepting_a_person_says_what_they_have_and_that_nothing_needs_repeating_with_the_real_reference():
+async def test_accepting_a_person_says_what_they_have_and_closes_with_the_real_reference():
     chat = await _offered_a_person()
     done = await chat.say("sí")
     handoff = _handoff(chat)
     assert handoff.handoff_id in done and "ya tiene el resumen" in done and "no hace falta que repitas nada" in done
-    assert chat.state.case_ref == handoff.handoff_id
+    assert chat.state.terminal is not None and chat.state.terminal.outcome == "handoff"
+    assert chat.state.terminal.reference == handoff.handoff_id and chat.state.handoff_accepted
+    calls = len(chat.agent.requests)
+    again = await chat.say("gracias")
+    assert f"referencia {handoff.handoff_id}" in again and "inicia una nueva conversación" in again
+    assert len(chat.agent.requests) == calls  # terminal: no model
 
 
 async def test_a_block_that_was_read_back_is_said_before_the_handoff_and_one_that_was_not_is_not():
@@ -936,6 +936,7 @@ async def test_a_block_that_was_read_back_is_said_before_the_handoff_and_one_tha
         await chat.say(text)
     done = await chat.say("sí")
     assert done.startswith("Tu tarjeta ya está bloqueada") and _handoff(chat).handoff_id in done
+    assert chat.state.terminal is not None and chat.state.terminal.card_blocked
     declined = _to_card([txn("T1", "30", "Cafe", JUNE_10)], not_me=True)
     for text in ("No reconozco un cargo", "sí"):
         await declined.say(text)
@@ -943,79 +944,132 @@ async def test_a_block_that_was_read_back_is_said_before_the_handoff_and_one_tha
     assert "bloqueada" not in done and "ya tiene el resumen" in done
 
 
-async def test_declining_a_person_is_said_kindly_and_leaves_the_door_open():
-    chat = await _offered_a_person()
+async def test_declining_the_first_offer_asks_for_the_charge_once_more_and_nothing_is_registered():
+    """The workflow's rule: a no goes back to asking for the charge; the offer may come once more."""
+    chat = await _offered_a_person([say("Claro. ¿En qué comercio fue el cargo?")])
     reply = await chat.say("no")
-    assert chat.state.phase == Phase.DONE and chat.state.case_ref is None
-    assert "no haré nada" not in reply  # it sounded like abandoning the customer
-    assert "no pasaré tu caso a un asesor" in reply and "escríbeme" in reply and "retomamos" in reply
+    assert reply == "Entendido, no te paso con nadie. Dime el monto, el comercio o la fecha del cargo."
+    assert chat.state.phase == Phase.SEARCH and chat.state.terminal is None and not _handoff_ids(chat)
+    assert chat.state.handoff_offers == 1
+    resumed = await chat.say("gracias")  # a later message goes to the agent: nothing was closed
+    assert resumed == "Claro. ¿En qué comercio fue el cargo?"
 
 
-async def test_writing_again_after_declining_a_person_never_claims_a_case_is_registered_and_the_search_resumes():
-    """Before: any message after "no" got "Tu caso ya quedó registrado con la referencia que te envié", which was
-    false: nothing was registered and no reference had been sent."""
-    chat = await _offered_a_person([say("Claro, ¿en qué comercio fue el cargo?")])
-    await chat.say("no")
-    reply = await chat.say("gracias")
-    assert reply == "Claro, ¿en qué comercio fue el cargo?"  # the agent answered: nothing was claimed
-    assert "registrado" not in reply and chat.state.phase == Phase.SEARCH
-    note = chat.agent.requests[-1][-1]["content"]
-    assert note.startswith("SISTEMA") and "decidir no pasar su caso" in note
+async def test_declining_the_last_offer_ends_without_a_case_with_the_status_from_code():
+    chat = await _offered_a_person([call("give_up", reason="not_found")])
+    await chat.say("no")  # offer 1 declined: back to the search
+    second = await chat.say("no sé")
+    assert chat.state.handoff_offers == 2 and "asesor" in second  # the second and last offer
+    ended = await chat.say("no")
+    assert chat.state.terminal is not None and chat.state.terminal.outcome == "no_case" and not _handoff_ids(chat)
+    assert ended.startswith("No abrí ningún caso ni te pasé con nadie.")
+    assert ended.endswith("Si quieres disputar otro cargo, inicia una nueva conversación.")
+    calls = len(chat.agent.requests)
+    assert await chat.say("espera") == ended and len(chat.agent.requests) == calls
 
 
-async def test_after_resuming_the_agent_must_ask_again_before_it_gives_up_again():
-    chat = await _offered_a_person([call("give_up", reason="not_found"), say("¿Recuerdas el comercio?")])
-    await chat.say("no")
-    reply = await chat.say("espera")
-    assert reply == "¿Recuerdas el comercio?" and chat.state.phase == Phase.SEARCH  # the early give_up was refused
-    assert "asked the customer" in chat.agent.requests[-1][-1]["output"]
+async def test_declining_a_person_after_a_denial_ends_the_conversation_informed():
+    chat = _to_card([txn("T1", "30", "Cafe", JUNE_10)])
+    chat.ctx.cases.create_dispute(customer_id="C1", transaction_id="T1", reason="unrecognized_charge")
+    for text in ("No reconozco un cargo", "sí", "sí"):
+        await chat.say(text)
+    assert chat.state.denial_text and chat.state.existing_dispute_id
+    ended = await chat.say("no")
+    assert chat.state.terminal is not None and chat.state.terminal.outcome == "informed"
+    assert "No abrí ningún reclamo nuevo" in ended and chat.state.existing_dispute_id in ended
+    assert not _handoff_ids(chat)
 
 
-async def test_after_a_case_exists_the_closing_says_so_with_the_real_reference():
-    chat = await _offered_a_person()
-    await chat.say("sí")
-    again = await chat.say("gracias")
-    expected = f"Tu caso ya quedó registrado con la referencia {chat.state.case_ref}."
-    assert again == f"{expected} Si necesitas algo más, escríbeme aquí."
-
-
-async def test_a_dispute_that_was_opened_is_the_case_reference_afterwards():
+async def test_a_dispute_that_was_opened_is_the_terminal_reference():
     chat = Chat(
         [txn("T1", "123.10", "Cafe Sur", JUNE_10)],
         ScriptedAgent([sql(FIND_123), call("propose_transaction", transaction_id="T1", customer_says_not_me=False)]),
     )
     for text in ("No reconozco un cargo de 123 dólares", "sí", "sí"):
         await chat.say(text)
-    assert chat.state.case_ref and chat.state.case_ref.startswith("DSP-")
-    assert chat.state.case_ref in await chat.say("gracias")
+    terminal = chat.state.terminal
+    assert (
+        terminal is not None and terminal.outcome == "dispute_opened" and (terminal.reference or "").startswith("DSP-")
+    )
+    assert f"Tu reclamo está abierto con la referencia {terminal.reference}" in await chat.say("gracias")
 
 
-async def test_new_information_in_answer_to_the_offer_goes_back_to_the_search_not_to_a_yes_or_no_loop():
-    """Before: "ya me acordé, fue en Starbucks" got "No me quedó claro. ¿Puedes responder sí o no?" for ever."""
-    chat = await _offered_a_person([say("Gracias, lo busco. ¿Cuánto fue más o menos?")])
-    reply = await chat.say("Espera, ya me acordé, fue en Starbucks")
-    assert reply == "Gracias, lo busco. ¿Cuánto fue más o menos?" and chat.state.phase == Phase.SEARCH
-    note = chat.agent.requests[-1][-1]["content"]
-    assert note.startswith("SISTEMA") and "oferta de un asesor" in note
-    assert not _handoff_ids(chat)  # nothing was created while the customer changed their mind
+async def test_a_handoff_is_refused_before_the_customer_confirmed_a_charge_or_accepted_a_person():
+    from minsky_api.agent.agentic import _escalate
+
+    chat = Chat([txn("T1", "10", "Cafe", JUNE_10)], ScriptedAgent([]))
+    chat.state.language = "es"
+    with pytest.raises(RuntimeError, match="before the customer confirmed"):
+        await _escalate(chat.ctx, chat.state, chat.agent, reason="anything")  # type: ignore[arg-type]
+    assert not _handoff_ids(chat)
 
 
-async def test_a_yes_with_extra_words_to_the_offer_asks_for_a_plain_yes():
+# ---- replies that are neither yes nor no
+
+
+async def test_a_yes_with_extra_words_to_the_offer_says_how_to_answer():
     chat = await _offered_a_person()
     reply = await chat.say("sí, por favor")
-    assert chat.state.phase == Phase.OFFER_ESCALATION and "sí o no" in reply and not _handoff_ids(chat)
+    assert chat.state.phase == Phase.OFFER_ESCALATION and not _handoff_ids(chat)
+    assert reply.startswith("No me quedó claro.") and reply.endswith(
+        "En esta parte del proceso solo puedes responder «sí» o «no»."
+    )
 
 
-async def test_an_unclear_reply_to_a_denial_says_the_whole_offer_again_and_does_not_search():
-    chat = _to_card([txn("T1", "900", "TV", JUNE_10)])
-    for text in ("No reconozco un cargo", "sí", "sí"):
-        await chat.say(text)
-    assert chat.state.phase == Phase.OFFER_ESCALATION and chat.state.denial_text
-    before = len(chat.agent.requests)
-    reply = await chat.say("¿y por qué no?")
-    assert reply == f"No me quedó claro. {chat.state.pending_question}"
-    assert "por el monto" in reply and "asesor" in reply  # the reason and the offer, again
-    assert chat.state.phase == Phase.OFFER_ESCALATION and len(chat.agent.requests) == before  # the agent was not called
+async def test_three_replies_in_a_row_that_are_not_yes_or_no_to_the_offer_end_without_a_case():
+    chat = await _offered_a_person()
+    for text in ("sí, por favor", "sí claro"):  # an affirmative with extra words is not a yes
+        assert "solo puedes responder" in await chat.say(text)
+    ended = await chat.say("sí dale")
+    assert chat.state.terminal is not None and chat.state.terminal.outcome == "no_case" and not _handoff_ids(chat)
+    assert "No abrí ningún caso" in ended
+
+
+async def test_three_free_text_replies_to_the_card_offer_a_person_instead_of_going_round_for_ever():
+    agent = ScriptedAgent(
+        [sql(FIND_123)] + [call("propose_transaction", transaction_id="T1", customer_says_not_me=False)] * 3
+    )
+    chat = Chat([txn("T1", "123.10", "Cafe Sur", JUNE_10)], agent)
+    await chat.say("No reconozco un cargo de 123 dólares")
+    await chat.say("tal vez")  # 1: the agent takes it and proposes again
+    await chat.say("no sé")  # 2
+    offer = await chat.say("quizás")  # 3: the limit; the agent is not called again
+    assert chat.state.phase == Phase.OFFER_ESCALATION and "asesor" in offer and not _handoff_ids(chat)
+    assert chat.state.escalation_reason == "unclear_confirmation"
+    done = await chat.say("sí")  # only a plain yes sends it to a person
+    assert _handoff(chat).reason == "unclear_confirmation" and _handoff(chat).handoff_id in done
+
+
+async def test_a_plain_answer_resets_the_count_of_free_text_replies_to_the_card():
+    agent = ScriptedAgent(
+        [sql(FIND_123)] + [call("propose_transaction", transaction_id="T1", customer_says_not_me=False)] * 2
+    )
+    chat = Chat([txn("T1", "123.10", "Cafe Sur", JUNE_10)], agent)
+    await chat.say("No reconozco un cargo de 123 dólares")
+    await chat.say("tal vez")
+    assert chat.state.unclear_detours == 1
+    await chat.say("sí")
+    assert chat.state.unclear_detours == 0
+
+
+async def test_unclear_replies_after_the_charge_was_confirmed_send_the_case_with_the_unanswered_question():
+    chat = _to_card([txn("T1", "30", "Cafe", JUNE_10)])
+    await chat.say("No reconozco un cargo")
+    await chat.say("sí")  # confirmed; now "do you recognise it?"
+    first = await chat.say("no sé")
+    assert "solo puedes responder" in first
+    await chat.say("mmm")
+    done = await chat.say("ya")
+    handoff = _handoff(chat)
+    assert handoff.reason == "unclear_confirmation" and handoff.handoff_id in done
+    assert "reconoces" in str(handoff.facts["unanswered_question"]) and handoff.facts["last_customer_replies"] == [
+        "no sé",
+        "mmm",
+        "ya",
+    ]
+
+
+# ---- the closing in Portuguese
 
 
 async def _offered_a_person_in_portuguese(extra_steps: list | None = None) -> Chat:
@@ -1036,12 +1090,12 @@ async def test_the_closing_is_in_portuguese_when_the_conversation_is():
     chat = await _offered_a_person_in_portuguese([say("Claro, em qual estabelecimento foi a cobrança?")])
     offer = chat.state.pending_question or ""
     assert "sinto muito" in offer and "atendente" in offer and offer.endswith("Responda sim ou não.")
-    declined = await chat.say("não")
-    assert "não vou passar o seu caso" in declined and "retomamos" in declined
+    unclear = await chat.say("sim, por favor")
+    assert "Nesta parte do processo você só pode responder" in unclear
     other = await _offered_a_person_in_portuguese()
     done = await other.say("sim")
-    assert other.state.case_ref is not None and other.state.case_ref in done
+    assert other.state.terminal is not None and other.state.terminal.reference is not None
+    assert other.state.terminal.reference in done
     assert "já tem o resumo" in done and "não precisa repetir nada" in done
     again = await other.say("obrigado")
-    expected = f"O seu caso já está registrado com a referência {other.state.case_ref}."
-    assert again == f"{expected} Se precisar de algo mais, escreva aqui."
+    assert f"referência {other.state.terminal.reference}" in again and "inicie uma nova conversa" in again

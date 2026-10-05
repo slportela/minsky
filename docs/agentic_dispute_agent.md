@@ -50,14 +50,15 @@ The agent never opens, blocks or escalates. It has no tool for that. It ends SEA
 
 ### Closing the conversation
 
-What the customer reads when the search ends is written by code (`agent/agentic_wording.py`, es and pt), from what was verified. The agent never writes it.
+The agentic mode closes like the workflow does (`main`: terminal state, `wording.terminal_reply`): once a conversation ends, every later message gets a code-written status, the reference and "start a new conversation", with no model and no tool call. What the customer reads when the search ends is written by code (`agent/agentic_wording.py`, es and pt), from what was verified; the agent never writes it.
 
-- **Offer of a person** (nothing found, or not a dispute): says it could not find the transaction and is sorry, then asks yes or no. `give_up(not_found)` is refused until the agent has asked the customer something.
-- **Yes:** says a person will take the case, that they already have the summary of the conversation so nothing needs repeating, and the real reference (read back from the case queue). If a card block was read back it is said first, never otherwise.
-- **No:** says kindly that nothing will be passed on and that the customer can come back. Nothing is registered, and any later message **resumes the search** instead of claiming a case exists.
-- **After a case exists** (a handoff or a dispute): "your case is registered with reference X", with the real reference (`ConversationState.case_ref`).
-- **Something other than yes or no to the offer:** if the offer was "I could not find it", the words are new information and go back to the agent; if it was a policy denial, the whole offer is said again (the reason and the question), since there is nothing to search.
-- The workflow's own closing texts (`done_fallback`, `safe_sentence`) are untouched. `done_fallback` says "your case is registered with the reference I sent you" even when nothing was registered; it only appears in the workflow as the fallback when the model cannot phrase a reply.
+- **Nothing reaches a person before the customer confirms a charge or accepts a person** (`txn_confirmed`, `handoff_accepted`; `_require_confirmed_case` fails loudly otherwise). At the turn limit with neither, the conversation ends without a case.
+- **Offer of a person** (nothing found, not a dispute, or too many replies that are not yes or no): says it could not find the transaction and is sorry, then asks yes or no. `give_up(not_found)` is refused until the agent has asked the customer something. Offers are bounded (`max_handoff_offers`): a no goes back to the search once ("no te paso con nadie, dime el monto, el comercio o la fecha"), and after the last offer the conversation ends without a case.
+- **Yes:** says a person will take the case, that they already have the summary so nothing needs repeating, and the real reference (read back from the case queue). A card block is said first only if it was read back.
+- **No after a policy denial:** the conversation ends ("informed": no new dispute opened, and the existing one if there is one).
+- **Replies that are neither yes nor no:** a plain yes or no is the only consent (`agent.consent`); anything else gets the question again with "only yes or no works here" (`with_only_yes_no`). At `max_unclear_replies` the conversation goes to a person as in the workflow: before the charge is confirmed a person is offered, while an offer is open it ends without a case, after the charge is confirmed the case goes to the queue with the unanswered question. A free-text reply to the card goes to the agent (a correction is heard) but counts toward the same limit. If the offer was "I could not find it", other words are new information and go back to the agent.
+- **After a case exists** the terminal reply says so with the real reference (`Terminal.reference`).
+- The shared helpers (`_finish`, `_ask`, `_consent`, the guard, `terminal_reply`) are the workflow's own; this mode does not keep a second set. A first version of this mode reopened the search when the customer wrote after declining; `main` decided on a terminal state, and this mode follows it.
 - Portuguese was written for this and has no source data or reviewer (a stated limitation of the project).
 
 ## 4. Query sandbox

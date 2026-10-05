@@ -72,3 +72,30 @@ def test_search_prompt_v5_proposes_a_near_match_with_a_note_instead_of_asking_ab
     assert "aunque difiera un poco" in text and "dila en `note`" in text
     assert "propose_transaction(transaction_id, customer_says_not_me, note)" in text
     assert "sin proponer nada" in text  # nothing fits: say what was not found and ask, do not propose
+
+
+def test_the_extractor_is_told_what_day_it_is_so_relative_dates_can_resolve():
+    """ "Un cargo de ayer" came back with no date because the model never knew the date. It now gets the system's
+    `today` as a message of its own; the instructions stay the same text."""
+    import asyncio
+    from typing import Any
+
+    from minsky_api.agent.extract import DisputeDetails, extract_dispute_details
+    from minsky_api.config import get_settings
+    from minsky_api.llm.client import LLMResult
+
+    seen: dict[str, Any] = {}
+
+    class _Recorder:
+        async def respond(self, instructions: str, messages: list[dict[str, str]], **kwargs: Any) -> LLMResult[Any]:
+            seen.update(instructions=instructions, messages=messages)
+            parsed = DisputeDetails()
+            return LLMResult(text="", parsed=parsed, model="m", input_tokens=0, output_tokens=0, latency_ms=0.0)
+
+    asyncio.run(extract_dispute_details(_Recorder(), "quiero reclamar un cargo de ayer"))  # type: ignore[arg-type]
+    today = get_settings().today.isoformat()
+    assert seen["messages"] == [
+        {"role": "user", "content": f"Fecha de hoy: {today}"},
+        {"role": "user", "content": "quiero reclamar un cargo de ayer"},
+    ]
+    assert today not in seen["instructions"] and "ayer" in seen["instructions"]

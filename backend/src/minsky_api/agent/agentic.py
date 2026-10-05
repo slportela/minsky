@@ -17,9 +17,6 @@ from typing import Any
 from pydantic import ValidationError
 
 from minsky_api.agent.agentic_wording import (
-    already_done,
-    ask_again,
-    declined_escalation,
     denial,
     handoff_done,
     need_more_detail,
@@ -30,13 +27,21 @@ from minsky_api.agent.agentic_wording import (
     transaction_card,
 )
 from minsky_api.agent.language import LanguageDetector, default_language_detector
-from minsky_api.agent.orchestrator import _ask, _classify_first_message, _consent, _get_owned_txn, _lang
+from minsky_api.agent.orchestrator import (
+    _ask,
+    _classify_first_message,
+    _consent,
+    _finish,
+    _get_owned_txn,
+    _lang,
+    _require_confirmed_case,
+)
 from minsky_api.agent.prompts import render
 from minsky_api.agent.sandbox import SandboxError, fold_text
 from minsky_api.agent.speak import action_claims, ungrounded_number
 from minsky_api.agent.state import ConversationState, Phase
 from minsky_api.agent.summary import build_handoff_facts
-from minsky_api.agent.wording import fallback_sentence
+from minsky_api.agent.wording import fallback_sentence, handoff_offer_declined, terminal_reply, with_only_yes_no
 from minsky_api.config import get_settings
 from minsky_api.identity.session import SessionState
 from minsky_api.llm.client import LLM, ToolCall, ToolSpec
@@ -256,9 +261,25 @@ async def _run_tool(ctx: ToolContext, state: ConversationState, call: ToolCall, 
 
 
 def _offer_escalation_without_match(state: ConversationState, reason: str) -> str:
-    state.escalation_reason = "out_of_scope" if reason == "out_of_scope" else "search_exhausted"
+    """Offer a person because no transaction could be identified. The customer decides; the offers are bounded."""
+    state.handoff_offers += 1
+    if state.handoff_offers > get_settings().max_handoff_offers:
+        return _end_without_case(state)
+    state.escalation_reason = {"out_of_scope": "out_of_scope", "unclear": "unclear_confirmation"}.get(
+        reason, "search_exhausted"
+    )
     state.acts.append("offer_handoff")
     return _ask(state, Phase.OFFER_ESCALATION, offer_escalation_without_match(_lang(state), reason))
+
+
+def _end_without_case(state: ConversationState) -> str:
+    """End the conversation with nothing registered: the code-written status, like the workflow's."""
+    if state.denial_text:  # the customer was told why the dispute cannot go ahead and wants no person
+        _finish(state, "informed", dispute_id=state.existing_dispute_id)
+    else:
+        _finish(state, "no_case")
+    state.acts.append("abort")
+    return terminal_reply(_lang(state), state.terminal)
 
 
 async def _phase_search(
@@ -332,10 +353,13 @@ async def _escalate(
     rule_id: str | None = None,
     actions: tuple[str, ...] = (),
     card_blocked: bool | None = None,
+    extra_facts: dict[str, object] | None = None,
 ) -> str:
+    _require_confirmed_case(state)  # no case reaches a person before the customer confirmed a charge or a person
     facts = await build_handoff_facts(ctx, state, llm, rule_id=rule_id)
     if card_blocked is not None:
         facts["card_blocked"] = card_blocked
+    facts.update(extra_facts or {})
     result = await create_handoff(
         ctx,
         CreateHandoffArgs(
@@ -346,16 +370,36 @@ async def _escalate(
             actions=actions,
         ),
     )
-    state.phase = Phase.DONE
-    state.pending_question = None
-    state.case_ref = result.handoff.handoff_id
+    _finish(state, "handoff", result.handoff.handoff_id, card_blocked=card_blocked is True)
     state.acts.append("handoff")
     return handoff_done(_lang(state), result.handoff.handoff_id, card_blocked=card_blocked is True)
 
 
-def _repeat_question(state: ConversationState) -> str:
-    state.acts.append("ask_again")
-    return ask_again(_lang(state))
+async def _unclear_reply(ctx: ToolContext, state: ConversationState, llm: LLM) -> str:
+    """The reply was not a plain yes or no: say how to answer. After too many in a row, stop asking.
+
+    The same rule as the workflow's (`max_unclear_replies`): before the customer confirmed a charge a person is
+    offered (nothing goes to one without a yes); while a person is being offered the conversation ends without a
+    case; after the charge was confirmed the case goes to the queue with the question left unanswered.
+    """
+    state.unclear_count += 1
+    if state.unclear_count < get_settings().max_unclear_replies:
+        state.acts.append("ask_again")
+        return with_only_yes_no(repeat_offer(_lang(state), state.pending_question or ""), _lang(state))
+    if state.phase == Phase.OFFER_ESCALATION:
+        return _end_without_case(state)
+    if not state.txn_confirmed:
+        return _offer_escalation_without_match(state, "unclear")
+    replies = [text[:200] for role, text in state.messages if role == "user"][-state.unclear_count :]
+    fraud_rule = state.rule_id if (state.rule_id or "").startswith("D06") else None
+    return await _escalate(
+        ctx,
+        state,
+        llm,
+        reason="unclear_confirmation",
+        rule_id=fraud_rule,
+        extra_facts={"unanswered_question": state.pending_question, "last_customer_replies": replies},
+    )
 
 
 async def _decide(ctx: ToolContext, state: ConversationState, llm: LLM) -> str:
@@ -380,9 +424,7 @@ async def _decide(ctx: ToolContext, state: ConversationState, llm: LLM) -> str:
             ),
         )
         verified = await get_dispute(ctx, GetDisputeArgs(dispute_id=opened.dispute.dispute_id))
-        state.phase = Phase.DONE
-        state.pending_question = None
-        state.case_ref = verified.dispute.dispute_id
+        _finish(state, "dispute_opened", verified.dispute.dispute_id)
         state.acts.append("inform")
         return fallback_sentence(language, {"dispute_id": verified.dispute.dispute_id})
     if decision.route == Route.ESCALATE_FRAUD.value:
@@ -401,8 +443,11 @@ async def _decide(ctx: ToolContext, state: ConversationState, llm: LLM) -> str:
 
 async def _phase_confirm_dispute(ctx: ToolContext, state: ConversationState, text: str, llm: LLM) -> str:
     decision = await _consent(ctx, state, text, llm)
+    if decision in ("yes", "no"):
+        state.unclear_detours = 0
     if decision == "yes":
         state.consent_text = text
+        state.txn_confirmed = True
         if state.customer_says_not_me:
             return await _decide(ctx, state, llm)  # already said they did not make it: no need to ask again
         return _ask(state, Phase.RECOGNIZE, recognize_question(_lang(state)))
@@ -414,8 +459,15 @@ async def _phase_confirm_dispute(ctx: ToolContext, state: ConversationState, tex
         note = f"el cliente dijo que la transacción {rejected} no es la que busca; no la propongas otra vez."
         return await _phase_search(ctx, state, text, llm, note=note)
     if state.confirmation == "yes":
-        return _repeat_question(state)  # an affirmative with extra words: only a plain yes authorizes, ask for it
-    # Neither yes nor no: the customer is saying something else (a correction, a new detail). The agent takes it.
+        return await _unclear_reply(
+            ctx, state, llm
+        )  # an affirmative with extra words: only a plain yes authorizes, ask for it
+    # Neither yes nor no: the customer is saying something else (a correction, a new detail). The agent takes it,
+    # but not for ever: at the same limit as the workflow's unclear replies a person is offered instead.
+    state.unclear_detours += 1
+    if state.unclear_detours >= get_settings().max_unclear_replies:
+        state.selected_txn_id = state.selected_product_id = state.selected_type = None
+        return _offer_escalation_without_match(state, "unclear")
     shown = state.selected_txn_id
     state.selected_txn_id = state.selected_product_id = state.selected_type = None
     note = (
@@ -433,7 +485,7 @@ async def _phase_recognize(ctx: ToolContext, state: ConversationState, text: str
         state.customer_says_not_me = True
         state.dispute_reason = "unrecognized_charge"
         return await _decide(ctx, state, llm)
-    return _repeat_question(state)
+    return await _unclear_reply(ctx, state, llm)
 
 
 async def _phase_card_offer(ctx: ToolContext, state: ConversationState, text: str, llm: LLM) -> str:
@@ -459,22 +511,29 @@ async def _phase_card_offer(ctx: ToolContext, state: ConversationState, text: st
         )
     if decision == "no":
         return await _escalate(ctx, state, llm, reason="possible_fraud_no_block", rule_id=state.rule_id)
-    return _repeat_question(state)
+    return await _unclear_reply(ctx, state, llm)
 
 
 async def _phase_offer_escalation(ctx: ToolContext, state: ConversationState, text: str, llm: LLM) -> str:
     decision = await _consent(ctx, state, text, llm)
     if decision == "yes":
+        state.handoff_accepted = True
         if state.denial_text:
             return await _escalate(ctx, state, llm, reason="customer_requested_after_denial", rule_id=state.rule_id)
         return await _escalate(ctx, state, llm, reason=state.escalation_reason or "search_exhausted")
     if decision == "no":
-        state.phase = Phase.DONE
-        state.pending_question = None
-        state.acts.append("abort")
-        return declined_escalation(_lang(state))
+        if state.denial_text or state.handoff_offers >= get_settings().max_handoff_offers:
+            return _end_without_case(state)  # nothing left to search, or the last offer: end without a case
+        # Back to the search once more, as the workflow does: the offer may come again.
+        _reset_for_new_search(state)
+        state.phase = Phase.SEARCH
+        state.asked_for_detail = True  # the customer was just asked for the charge
+        state.acts.append("clarify")
+        return handoff_offer_declined(_lang(state))
     if state.confirmation == "yes":
-        return _repeat_question(state)  # an affirmative with extra words: only a plain yes asks for a person
+        return await _unclear_reply(
+            ctx, state, llm
+        )  # an affirmative with extra words: only a plain yes asks for a person
     if not state.denial_text:
         # The offer was "I could not find it". Other words are new information, not an answer: the search goes on.
         _reset_for_new_search(state)
@@ -519,20 +578,16 @@ async def run_agentic_turn(
         if state.language is None:
             state.language = (detector or default_language_detector()).detect(stripped)
 
-        if state.phase == Phase.DONE and state.case_ref:
-            reply = already_done(_lang(state), state.case_ref)
+        if state.phase == Phase.DONE:
+            # Terminal: no model, no tools. The status, the reference, and how to start another conversation.
+            reply = terminal_reply(_lang(state), state.terminal)
+            state.acts.append("closed")
         elif state.turn_count > get_settings().max_turns:
-            reply = await _escalate(ctx, state, llm, reason="max_turns")
-        elif state.phase == Phase.DONE:
-            # Closed without a case (the customer declined a person) and writing again: nothing is registered, so
-            # this is a new search, not a "your case is registered".
-            _reset_for_new_search(state)
-            note = (
-                "el cliente vuelve a escribir después de decidir no pasar su caso a un asesor. Si es un agradecimiento "
-                "o una despedida, despídete con amabilidad y sin insistir; si da información o pide algo, sigue "
-                "buscando."
-            )
-            reply = await _phase_search(ctx, state, stripped, llm, note=note)
+            if state.txn_confirmed or state.handoff_accepted:
+                reply = await _escalate(ctx, state, llm, reason="max_turns")
+            else:  # no confirmed charge and no yes to a person: end here, without a case
+                _finish(state, "no_case")
+                reply = terminal_reply(_lang(state), state.terminal)
         elif state.phase in (Phase.UNDERSTAND, Phase.SEARCH):
             if state.phase == Phase.UNDERSTAND:
                 _classify_first_message(state, stripped)

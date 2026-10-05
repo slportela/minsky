@@ -289,7 +289,15 @@ class _ReactiveUser:
     def __init__(self, case: Case, facts: WorldFacts) -> None:
         script = list(case.user_scenario.script or [])
         self._opening = script[0]
-        self._details = [t for t in script[1:] if not _is_answer(t)]
+        # What comes after the last yes or no of the script is said after the conversation is closed (the case wants
+        # to see what the system answers then); what comes before is what the customer says when asked for detail.
+        last_answer = max((i for i, t in enumerate(script) if i > 0 and _is_answer(t)), default=0)
+        body = [t for t in script[1 : last_answer + 1] if not _is_answer(t)] if last_answer else script[1:]
+        self._after_close = [t for t in script[last_answer + 1 :] if not _is_answer(t)] if last_answer else []
+        # A customer who never gives a plain yes or no (label unclear_replies) says those words to every question
+        # of the flow instead of an answer; what the script holds is not search detail.
+        self._unclear = body if facts.label_source == "unclear_replies" else []
+        self._details = [] if facts.label_source == "unclear_replies" else [t for t in body if not _is_answer(t)]
         yes = next((t for t in script if t.strip().rstrip(".!?").casefold() in _YES_TOKENS), "sí")
         self._yes = yes
         self._facts = facts
@@ -322,6 +330,10 @@ class _ReactiveUser:
 
     def _answer(self, state: ConversationState) -> str | None:
         phase = state.phase
+        if phase == Phase.DONE:
+            return self._after_close.pop(0) if self._after_close else None
+        if phase in (Phase.CONFIRM_DISPUTE, Phase.RECOGNIZE, Phase.CARD_OFFER) and self._unclear:
+            return self._unclear.pop(0)
         if phase == Phase.SEARCH:
             return self._details.pop(0) if self._details else None
         if phase == Phase.CONFIRM_DISPUTE:
