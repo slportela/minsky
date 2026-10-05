@@ -303,6 +303,26 @@ docs/           challenge · solution · architecture · policy · evals · ADRs
 
 ## 9. Quick start
 
+### For evaluators (local smoke)
+
+Needs **Docker** with Compose v2. No `uv`, Node, AWS, or pipeline.
+
+```bash
+cp .env.evaluator.example .env   # set MINSKY_LLM_API_KEY only
+docker compose -f compose.yaml -f compose.evaluator.yaml up --build
+# open https://localhost/chat  (accept the local certificate warning)
+# credentials + sample messages: comments at the end of .env.evaluator.example
+# reset: docker compose -f compose.yaml -f compose.evaluator.yaml down -v
+```
+
+- First `--build` is slow (images compile with uv/npm inside the Dockerfiles).
+- Without an API key, `/api/health` is fine but chat returns 503.
+- Ports 80/443 must be free. Cheat sheet covers D09 (auto dispute), D06 (fraud/block), and `/console`.
+
+The deployed demo link (D2) remains the primary evaluation path; this is a local backup.
+
+### For developers
+
 Needs `uv`, Node.js 22+, Docker.
 
 ```bash

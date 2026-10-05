@@ -7,7 +7,7 @@ PROFILE    := $(shell grep '^BRONZE_AWS_PROFILE=' .env 2>/dev/null | cut -d= -f2
 LAKE_URI   := $(patsubst %/bronze,%,$(BRONZE_URI))
 AWS        := AWS_PROFILE=$(PROFILE) aws
 
-.PHONY: demo-reset demo-sessions help setup lock-check lint typecheck test llm-smoke regression-smoke eval-smoke eval-live-estimate frontend-check eval-check router ci model-prices up down logs demo-plan demo-apply pipeline bronze mirror silver gold publish docs freshness-check
+.PHONY: demo-reset demo-sessions evaluator-pack help setup lock-check lint typecheck test llm-smoke regression-smoke eval-smoke eval-live-estimate frontend-check eval-check router ci model-prices up down logs demo-plan demo-apply pipeline bronze mirror silver gold publish docs freshness-check
 
 EVAL_CAP_USD ?= 1
 
@@ -77,6 +77,9 @@ DEMO          := tofu -chdir=infra/tofu/envs/demo
 
 demo-sessions:  ## print demo customer + agent-console credentials for .env (needs make gold)
 	uv run python infra/demo_sessions.py
+
+evaluator-pack:  ## team: rebuild evaluator slice + .env.evaluator.example (needs make gold; or: uv run python infra/evaluator_pack.py --synthetic)
+	uv run python infra/evaluator_pack.py
 
 demo-reset:  ## delete every case (disputes, handoffs, blocks, audit, queue) so the demo can be replayed
 	$(COMPOSE_LOCAL) exec postgres psql -U $${POSTGRES_USER:-minsky} -d $${POSTGRES_DB:-minsky} -c "DROP SCHEMA IF EXISTS cases CASCADE"

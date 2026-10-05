@@ -1,6 +1,8 @@
 .env
 .venv/
-data/
+data/*
+!data/evaluator/
+!data/evaluator/**
 __pycache__/
 .ipynb_checkpoints/
 pipeline/transform/target/

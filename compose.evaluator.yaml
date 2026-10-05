@@ -1,0 +1,10 @@
+# Judge / evaluator local run: load the committed bank.* slice on first Postgres start.
+# Use with the base stack only (do not add compose.local.yaml — that mounts ~/.aws).
+#
+#   cp .env.evaluator.example .env   # set MINSKY_LLM_API_KEY
+#   docker compose -f compose.yaml -f compose.evaluator.yaml up --build
+#
+services:
+  postgres:
+    volumes:
+      - ./data/evaluator/bank_slice.sql.gz:/docker-entrypoint-initdb.d/01_bank_slice.sql.gz:ro
