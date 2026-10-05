@@ -112,7 +112,7 @@ def _outcome(
     txn_id = facts.other_transaction_id if facts.label_source == "tool_denial" else facts.transaction_id
     if txn_id and cases.get_dispute_by_transaction(customer_id=customer_id, transaction_id=txn_id) is not None:
         return Outcome.RESOLVE
-    terminal = [act for act in acts if act in {"refuse", "inform", "handoff", "clarify", "abort"}]
+    terminal = [act for act in acts if act in {"refuse", "inform", "handoff", "clarify", "abort", "unavailable"}]
     last = terminal[-1] if terminal else None
     if last == "refuse":
         return Outcome.REFUSE
@@ -124,6 +124,8 @@ def _outcome(
         return Outcome.CLARIFY
     if last == "abort":
         return Outcome.RESOLVE
+    if last == "unavailable":
+        return Outcome.ABSTAIN  # the model was down: no answer, no case, and the customer is told so
     return None
 
 

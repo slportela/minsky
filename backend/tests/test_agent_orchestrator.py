@@ -861,6 +861,12 @@ def test_after_a_handoff_the_status_is_the_handoff_and_a_card_block_is_reported_
     assert terminal_reply("es", blocked).startswith("Tu tarjeta está bloqueada. Tu caso está con un especialista")
     assert "bloqueada" not in terminal_reply("es", handed)
     assert "nova conversa" in terminal_reply("pt", handed) and "HO-123" in terminal_reply("pt", handed)
+    down = Terminal("unavailable", dispute_id="DSP-9")
+    assert terminal_reply("es", down) == (
+        "Tu reclamo DSP-9 ya quedó registrado. El sitio está en mantenimiento en este momento. Por favor, consulta "
+        "con el servicio técnico. Cuando el sitio vuelva a estar disponible, inicia una nueva conversación."
+    )
+    assert "manutenção" in terminal_reply("pt", Terminal("unavailable")) and "HO-" not in terminal_reply("es", down)
     informed = Terminal("informed", dispute_id="DSP-9")
     assert terminal_reply("es", informed).startswith("No abrí ningún reclamo nuevo. El reclamo ya abierto es DSP-9.")
 

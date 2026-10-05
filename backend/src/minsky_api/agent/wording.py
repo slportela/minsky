@@ -277,7 +277,7 @@ def terminal_reply(language: str, terminal: Terminal | None) -> str:
     conversation says its status, gives the reference, and says how to start another one.
     """
     pt = _lang(language) == "pt"
-    closing = _NEW_CONVERSATION["pt" if pt else "es"]
+    closing = _NEW_CONVERSATION["pt" if pt else "es"]  # the unavailable outcome overrides it
     if terminal is None:
         return done_fallback(language)
     parts: list[str] = []
@@ -309,6 +309,23 @@ def terminal_reply(language: str, terminal: Terminal | None) -> str:
                 if pt
                 else f"El reclamo ya abierto es {terminal.dispute_id}."
             )
+    elif terminal.outcome == "unavailable":
+        if terminal.dispute_id:
+            parts.append(
+                f"A sua contestação {terminal.dispute_id} já foi registrada."
+                if pt
+                else f"Tu reclamo {terminal.dispute_id} ya quedó registrado."
+            )
+        parts.append(
+            "O site está em manutenção neste momento. Por favor, consulte o serviço técnico."
+            if pt
+            else "El sitio está en mantenimiento en este momento. Por favor, consulta con el servicio técnico."
+        )
+        closing = (
+            "Quando o site voltar a funcionar, inicie uma nova conversa."
+            if pt
+            else "Cuando el sitio vuelva a estar disponible, inicia una nueva conversación."
+        )
     elif terminal.outcome == "no_case":
         parts.append(
             "Não abri nenhum caso nem passei você para ninguém." if pt else "No abrí ningún caso ni te pasé con nadie."

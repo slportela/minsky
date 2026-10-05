@@ -29,7 +29,7 @@ class Terminal:
     the status, the reference, and that a new charge needs a new conversation.
     """
 
-    outcome: str  # dispute_opened | handoff | informed | cancelled | no_case
+    outcome: str  # dispute_opened | handoff | informed | cancelled | no_case | unavailable
     reference: str | None = None  # the handoff id, or the dispute id when outcome is dispute_opened
     card_blocked: bool = False
     dispute_id: str | None = None  # a dispute already open next to a handoff (informed: the existing one)
@@ -42,7 +42,7 @@ class ConversationState:
     phase: Phase = Phase.UNDERSTAND
     terminal: Terminal | None = None  # set exactly when phase is DONE
     # The customer said yes to "is this the charge you mean?". No handoff is created before that, except one the
-    # customer asked for (`handoff_accepted`) or the one for a model outage (agent/degraded.py).
+    # customer asked for (`handoff_accepted`). A model outage creates none (agent/degraded.py).
     txn_confirmed: bool = False
     handoff_accepted: bool = False
     handoff_offers: int = 0  # times a human agent was offered because no charge could be identified

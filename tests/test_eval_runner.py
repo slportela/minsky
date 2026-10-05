@@ -36,7 +36,7 @@ SCRIPTED = (
     "dispute-unclear-replies-handoff-es",
     "dispute-offer-declined-then-dispute-es",
     "dispute-follow-up-after-case-es",
-    "model-outage-handoff-es",
+    "model-outage-maintenance-es",
 )
 
 
@@ -106,12 +106,12 @@ class _ProviderLLM:
 
 
 async def test_the_real_extractor_closes_the_client_behind_an_injected_fault(monkeypatch: pytest.MonkeyPatch) -> None:
-    """`python -m evals.runner --extractor real` crashed on model-outage-handoff-es, the last case: the trial closes
+    """`python -m evals.runner --extractor real` crashed on model-outage-maintenance-es, the last case: the trial closes
     the client of its llm, and the fault wrapper around it had none. The exception came out of a `finally`, so it
     ended the whole run and lost the summary and artifacts of every trial before it."""
     _ProviderLLM.instances = []
     monkeypatch.setattr("evals.runner.LLM", _ProviderLLM)
-    record = await run_trial(_case("model-outage-handoff-es"), extractor="real", budget=_BUDGET)
+    record = await run_trial(_case("model-outage-maintenance-es"), extractor="real", budget=_BUDGET)
     assert record.status == "passed", (record.status, record.error_class, record.grade)
     assert len(_ProviderLLM.instances) == 1
     assert _ProviderLLM.instances[0].client.closed is True
