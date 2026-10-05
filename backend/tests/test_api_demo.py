@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 from typing import Any
 
 import pytest
@@ -24,19 +25,44 @@ from minsky_api.identity.errors import PermissionDenied
 from minsky_api.identity.http import resolve_session
 from minsky_api.main import create_app
 from minsky_api.store.cases_memory import InMemoryCasesBackend
-from minsky_api.store.models import Customer
+from minsky_api.store.models import Customer, CustomerComplaintStats, Transaction
 
 _FUTURE = "2099-01-01T00:00:00Z"
 OPERATOR = {"Authorization": "Bearer op-equipo"}
 CUSTOMERS = {"CLI-A": Customer(customer_id="CLI-A", first_name="Ana", country="Mexico")}
 
 
+def _txn(
+    transaction_id: str, amount: str, *, day: int, status: str = "Approved", merchant: str | None = "Cafe"
+) -> Transaction:
+    return Transaction(
+        transaction_id=transaction_id,
+        customer_id="CLI-A",
+        product_id="P1",
+        amount=Decimal(amount),
+        currency="USD",
+        amount_usd=Decimal(amount),
+        amount_usd_source="native_usd",
+        transaction_date=datetime(2026, 6, day, 9, 30),
+        merchant_name=merchant,
+        transaction_status=status,
+        is_fraud=False,
+    )
+
+
+TXNS: list[Transaction] = []  # newest first, as the store returns them
+
+
 class _FakeResult:
-    def __init__(self, value: Any) -> None:
+    def __init__(self, value: Any, rows: list[Any] | None = None) -> None:
         self._value = value
+        self._rows = rows or []
 
     def scalar(self) -> Any:
         return self._value
+
+    def all(self) -> list[Any]:
+        return self._rows
 
 
 class _FakeDb:
@@ -46,7 +72,14 @@ class _FakeDb:
         self.random_pick = random_pick
 
     async def get(self, model: type, identity: Any) -> Any:
+        if model is Transaction:
+            return next((t for t in TXNS if t.transaction_id == identity), None)
+        if model is CustomerComplaintStats:
+            return CustomerComplaintStats(customer_id=identity, is_repeat_complainer=False)
         return CUSTOMERS.get(identity)
+
+    async def exec(self, statement: Any) -> _FakeResult:
+        return _FakeResult(None, list(TXNS))
 
     async def execute(self, statement: Any, params: Any = None) -> _FakeResult:
         return _FakeResult(self.random_pick)
@@ -76,6 +109,7 @@ def _environment(monkeypatch: pytest.MonkeyPatch, *, enabled: bool = True, **ext
 
 @pytest.fixture
 def harness(monkeypatch):
+    TXNS.clear()
     _environment(monkeypatch)
     seen: dict[str, Any] = {"random_pick": "CLI-A", "sessions": []}
 
@@ -187,7 +221,7 @@ def test_the_operator_chooses_a_customer_and_chats_as_that_customer(harness):
 def test_every_choice_is_audited_with_the_operator_and_the_customer(harness):
     app, client, _seen = harness
     _choose(client, {"customer_id": "CLI-A"}, {"Authorization": "Bearer op-jurado"})
-    (row,) = app.state.cases.list_audit()
+    (row,) = [r for r in app.state.cases.list_audit() if r.tool == "demo_choose_customer"]
     assert (row.tool, row.customer_id, row.outcome) == ("demo_choose_customer", "CLI-A", "ok")
     assert row.session_id.startswith("demo:jurado:") and row.reason == "operator=jurado"
 
@@ -330,3 +364,83 @@ def test_a_misconfigured_operator_list_fails_closed(monkeypatch):
         with pytest.raises(RuntimeError):
             resolve_operator("Bearer k")
     get_settings.cache_clear()
+
+
+# ---- what there is to dispute --------------------------------------------------------------------------------
+
+
+def _charges(response: Any) -> list[dict[str, Any]]:
+    assert response.status_code == 200, response.text
+    return response.json()["recent_charges"]
+
+
+def test_the_choice_comes_with_the_recent_charges_and_what_the_policy_does_with_each(harness):
+    app, client, _seen = harness
+    TXNS.extend(
+        [
+            _txn("T-BIG", "900.00", day=11, merchant=None),
+            _txn("T-DECLINED", "40.00", day=9, status="Declined"),
+            _txn("T-OK", "25.00", day=8),
+        ]
+    )
+    charges = _charges(_choose(client, {"customer_id": "CLI-A"}))
+    assert [c["transaction_id"] for c in charges] == ["T-BIG", "T-DECLINED", "T-OK"]  # newest first
+    big, declined, ok = charges
+    assert (ok["route"], ok["rule_id"], ok["date"], ok["amount"], ok["currency"]) == (
+        "open_dispute",
+        "D09-eligible",
+        "2026-06-08",
+        "25.00",
+        "USD",
+    )
+    assert (
+        ok["suggested_message"]
+        == "Quiero reclamar un cargo de 25.00 USD en Cafe del 2026-06-08, el monto no es correcto."
+    )
+    assert ok["hint"] and "reclamo" in ok["hint"]
+    assert big["route"] == "escalate_agent" and big["rule_id"].startswith("D07")
+    assert "en None" not in big["suggested_message"] and " en " not in big["suggested_message"]  # no merchant
+    assert declined["rule_id"].startswith("D01") and declined["status"] == "Declined"
+    assert all(c["existing_dispute_id"] is None for c in charges)
+
+
+def test_the_policy_is_read_through_the_tools_as_the_chosen_customer_and_nothing_is_written(harness):
+    app, client, _seen = harness
+    TXNS.append(_txn("T-OK", "25.00", day=8))
+    _choose(client, {"customer_id": "CLI-A"})
+    rows = app.state.cases.list_audit()
+    assert {r.tool for r in rows} == {"demo_choose_customer", "get_transactions", "evaluate_dispute"}
+    assert all(r.session_id.startswith("demo:equipo:") and r.customer_id == "CLI-A" for r in rows)
+    assert not app.state.cases.list_cases()
+    assert app.state.cases.get_dispute_by_transaction(customer_id="CLI-A", transaction_id="T-OK") is None
+
+
+def test_a_charge_already_disputed_says_so(harness):
+    app, client, _seen = harness
+    TXNS.append(_txn("T-OK", "25.00", day=8))
+    dispute = app.state.cases.create_dispute(customer_id="CLI-A", transaction_id="T-OK", reason="wrong_amount")
+    (charge,) = _charges(_choose(client, {"customer_id": "CLI-A"}))
+    assert charge["existing_dispute_id"] == dispute.dispute_id and charge["rule_id"].startswith("D04")
+
+
+def test_at_most_the_newest_and_the_likely_ones_are_listed(harness):
+    _app, client, _seen = harness
+    TXNS.extend([_txn(f"T-BIG{i}", "900.00", day=20 - i) for i in range(6)])  # newest: all above the limit
+    TXNS.extend([_txn(f"T-OK{i}", "25.00", day=10 - i) for i in range(6)])  # older: under it
+    ids = [c["transaction_id"] for c in _charges(_choose(client, {"customer_id": "CLI-A"}))]
+    assert ids == [f"T-BIG{i}" for i in range(4)] + [f"T-OK{i}" for i in range(4)]  # 4 newest + 4 likely, newest first
+
+
+def test_if_the_charges_cannot_be_read_the_session_is_still_good_and_says_so(harness, monkeypatch):
+    from minsky_api.tools.errors import ToolError
+
+    _app, client, _seen = harness
+
+    async def broken(ctx, args=None):
+        raise ToolError("bank read failed")
+
+    monkeypatch.setattr("minsky_api.api.demo.get_transactions", broken)
+    response = _choose(client, {"customer_id": "CLI-A"})
+    assert response.status_code == 200
+    body = response.json()
+    assert body["recent_charges"] is None and body["credential"].startswith("demo-s-")

@@ -256,6 +256,52 @@ export default function ChatPage() {
           la sesión vence {new Date(actingAs.expires_at).toLocaleString("es")}.
         </p>
       ) : null}
+      {actingAs ? (
+        <details open className="card charges">
+          <summary>Cargos recientes de este cliente (últimos 120 días)</summary>
+          {actingAs.recent_charges === null ? (
+            <p>No se pudieron leer los cargos; la sesión sigue siendo válida.</p>
+          ) : actingAs.recent_charges.length === 0 ? (
+            <p>Este cliente no tiene cargos en los últimos 120 días: cualquier reclamo sería fuera de plazo.</p>
+          ) : (
+            <table>
+              <thead>
+                <tr>
+                  <th>Fecha</th>
+                  <th>Comercio</th>
+                  <th>Monto</th>
+                  <th>Estado</th>
+                  <th>Qué haría el sistema</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {actingAs.recent_charges.map((charge) => (
+                  <tr key={charge.transaction_id}>
+                    <td>{charge.date ?? "?"}</td>
+                    <td>{charge.merchant ?? "(sin comercio)"}</td>
+                    <td>
+                      {charge.amount ?? charge.amount_usd} {charge.currency ?? "USD"}
+                    </td>
+                    <td>{charge.status ?? "?"}</td>
+                    <td>
+                      {charge.existing_dispute_id
+                        ? `ya tiene el reclamo ${charge.existing_dispute_id}`
+                        : (charge.hint ?? charge.rule_id)}{" "}
+                      <small>({charge.rule_id})</small>
+                    </td>
+                    <td>
+                      <button type="button" disabled={busy} onClick={() => setDraft(charge.suggested_message)}>
+                        Usar
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </details>
+      ) : null}
       <p className="toolbar">
         Sesión de prueba
         {conversationId ? (

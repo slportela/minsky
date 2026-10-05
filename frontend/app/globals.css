@@ -457,7 +457,7 @@ main.chat-page {
   position: sticky;
   bottom: 0;
   padding: 12px 0 16px;
-  background: linear-gradient(to bottom, transparent, var(--bg) 18%);
+  background: var(--bg);
 }
 
 .composer textarea {
@@ -689,4 +689,25 @@ details summary {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+/* Demo operator only: the customer's recent charges and what the policy would do with each. */
+.charges {
+  margin-bottom: 14px;
+  padding: 14px 18px;
+}
+
+.charges summary {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.charges table {
+  margin-top: 10px;
+  font-size: 0.82rem;
+}
+
+.charges button {
+  padding: 4px 12px;
+  font-size: 0.78rem;
 }
