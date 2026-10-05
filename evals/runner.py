@@ -332,11 +332,22 @@ class _ReactiveUser:
         phase = state.phase
         if phase == Phase.DONE:
             return self._after_close.pop(0) if self._after_close else None
-        if phase in (Phase.CONFIRM_DISPUTE, Phase.RECOGNIZE, Phase.CARD_OFFER) and self._unclear:
+        if phase in (Phase.CONFIRM_DISPUTE, Phase.CONFIRM_TXN, Phase.RECOGNIZE, Phase.CARD_OFFER) and self._unclear:
             return self._unclear.pop(0)
         if phase == Phase.SEARCH:
             return self._details.pop(0) if self._details else None
-        if phase == Phase.CONFIRM_DISPUTE:
+        # The workflow's own phases, for a case whose script was written for the agent (it has no confirmations):
+        # the customer reads the list it is shown and picks the charge it means, and confirms what is asked.
+        if phase == Phase.CLARIFY:
+            ids = state.candidate_txn_ids
+            if self._target is not None and self._target in ids:
+                return str(ids.index(self._target) + 1)
+            return self._details.pop(0) if self._details else None
+        if phase == Phase.CONFIRM_ACT:
+            return self._yes
+        if phase == Phase.OFFER_HANDOFF:
+            return self._yes if self._expected == Outcome.ESCALATE else None
+        if phase in (Phase.CONFIRM_DISPUTE, Phase.CONFIRM_TXN):
             return self._yes if self._target is not None and state.selected_txn_id == self._target else "no"
         if phase == Phase.RECOGNIZE:
             return "no" if self._facts.customer_says_not_me else self._yes
@@ -612,8 +623,12 @@ async def run_trial(
             raise ValueError("expected status count must match scripted turn count")
         # Agentic mode asks questions the script does not have, so its requests are not the script's turns:
         # a reactive customer plays the case. The expected statuses are then read per request.
+        # A case that needs a model was written for the agent: its script has no confirmations. Both flows get the
+        # same reactive customer there, or the workflow would "fail" by being cut off at its own question.
         user: _WorkflowUser | _ReactiveUser = (
-            _WorkflowUser(case.user_scenario.script) if agent_mode == "workflow" else _ReactiveUser(case, facts)
+            _WorkflowUser(case.user_scenario.script)
+            if agent_mode == "workflow" and not _needs_model(case)
+            else _ReactiveUser(case, facts)
         )
         with patch.dict("os.environ", {"MINSKY_TEST_SESSIONS": mapping, "MINSKY_AGENT_MODE": agent_mode}):
             get_settings.cache_clear()

@@ -440,11 +440,52 @@ async def test_an_agent_that_proposes_the_unrelated_charge_does_not_get_it_opene
     assert not any(t.tool == "open_dispute" for t in record.tools)  # nothing is near: the customer says no
 
 
-@pytest.mark.parametrize("case_id", FLEX_RESOLVE)
+# The workflow's exact search needs the customer's words to match the records. Five cases need more than that; two do
+# not (listing the candidates and asking which is the right move there), so they do not separate the designs.
+FLEX_THE_WORKFLOW_CANNOT = [
+    "dispute-flex-near-amount-es",
+    "dispute-flex-near-amount-pt",
+    "dispute-flex-usd-for-cop-es",
+    "dispute-flex-merchant-misspelled-es",
+    "dispute-flex-approx-amount-wrong-day-es",
+]
+FLEX_THE_WORKFLOW_CAN = ["dispute-flex-two-same-day-es", "dispute-flex-no-merchant-withdrawal-es"]
+
+
+def test_the_two_groups_cover_every_case_that_must_open():
+    assert sorted(FLEX_THE_WORKFLOW_CANNOT + FLEX_THE_WORKFLOW_CAN) == sorted(FLEX_RESOLVE)
+
+
+@pytest.mark.parametrize("case_id", FLEX_THE_WORKFLOW_CANNOT)
 async def test_the_workflows_exact_search_cannot_pass_these_cases_with_scripted_understanding(case_id: str) -> None:
-    """The cases separate the two designs: exact amount, date and merchant find none of them (offline, scripted)."""
+    """These cases separate the two designs: exact amount and merchant find none of them (offline, scripted)."""
     record = await run_trial(_case(case_id))
     assert record.status == "failed"
+
+
+@pytest.mark.parametrize("case_id", FLEX_THE_WORKFLOW_CAN)
+async def test_the_workflow_resolves_these_when_the_customer_answers_what_it_asks(case_id: str) -> None:
+    """Live run on the merged main: it listed the candidates and asked, and the script (written for the agent) had no
+    answer, so it looked like a failure. With a customer that picks and confirms it passes: not a separating case."""
+    record = await run_trial(_case(case_id))
+    assert record.status == "passed", (record.grade, record.error_class)
+    assert len(record.requests) == 4  # the question, the pick, the confirmation, the dispute
+
+
+def test_the_workflow_customer_picks_from_the_list_and_confirms_what_is_asked() -> None:
+    case = _case("dispute-flex-no-merchant-withdrawal-es")
+    facts = facts_from_case(case)
+    user = _ReactiveUser(case, facts)
+    user.next(0, None, None)
+    clarify = _state(Phase.CLARIFY)
+    clarify.candidate_txn_ids = ["TRX-FLEX-ATM-OTHER", facts.transaction_id or ""]
+    assert user.next(1, clarify, 200) == "2"  # the second one it was shown is the charge it means
+    wrong = _state(Phase.CLARIFY)
+    wrong.candidate_txn_ids = ["TRX-FLEX-ATM-OTHER"]
+    assert user.next(2, wrong, 200) is None  # the charge is not in the list and there is nothing to add
+    assert user.next(3, _state(Phase.CONFIRM_TXN, selected=facts.transaction_id), 200) == "sí"
+    assert user.next(4, _state(Phase.CONFIRM_TXN, selected="TRX-FLEX-ATM-OTHER"), 200) == "no"
+    assert user.next(5, _state(Phase.CONFIRM_ACT), 200) == "sí"
 
 
 def test_a_no_match_world_must_expect_clarify() -> None:
