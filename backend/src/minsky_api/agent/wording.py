@@ -67,28 +67,32 @@ def fallback_sentence(language: str, facts: dict[str, object]) -> str:
     pt = _lang(language) == "pt"
     dispute_id = facts.get("dispute_id") or facts.get("existing_dispute_id")
     handoff_id = facts.get("handoff_id")
-    parts: list[str] = []
+    body: list[str] = []
     if facts.get("card_blocked") is True:
-        parts.append(
+        body.append(
             "Seu cartão já está bloqueado para proteger o seu dinheiro."
             if pt
             else "Tu tarjeta ya está bloqueada para proteger tu dinero."
         )
     if isinstance(dispute_id, str) and dispute_id:
-        parts.append(
+        body.append(
             f"Sua contestação {dispute_id} está registrada; nossa equipe vai analisá-la e avisaremos cada avanço."
             if pt
             else f"Tu reclamo {dispute_id} quedó registrado; nuestro equipo lo revisará y te avisaremos de cada avance."
         )
     if isinstance(handoff_id, str) and handoff_id:
-        parts.append(
+        body.append(
             f"Um especialista da nossa equipe vai assumir o seu caso. Sua referência é {handoff_id}."
             if pt
             else f"Un especialista de nuestro equipo tomará tu caso. Tu referencia es {handoff_id}."
         )
-    if not parts:
-        parts.append("Pronto, registramos a sua solicitação." if pt else "Listo, registramos tu solicitud.")
-    return " ".join(parts)
+    if not body:
+        body.append("Pronto, registramos a sua solicitação." if pt else "Listo, registramos tu solicitud.")
+    # The opener must hold on every path that reaches here, including a handoff the customer never
+    # confirmed (out of scope, clarify exhausted, turn limit) and one they declined (no card block).
+    opener = "Obrigado por escrever." if pt else "Gracias por escribirnos."
+    closing = "Fico à disposição se precisar de mais alguma coisa." if pt else "Quedo aquí si necesitas algo más."
+    return " ".join([opener, *body, closing])
 
 
 # What the customer calls the transaction: a transfer or a withdrawal is not a "cargo". (noun, "this <noun>")
@@ -122,15 +126,18 @@ def _this(transaction_type: str | None, language: str) -> str:
 
 # The question a "yes" authorizes is written by code, never by the model, so the customer always
 # consents to exactly the action that runs (AGENTS rule 1). Appended to the model's sentence.
+# It asks what the customer wants rather than announcing what the bank does, and it stays a question:
+# a declarative "bloqueo tu tarjeta" reads as an action already taken (evals.claims).
 def confirm_question(act: str, language: str, transaction_type: str | None = None) -> str:
     this = _this(transaction_type, language)
     if _lang(language) == "pt":
+        # The verb, not "a contestação de <noun>", which would need the preposition contracted.
         if act == "confirm_open":
-            return f"Posso abrir a contestação de {this}? Responda sim ou não."
-        return "Posso bloquear o seu cartão agora? Responda sim ou não."
+            return f"Você quer que eu conteste {this}? Responda sim ou não."
+        return "Você quer que eu bloqueie o seu cartão agora, para proteger a sua conta? Responda sim ou não."
     if act == "confirm_open":
-        return f"¿Abro el reclamo por {this}? Responde sí o no."
-    return "¿Bloqueo tu tarjeta ahora? Responde sí o no."
+        return f"¿Quieres que abra el reclamo por {this}? Responde sí o no."
+    return "¿Quieres que bloquee tu tarjeta ahora, para proteger tu cuenta? Responde sí o no."
 
 
 def with_yes_no_hint(text: str, language: str) -> str:
@@ -161,14 +168,22 @@ def clarify_fallback(language: str, candidates: str | None) -> str:
     pt = _lang(language) == "pt"
     if candidates:
         head = (
-            "Encontrei mais de uma transação que corresponde. Qual delas você quer revisar?"
+            "Obrigado pelos dados. Encontrei mais de uma transação que corresponde e prefiro não escolher por você: "
+            "qual delas você quer revisar?"
             if pt
-            else "Encontré más de una transacción que coincide. ¿Cuál es la que quieres revisar?"
+            else "Gracias por los datos. Encontré más de una transacción que coincide y prefiero no elegir por ti: "
+            "¿cuál es la que quieres revisar?"
         )
         return f"{head}\n{candidates}"
     if pt:
-        return "Não encontrei essa transação. Pode me dizer o estabelecimento, o valor ou a data?"
-    return "No encontré esa transacción. ¿Puedes decirme el comercio, el monto o la fecha?"
+        return (
+            "Desculpe, não encontrei essa transação. Pode me dizer o estabelecimento, o valor ou a data, por favor? "
+            "Com qualquer um desses dados eu procuro de novo."
+        )
+    return (
+        "Disculpa, no encontré esa transacción. ¿Me puedes decir el comercio, el monto o la fecha, por favor? "
+        "Con cualquiera de esos datos la busco de nuevo."
+    )
 
 
 def safe_sentence(act: str, language: str, facts: dict[str, object]) -> str:
@@ -185,15 +200,22 @@ def safe_sentence(act: str, language: str, facts: dict[str, object]) -> str:
         return "Não ficou claro. Pode responder sim ou não?" if pt else "No me quedó claro. ¿Puedes responder sí o no?"
     if act == "abort":
         return (
-            "Entendido, não vou fazer nada com este caso. Se precisar de algo mais, escreva aqui."
+            "Entendido, obrigado por me dizer: não vou fazer nada com este caso. "
+            "Se precisar de algo mais, escreva aqui e eu te ajudo."
             if pt
-            else "Entendido, no haré nada con este caso. Si necesitas algo más, escríbeme aquí."
+            else "Entendido, gracias por decírmelo: no haré nada con este caso. "
+            "Si necesitas algo más, escríbeme aquí y te ayudo."
         )
     if act in ("confirm_open", "offer_block"):
+        # Both acts are reached from _apply_policy, which only runs after the customer confirmed the
+        # transaction. The question a "yes" authorizes comes from confirm_question, appended by the caller.
+        thanks = "Obrigado por confirmar." if pt else "Gracias por confirmarlo."
         reason = facts.get("reason")
         if isinstance(reason, str) and reason:
-            return reason[:1].upper() + reason[1:] + "."
-        return "Com o que você me contou, posso seguir." if pt else "Con lo que me contaste, puedo seguir."
+            return f"{thanks} {reason[:1].upper()}{reason[1:]}."
+        return f"{thanks} " + (
+            "Com o que você me contou, posso seguir." if pt else "Con lo que me contaste, puedo seguir."
+        )
     if act == "confirm_txn":
         merchant, amount, when = facts.get("merchant"), facts.get("amount"), facts.get("when")
         if pt:
@@ -212,19 +234,48 @@ def safe_sentence(act: str, language: str, facts: dict[str, object]) -> str:
 
 def inform_fallback(language: str, rule_id: str | None, existing_dispute_id: str | None) -> str:
     """A complete, safe answer when the model cannot phrase a policy explanation (for example D04)."""
+    pt = _lang(language) == "pt"
     reason = policy_reason(rule_id, language) or ""
-    text = reason[:1].upper() + reason[1:] + "." if reason else ""
+    parts: list[str] = []
+    if reason:
+        parts.append("Obrigado por nos contar." if pt else "Gracias por contárnoslo.")
+        parts.append(f"{reason[:1].upper()}{reason[1:]}.")
     if existing_dispute_id:
-        text += (
-            f" A referência da sua contestação é {existing_dispute_id}."
-            if _lang(language) == "pt"
-            else f" La referencia de tu reclamo es {existing_dispute_id}."
+        parts.append(
+            f"A referência da sua contestação é {existing_dispute_id}."
+            if pt
+            else f"La referencia de tu reclamo es {existing_dispute_id}."
         )
-    return text.strip() or done_fallback(language)
+    if not parts:
+        return done_fallback(language)
+    parts.append(
+        "Qualquer outra dúvida sobre este caso, escreva aqui."
+        if pt
+        else "Si tienes otra duda sobre este caso, escríbeme aquí."
+    )
+    return " ".join(parts)
 
 
-def done_fallback(language: str) -> str:
-    """After the conversation's case is settled: no new facts, only what to do next."""
-    if _lang(language) == "pt":
-        return "O seu caso já está registrado com a referência que enviei. Se precisar de outra coisa, escreva aqui."
-    return "Tu caso ya quedó registrado con la referencia que te envié. Si necesitas algo más, escríbeme aquí."
+def done_fallback(language: str, reference: str | None = None) -> str:
+    """After the conversation's case is settled: no new facts, only what to do next.
+
+    It points at a reference only when one was already reported. A settled conversation did not
+    necessarily open anything: a policy inform (D01-D03) and an abort both end here with nothing
+    written, and claiming a registered case there would report an action that never happened.
+    """
+    pt = _lang(language) == "pt"
+    if reference:
+        return (
+            f"Obrigado por escrever de novo. A referência do seu caso é {reference}, e nossa equipe vai avisar "
+            "cada avanço. Se precisar de outra coisa, me conte e eu te ajudo."
+            if pt
+            else f"Gracias por escribirme de nuevo. La referencia de tu caso es {reference}, y nuestro equipo te "
+            "avisará de cada avance. Si necesitas algo más, cuéntame y te ayudo."
+        )
+    return (
+        "Obrigado por escrever de novo. Sobre este caso já compartilhei o que tenho. "
+        "Se precisar de outra coisa, me conte e eu te ajudo."
+        if pt
+        else "Gracias por escribirme de nuevo. Sobre este caso ya te compartí lo que tengo. "
+        "Si necesitas algo más, cuéntame y te ayudo."
+    )

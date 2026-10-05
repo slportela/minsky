@@ -82,3 +82,35 @@ def test_grader_checks_iso_dates():
 
 def test_the_d09_reason_before_confirmation_is_not_a_claim():
     assert claims("El cargo cumple las condiciones para abrir el reclamo ahora mismo.") == set()
+
+
+def test_the_code_written_sentences_before_a_write_claim_nothing():
+    """Courteous wording may acknowledge and reassure, but only a sentence carrying a reference may claim."""
+    from evals.claims import new_opening
+    from minsky_api.agent import wording
+
+    facts: dict[str, object] = {"merchant": "Cafe", "amount": "25.00 USD", "when": "10 de junio de 2026"}
+    for language in ("es", "pt"):
+        reason = {"reason": wording.policy_reason("D06-possible-fraud", language)}
+        for act in ("clarify", "ask_again", "abort", "confirm_open", "offer_block", "confirm_txn"):
+            text = wording.safe_sentence(act, language, {**facts, **reason})
+            assert claims(text) == set() and not new_opening(text), (act, language)
+        for act in ("confirm_open", "offer_block"):
+            assert claims(wording.confirm_question(act, language, "Purchase")) == set(), (act, language)
+        assert claims(wording.clarify_fallback(language, None)) == set(), language
+        assert claims(wording.inform_fallback(language, "D01-declined", None)) == set(), language
+        # A settled conversation did not necessarily open a case: D01-D03 and an abort write nothing.
+        assert claims(wording.done_fallback(language)) == set(), language
+        assert not new_opening(wording.done_fallback(language)), language
+
+
+def test_the_code_written_sentences_after_a_write_carry_a_reference_for_what_they_claim():
+    from minsky_api.agent import wording
+
+    for language in ("es", "pt"):
+        opened = wording.fallback_sentence(language, {"dispute_id": "DSP-0123456789ab"})
+        assert claims(opened) == {"dispute_opened"} and "DSP-0123456789ab" in opened, language
+        blocked = wording.fallback_sentence(language, {"handoff_id": "HO-0123456789ab", "card_blocked": True})
+        assert claims(blocked) == {"card_blocked", "handoff"} and "HO-0123456789ab" in blocked, language
+        existing = wording.inform_fallback(language, "D04-already-disputed", "DSP-0123456789ab")
+        assert claims(existing) == {"dispute_opened"} and "DSP-0123456789ab" in existing, language

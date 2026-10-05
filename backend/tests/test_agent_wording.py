@@ -95,8 +95,9 @@ def test_the_confirm_txn_sentence_names_the_transaction_and_asks_for_a_yes_or_no
 def test_the_question_acts_use_the_policy_reason_and_never_report_an_action():
     for act in ("confirm_open", "offer_block"):
         text = safe_sentence(act, "es", _REASON)
-        assert text == "El cargo cumple las condiciones para abrir el reclamo ahora mismo."
-        assert not action_claims(text)
+        # The reason is carried whole; only the acknowledgement in front of it is the act's own.
+        assert text.endswith("El cargo cumple las condiciones para abrir el reclamo ahora mismo.")
+        assert text.startswith("Gracias") and not action_claims(text)
     assert safe_sentence("abort", "es", {}) and not action_claims(safe_sentence("abort", "es", {}))
 
 

@@ -70,7 +70,17 @@ def _public_facts(state: ConversationState, **extra: object) -> dict[str, object
     rule_id = extra.pop("rule_id", state.rule_id)
     raw: dict[str, object] = {"reason": policy_reason(rule_id if isinstance(rule_id, str) else None, _lang(state))}
     raw.update(extra)
-    return {key: value for key, value in raw.items() if value is not None}
+    facts = {key: value for key, value in raw.items() if value is not None}
+    _remember_reference(state, facts)
+    return facts
+
+
+def _remember_reference(state: ConversationState, facts: dict[str, object]) -> None:
+    """Every path that carries an id into the facts is about to report it, so keep it for a later turn."""
+    for key in ("dispute_id", "existing_dispute_id", "handoff_id"):
+        value = facts.get(key)
+        if isinstance(value, str) and value:
+            state.reference = value
 
 
 def _txn_facts(txn: TransactionView, language: str) -> dict[str, object]:
@@ -576,7 +586,7 @@ async def run_turn(
                 if not (isinstance(exc, RuntimeError) or is_model_failure(exc)):
                     raise
                 state.acts.append("inform")
-                reply = done_fallback(_lang(state))
+                reply = done_fallback(_lang(state), state.reference)
             state.messages.append(("agent", reply))
             return state, reply
 

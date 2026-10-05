@@ -777,7 +777,7 @@ def test_the_question_a_yes_authorizes_is_written_by_code():
     state, _ = asyncio.run(run_turn(state, "Cafe 25", ctx, llm))  # type: ignore[arg-type]
     state, reply = asyncio.run(run_turn(state, "sí", ctx, llm))  # type: ignore[arg-type]
     assert state.phase == Phase.CONFIRM_ACT
-    assert reply.endswith("¿Abro el reclamo por este cargo? Responde sí o no.")
+    assert reply.endswith("¿Quieres que abra el reclamo por este cargo? Responde sí o no.")
     assert state.pending_question == reply
 
 
@@ -846,6 +846,30 @@ def test_follow_up_after_the_case_uses_template_on_provider_outage():
     assert len(ctx.cases.list_cases()) == before_cases
 
 
+def test_a_follow_up_after_an_abort_names_no_reference_because_nothing_was_opened():
+    """A settled conversation did not necessarily write anything: the answer must not claim a case."""
+    import httpx2
+    import openai
+
+    ctx = _ctx()
+    state = _state()
+    llm = FakeLLM(_details())
+    for text in ("Cafe 25", "sí", "no"):
+        state, _ = asyncio.run(run_turn(state, text, ctx, llm))  # type: ignore[arg-type]
+    assert state.phase == Phase.DONE and state.reference is None
+    assert not any(row.tool == "open_dispute" for row in ctx.cases.list_audit())
+
+    class _TimeoutLLM(FakeLLM):
+        async def respond(self, *args: Any, schema: type | None = None, **kwargs: Any) -> LLMResult[Any]:
+            if schema is not None and schema.__name__ == "Speech":
+                raise openai.APITimeoutError(request=httpx2.Request("POST", "https://llm.invalid/v1/responses"))
+            return await super().respond(*args, schema=schema, **kwargs)
+
+    state, reply = asyncio.run(run_turn(state, "¿Y ahora qué?", ctx, _TimeoutLLM(_details())))  # type: ignore[arg-type]
+    assert state.phase == Phase.DONE
+    assert "referencia" not in reply and "DSP-" not in reply and "HO-" not in reply
+
+
 def test_a_transfer_is_not_called_a_charge():
     from minsky_api.agent.wording import confirm_question, transaction_noun
 
@@ -853,9 +877,12 @@ def test_a_transfer_is_not_called_a_charge():
     assert transaction_noun("Withdrawal", "pt") == "saque"
     assert (
         confirm_question("confirm_open", "es", "Transfer")
-        == "¿Abro el reclamo por esta transferencia? Responde sí o no."
+        == "¿Quieres que abra el reclamo por esta transferencia? Responde sí o no."
     )
     assert "cargo" in confirm_question("confirm_open", "es", None)
+    # pt uses the verb, so no preposition has to be contracted; the noun still has to be the right one.
+    assert "conteste esta cobrança" in confirm_question("confirm_open", "pt", "Purchase")
+    assert "conteste este saque" in confirm_question("confirm_open", "pt", "Withdrawal")
 
 
 # ---- clarify: the model asks, code owns the option list -------------------------------------------------------
@@ -1084,7 +1111,7 @@ def test_a_refused_open_confirmation_keeps_the_code_written_question():
     llm = _NthSpeech(_details(), n=2, speech=_refused("confirm_open"), repeat=2)
     state, reply = _turns(llm, _ctx(), "Cafe 25", "sí")
     assert state.phase == Phase.CONFIRM_ACT
-    assert reply.startswith("El cargo cumple las condiciones") and reply.endswith("Responde sí o no.")
+    assert "El cargo cumple las condiciones" in reply and reply.endswith("Responde sí o no.")
     assert "900" not in reply and state.pending_question == reply
 
 
@@ -1093,7 +1120,28 @@ def test_a_refused_card_offer_keeps_the_code_written_question():
     llm = _NthSpeech(_details(customer_says_not_me=True), n=2, speech=_refused("offer_block"), repeat=2)
     state, reply = _turns(llm, ctx, "No fui yo en Cafe", "sí")
     assert state.phase == Phase.CARD_OFFER
-    assert "alguien podría estar usando tu tarjeta" in reply and "¿Bloqueo tu tarjeta ahora?" in reply
+    assert "alguien podría estar usando tu tarjeta" in reply
+    assert "¿Quieres que bloquee tu tarjeta ahora" in reply
+
+
+def test_the_fallback_after_a_write_never_thanks_the_customer_for_a_confirmation_they_did_not_give():
+    """An out-of-scope request hands off on the first message: nothing was confirmed yet."""
+    llm = _NthSpeech(_details(out_of_scope=True), n=1, speech=_refused("handoff"), repeat=2)
+    state, reply = _turns(llm, _ctx(), "Hola, quiero saber mi saldo")
+    assert state.phase == Phase.DONE
+    assert "HO-" in reply and "900" not in reply  # the code-written sentence, not the refused one
+    assert "confirm" not in reply.casefold()
+
+
+def test_the_fallback_after_a_declined_card_block_never_thanks_the_customer_for_confirming():
+    """The customer said no to the block, so a thanks-for-confirming would report their own words wrong."""
+    ctx = _ctx(_txn(is_fraud=True))
+    llm = _NthSpeech(_details(customer_says_not_me=True), n=3, speech=_refused("handoff"), repeat=2)
+    state, reply = _turns(llm, ctx, "No fui yo en Cafe", "sí", "no")
+    assert state.phase == Phase.DONE
+    assert "HO-" in reply and "900" not in reply
+    assert "confirm" not in reply.casefold()
+    assert not any(row.tool == "block_card" for row in ctx.cases.list_audit())
 
 
 def test_a_refused_abort_is_a_code_written_one():

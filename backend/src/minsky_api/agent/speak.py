@@ -274,7 +274,7 @@ async def compose_speech(
         [{"role": "user", "content": payload}],
         schema=Speech,
         reasoning_effort="low",
-        max_output_tokens=400,
+        max_output_tokens=500,  # four sentences in es or pt, plus the ids copied verbatim
     )
     parsed = result.parsed
     if not isinstance(parsed, Speech):
