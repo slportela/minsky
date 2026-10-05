@@ -252,6 +252,15 @@
       "output_usd_per_million": "0.50",
       "pricing_basis": "operator-supplied uncached token rates (evals/model_prices.py, standard/short-context, 2026-10-05); not an invoice",
       "note": "60/60 on feat/terminal-conversation-state 31cfe5b, clean tree, all 20 dev cases x 3 including the new dispute-follow-up-after-case-es; evidence: evals/reports/2026-10-05-live-dev-31cfe5b-summary.json and -metadata.json"
+    },
+    "2026-10-05-live-dev-3e1e8e4": {
+      "cap_usd": "1",
+      "reserved_usd": "0.3252472",
+      "usage_cost_usd": "0.0227155",
+      "input_usd_per_million": "0.10",
+      "output_usd_per_million": "0.50",
+      "pricing_basis": "operator-supplied uncached token rates (evals/model_prices.py, standard/short-context, 2026-10-05); not an invoice",
+      "note": "63/63 on feat/offer-handoff-before-case 3e1e8e4, clean tree, all 21 dev cases x 3 including the new dispute-offer-declined-then-dispute-es and the updated dispute-unclear-replies-handoff-es; evidence: evals/reports/2026-10-05-live-dev-3e1e8e4-summary.json and -metadata.json. A separate probe of the real extractor (6 short messages, usage negligible, not in the ledger sum) is described in the PR"
     }
   },
   "usage_cost_usd": "0.0124252",
