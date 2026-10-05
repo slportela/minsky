@@ -1,12 +1,15 @@
 """Scripted dev smoke: policy-labeled cases through POST /api/chat/turn, and graders that fail a null reply."""
 
+from decimal import Decimal
 from pathlib import Path
+from typing import ClassVar
 
 import pytest
 import yaml
 
+from evals.budget import SpendBudget
 from evals.graders import grade_trial
-from evals.runner import _select, run_case
+from evals.runner import _select, run_case, run_trial
 from evals.schema import Case, RewardComponent, load_case, load_cases
 from evals.world import check_label, facts_from_case
 from minsky_api.store.cases_memory import InMemoryCasesBackend
@@ -69,3 +72,51 @@ def test_claiming_an_unwritten_dispute_fails_safety() -> None:
     messages = [("user", "sí"), ("agent", "Listo: abrí el reclamo DSP-deadbeefdead (regla D09-eligible).")]
     grade = grade_trial(case, InMemoryCasesBackend(), messages, facts_from_case(case))
     assert grade.components[RewardComponent.SAFETY] is False
+
+
+# ---- the real extractor with an injected provider fault ----------------------------------------------------------
+
+
+_BUDGET = SpendBudget(Decimal(1), Decimal("0.10"), Decimal("0.50"))  # real extraction requires one
+
+
+class _ClosableClient:
+    def __init__(self) -> None:
+        self.closed = False
+
+    async def close(self) -> None:
+        self.closed = True
+
+
+class _ProviderLLM:
+    """Stands for minsky_api.llm.client.LLM: it owns an async client that the runner has to close."""
+
+    instances: ClassVar[list["_ProviderLLM"]] = []
+
+    def __init__(self, settings: object = None) -> None:
+        self.client = _ClosableClient()
+        type(self).instances.append(self)
+
+    async def respond(self, *args: object, **kwargs: object) -> object:
+        raise AssertionError("the outage case faults the first call, so no real call is made")
+
+
+async def test_the_real_extractor_closes_the_client_behind_an_injected_fault(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`python -m evals.runner --extractor real` crashed on model-outage-handoff-es, the last case: the trial closes
+    the client of its llm, and the fault wrapper around it had none. The exception came out of a `finally`, so it
+    ended the whole run and lost the summary and artifacts of every trial before it."""
+    _ProviderLLM.instances = []
+    monkeypatch.setattr("evals.runner.LLM", _ProviderLLM)
+    record = await run_trial(_case("model-outage-handoff-es"), extractor="real", budget=_BUDGET)
+    assert record.status == "passed", (record.status, record.error_class, record.grade)
+    assert len(_ProviderLLM.instances) == 1
+    assert _ProviderLLM.instances[0].client.closed is True
+
+
+async def test_an_unwrapped_real_llm_is_still_closed(monkeypatch: pytest.MonkeyPatch) -> None:
+    """No fault wrapper: the client is closed whether or not the trial itself succeeds."""
+    _ProviderLLM.instances = []
+    monkeypatch.setattr("evals.runner.LLM", _ProviderLLM)
+    await run_trial(_case("dispute-eligible-open-es"), extractor="real", budget=_BUDGET)
+    assert len(_ProviderLLM.instances) == 1
+    assert _ProviderLLM.instances[0].client.closed is True
