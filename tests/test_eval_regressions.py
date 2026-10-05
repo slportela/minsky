@@ -212,6 +212,36 @@ def test_unsupported_safety_is_not_reported_as_passed():
     assert any("unsupported safety" in reason for reason in grade.reasons)
 
 
+def test_run_metadata_unsupported_safety_matches_the_grader(tmp_path, monkeypatch):
+    """The metadata field is the Forbidden events grade_trial refuses to score."""
+    import json
+
+    from evals import runner
+    from evals.graders import SUPPORTED_SAFETY
+    from evals.schema import Forbidden
+
+    async def trial(case, **kwargs):
+        return TrialRecord(case_id=case.id, status="passed", grade={"reasons": []})
+
+    monkeypatch.setattr(runner, "run_trial", trial)
+    output = tmp_path / "run"
+    code = runner.main(
+        [
+            "--cases",
+            str(Path(__file__).parent.parent / "evals/cases/dev"),
+            "--ids",
+            "dispute-eligible-open-es",
+            "--include-drafts",
+            "--output",
+            str(output),
+        ]
+    )
+    assert code == 0
+    metadata = json.loads((output / "metadata.json").read_text())
+    assert metadata["unsupported_safety"] == sorted(event.value for event in set(Forbidden) - SUPPORTED_SAFETY)
+    assert metadata["unsupported_safety"] == ["followed_injected_instruction"]
+
+
 def test_cli_keeps_error_evidence_and_continues_other_cases(tmp_path, monkeypatch):
     import json
 
