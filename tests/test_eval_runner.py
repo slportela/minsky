@@ -1,5 +1,6 @@
 """Scripted dev smoke: policy-labeled cases through POST /api/chat/turn, and graders that fail a null reply."""
 
+from decimal import Decimal
 from pathlib import Path
 from uuid import uuid4
 
@@ -267,3 +268,183 @@ def test_the_world_records_a_transaction_type_like_the_bank_does() -> None:
         finally:
             bank.close()
         assert None not in types and kind in types, (case_id, types)
+
+
+# ---------------------------------------------------------------- flexible-matching cases (need a model)
+
+FLEX = sorted(path.stem for path in (CASES / "dev").glob("dispute-flex-*.yaml"))
+FLEX_RESOLVE = [case_id for case_id in FLEX if case_id != "dispute-flex-nothing-near-es"]
+
+
+def test_the_flexible_cases_exist_and_cover_each_rule_and_a_mirror() -> None:
+    assert FLEX == [
+        "dispute-flex-approx-amount-wrong-day-es",
+        "dispute-flex-merchant-misspelled-es",
+        "dispute-flex-near-amount-es",
+        "dispute-flex-near-amount-pt",
+        "dispute-flex-no-merchant-withdrawal-es",
+        "dispute-flex-nothing-near-es",
+        "dispute-flex-two-same-day-es",
+        "dispute-flex-usd-for-cop-es",
+    ]
+    mirror = _case("dispute-flex-nothing-near-es")
+    assert mirror.evaluation_criteria.expected_outcome == "clarify"
+    assert facts_from_case(mirror).label_source == "no_match"
+
+
+def test_a_scripted_stand_in_does_not_run_the_cases_that_test_a_model() -> None:
+    offline = {case.id for case in _select(load_cases(CASES), include_drafts=True, ids=None)}
+    assert offline == set(SCRIPTED)  # the scripted smokes (and make ci) are untouched
+    live = {case.id for case in _select(load_cases(CASES), include_drafts=True, ids=None, extractor="real")}
+    assert set(FLEX) <= live and set(SCRIPTED) <= live
+
+
+def _row(bank, transaction_id: str):  # type: ignore[no-untyped-def]
+    return bank.session.get(Transaction, transaction_id)
+
+
+@pytest.mark.parametrize("case_id", FLEX)
+def test_each_flexible_world_holds_the_target_and_its_look_alikes(case_id: str) -> None:
+    case = _case(case_id)
+    facts = facts_from_case(case)
+    bank = build_bank(case, facts)
+    try:
+        rows = {row.transaction_id: row for row in bank.session.exec(select(Transaction)).all()}
+    finally:
+        bank.close()
+    assert facts.transaction_id in rows
+    assert len(rows) >= 2 or case_id == "dispute-flex-nothing-near-es"
+    assert all(row.customer_id == case.session.customer_id for row in rows.values())
+    assert all(row.transaction_type for row in rows.values())  # the bank always records a type
+
+
+def _day(row: Transaction) -> str:
+    assert row.transaction_date is not None
+    return row.transaction_date.date().isoformat()
+
+
+def test_the_worlds_hold_what_each_case_is_about() -> None:
+    def world(case_id: str) -> dict[str, Transaction]:
+        case = _case(case_id)
+        bank = build_bank(case, facts_from_case(case))
+        try:
+            return {r.transaction_id: r for r in bank.session.exec(select(Transaction)).all()}
+        finally:
+            bank.close()
+
+    near = world("dispute-flex-near-amount-es")
+    assert (
+        Decimal(str(near["TRX-FLEX-NEAR"].amount_usd)) == Decimal("123.10")
+        and near["TRX-FLEX-NEAR-OTHER"].merchant_name == "Café Sur"
+    )
+
+    cop = world("dispute-flex-usd-for-cop-es")["TRX-FLEX-COP"]
+    assert cop.currency == "COP"
+    assert (Decimal(str(cop.amount)), Decimal(str(cop.amount_usd))) == (Decimal("450000"), Decimal("112.50"))
+    assert world("dispute-flex-usd-for-cop-es")["TRX-FLEX-COP-OTHER"].currency == "USD"
+
+    day = world("dispute-flex-approx-amount-wrong-day-es")
+    assert _day(day["TRX-FLEX-DAY"]) == "2026-06-18"  # today, not yesterday
+    assert _day(day["TRX-FLEX-DAY-OTHER"]) == "2026-06-17"
+
+    atm = world("dispute-flex-no-merchant-withdrawal-es")
+    assert atm["TRX-FLEX-ATM"].merchant_name is None and atm["TRX-FLEX-ATM"].transaction_type == "Withdrawal"
+    assert atm["TRX-FLEX-ATM-OTHER"].transaction_type == "Purchase"
+    assert atm["TRX-FLEX-ATM"].amount_usd == atm["TRX-FLEX-ATM-OTHER"].amount_usd
+
+    dates = world("dispute-flex-two-same-day-es")
+    assert {_day(r) for r in dates.values()} == {"2026-06-17"}
+
+    assert world("dispute-flex-merchant-misspelled-es")["TRX-FLEX-NAME"].merchant_name == "Starbucks"
+
+
+def _oracle(items: list, facts):  # type: ignore[no-untyped-def]
+    """The reference solution: it knows the transaction. A case the oracle cannot pass is a broken case."""
+    from evals import runner
+
+    last_user = max((i for i, item in enumerate(items) if item.get("role") == "user"), default=-1)
+    answered = any(item.get("type") == "function_call_output" for item in items[last_user + 1 :])
+    if facts.label_source == "no_match":
+        return runner._text_step("No encontré nada parecido. ¿Puedes decirme el comercio o la fecha?")
+    if not answered:
+        return runner._tool_step(
+            "query_transactions",
+            sql=f"SELECT transaction_id FROM transactions WHERE transaction_id = '{facts.transaction_id}'",
+        )
+    return runner._tool_step("propose_transaction", transaction_id=facts.transaction_id, customer_says_not_me=False)
+
+
+@pytest.mark.parametrize("case_id", FLEX)
+async def test_the_oracle_passes_every_flexible_case(case_id: str) -> None:
+    from unittest.mock import patch
+
+    from evals import runner
+
+    with patch.object(runner, "_scripted_agent_step", _oracle):
+        record = await run_trial(_case(case_id), agent_mode="agentic")
+    assert record.status == "passed", (record.grade, record.error_class)
+
+
+@pytest.mark.parametrize("case_id", FLEX_RESOLVE)
+async def test_an_agent_that_opens_nothing_fails_every_case_that_must_open(case_id: str) -> None:
+    from unittest.mock import patch
+
+    from evals import runner
+
+    with patch.object(
+        runner, "_scripted_agent_step", lambda items, facts: runner._text_step("Cuéntame más, por favor.")
+    ):
+        record = await run_trial(_case(case_id), agent_mode="agentic")
+    assert record.status == "failed"
+
+
+async def test_an_agent_that_proposes_the_look_alike_never_gets_it_opened() -> None:
+    from unittest.mock import patch
+
+    from evals import runner
+
+    def look_alike(items: list, facts):  # type: ignore[no-untyped-def]
+        last_user = max((i for i, item in enumerate(items) if item.get("role") == "user"), default=-1)
+        if not any(item.get("type") == "function_call_output" for item in items[last_user + 1 :]):
+            return runner._tool_step("query_transactions", sql="SELECT transaction_id FROM transactions")
+        return runner._tool_step(
+            "propose_transaction", transaction_id="TRX-FLEX-NEAR-OTHER", customer_says_not_me=False
+        )
+
+    with patch.object(runner, "_scripted_agent_step", look_alike):
+        record = await run_trial(_case("dispute-flex-near-amount-es"), agent_mode="agentic")
+    assert record.status == "failed"
+    assert not any(t.tool == "open_dispute" for t in record.tools)  # the customer said no to the wrong one
+
+
+async def test_an_agent_that_proposes_the_unrelated_charge_does_not_get_it_opened() -> None:
+    from unittest.mock import patch
+
+    from evals import runner
+
+    def propose_it(items: list, facts):  # type: ignore[no-untyped-def]
+        last_user = max((i for i, item in enumerate(items) if item.get("role") == "user"), default=-1)
+        if not any(item.get("type") == "function_call_output" for item in items[last_user + 1 :]):
+            return runner._tool_step("query_transactions", sql="SELECT transaction_id FROM transactions")
+        return runner._tool_step("propose_transaction", transaction_id="TRX-FLEX-NONE", customer_says_not_me=False)
+
+    with patch.object(runner, "_scripted_agent_step", propose_it):
+        record = await run_trial(_case("dispute-flex-nothing-near-es"), agent_mode="agentic")
+    assert not any(t.tool == "open_dispute" for t in record.tools)  # nothing is near: the customer says no
+
+
+@pytest.mark.parametrize("case_id", FLEX_RESOLVE)
+async def test_the_workflows_exact_search_cannot_pass_these_cases_with_scripted_understanding(case_id: str) -> None:
+    """The cases separate the two designs: exact amount, date and merchant find none of them (offline, scripted)."""
+    record = await run_trial(_case(case_id))
+    assert record.status == "failed"
+
+
+def test_a_no_match_world_must_expect_clarify() -> None:
+    data = yaml.safe_load((CASES / "dev" / "dispute-flex-nothing-near-es.yaml").read_text())
+    data["evaluation_criteria"]["expected_outcome"] = "resolve"
+    data["evaluation_criteria"]["reward_basis"] = ["outcome", "env", "communicate", "safety"]
+    data["evaluation_criteria"]["communicate_info"] = ["DSP-"]
+    case = Case.model_validate(data)
+    with pytest.raises(ValueError, match="no matching transaction must expect clarify"):
+        check_label(case, facts_from_case(case))

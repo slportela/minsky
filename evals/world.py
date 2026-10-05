@@ -53,6 +53,7 @@ class WorldFacts:
     other_customer_id: str | None
     other_transaction_id: str | None
     existing_dispute: bool = False  # the trial starts with a dispute already open on the transaction (rule D04)
+    transaction_type: str | None = None  # Purchase, Withdrawal, Transfer...; default from the merchant
 
 
 class MemoryBank(FixtureBank):
@@ -73,10 +74,22 @@ class MemoryBank(FixtureBank):
 def facts_from_case(case: Case) -> WorldFacts:
     info = case.user_scenario.known_info
     label_source = info.get("label_source", "policy")
-    if label_source not in {"policy", "tool_denial", "authentication", "data"}:
-        raise ValueError(f"{case.id}: label_source must be policy, tool_denial, authentication or data")
+    if label_source not in {"policy", "tool_denial", "authentication", "data", "no_match"}:
+        raise ValueError(f"{case.id}: label_source must be policy, tool_denial, authentication, data or no_match")
     if label_source == "tool_denial":
         _require(info, "other_customer_id", "other_transaction_id")
+    elif label_source == "no_match":
+        # The world holds a transaction that is NOT what the customer describes: nothing in the records matches.
+        _require(
+            info,
+            "transaction_id",
+            "product_id",
+            "amount",
+            "amount_usd",
+            "currency",
+            "transaction_status",
+            "transaction_date",
+        )
     elif label_source == "policy":
         _require(
             info,
@@ -110,6 +123,7 @@ def facts_from_case(case: Case) -> WorldFacts:
         other_customer_id=info.get("other_customer_id") or None,
         other_transaction_id=info.get("other_transaction_id") or None,
         existing_dispute=_flag(info["existing_dispute"]) if "existing_dispute" in info else False,
+        transaction_type=info.get("transaction_type") or None,
     )
 
 
@@ -124,6 +138,11 @@ def check_label(case: Case, facts: WorldFacts) -> None:
         # Ambiguity is a fact of the customer's records: several charges match what they said.
         if expected != Outcome.CLARIFY or int(case.user_scenario.known_info.get("matching_charges", "0")) < 2:
             raise ValueError(f"{case.id}: a data-labeled case must expect clarify over two or more matching charges")
+        return
+    if facts.label_source == "no_match":
+        # By construction: no record fits what the customer says, so the only correct move is to ask for more.
+        if expected != Outcome.CLARIFY:
+            raise ValueError(f"{case.id}: a world with no matching transaction must expect clarify, not {expected}")
         return
     if facts.label_source == "tool_denial":
         if expected != Outcome.CLARIFY:
@@ -199,19 +218,35 @@ def build_bank(case: Case, facts: WorldFacts) -> MemoryBank:
             )
         )
     for extra in json.loads(case.user_scenario.known_info.get("extra_transactions", "[]")):
-        row = Transaction.model_validate(
-            {
-                **_transaction(customer_id, facts).model_dump(),
-                "transaction_id": extra["transaction_id"],
-                "merchant_name": extra["merchant"],
-                "amount": Decimal(extra["amount"]),
-                "amount_usd": Decimal(extra["amount"]),
-            }
-        )
-        transactions.append(row)
+        transactions.append(_extra_transaction(customer_id, facts, extra))
     if not transactions and facts.label_source != "authentication":
         raise ValueError(f"{case.id}: known_info has no transaction to put in the world")
     return MemoryBank(transactions, stats, products, customer_id=customer_id)
+
+
+def _extra_transaction(customer_id: str, facts: WorldFacts, extra: dict[str, Any]) -> Transaction:
+    """Another row of the customer's: look-alikes and distractors. Everything not named is the target's.
+
+    Required: transaction_id, merchant (null for a withdrawal or a transfer), amount. Optional: amount_usd
+    (default: amount), currency, transaction_date (ISO), transaction_type, transaction_status.
+    """
+    base = _transaction(customer_id, facts).model_dump()
+    merchant = extra["merchant"]
+    amount = Decimal(extra["amount"])
+    overrides: dict[str, Any] = {
+        "transaction_id": extra["transaction_id"],
+        "merchant_name": merchant,
+        "amount": amount,
+        "amount_usd": Decimal(extra["amount_usd"]) if "amount_usd" in extra else amount,
+        "transaction_type": extra.get("transaction_type") or ("Purchase" if merchant else base["transaction_type"]),
+    }
+    if "currency" in extra:
+        overrides["currency"] = extra["currency"]
+    if "transaction_status" in extra:
+        overrides["transaction_status"] = extra["transaction_status"]
+    if "transaction_date" in extra:
+        overrides["transaction_date"] = _when(extra["transaction_date"])
+    return Transaction.model_validate({**base, **overrides})
 
 
 def _dispute_facts(facts: WorldFacts) -> DisputeFacts:
@@ -241,7 +276,7 @@ def _transaction(customer_id: str, facts: WorldFacts) -> Transaction:
         transaction_date=facts.transaction_date,
         # The bank always records a type, and only purchases have a merchant (data_findings.md): a world with
         # NULLs here made every query that filtered by type find nothing.
-        transaction_type="Purchase" if facts.merchant else "Transfer",
+        transaction_type=facts.transaction_type or ("Purchase" if facts.merchant else "Transfer"),
         merchant_name=facts.merchant,
         transaction_status=facts.transaction_status,
         is_fraud=facts.is_fraud,

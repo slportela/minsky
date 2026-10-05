@@ -291,6 +291,9 @@ class _ReactiveUser:
         yes = next((t for t in script if t.strip().rstrip(".!?").casefold() in _YES_TOKENS), "sí")
         self._yes = yes
         self._facts = facts
+        # Only a policy-labeled world has a transaction the customer means. In a no_match world nothing the agent
+        # proposes is it, so the customer rejects every proposal.
+        self._target = facts.transaction_id if facts.label_source == "policy" else None
         self._expected = case.evaluation_criteria.expected_outcome
         blocks_card = any(
             a.check == "card_blocked" and str(a.args.get("expected", True)).lower() == "true"
@@ -320,7 +323,7 @@ class _ReactiveUser:
         if phase == Phase.SEARCH:
             return self._details.pop(0) if self._details else None
         if phase == Phase.CONFIRM_DISPUTE:
-            return self._yes if state.selected_txn_id == self._facts.transaction_id else "no"
+            return self._yes if self._target is not None and state.selected_txn_id == self._target else "no"
         if phase == Phase.RECOGNIZE:
             return "no" if self._facts.customer_says_not_me else self._yes
         if phase == Phase.CARD_OFFER:
@@ -723,7 +726,14 @@ def _pair(item: dict[str, str]) -> tuple[str, str]:
     return ("user", item["user"]) if "user" in item else ("agent", item["agent"])
 
 
-def _select(cases: list[Case], *, include_drafts: bool, ids: set[str] | None) -> list[Case]:
+def _needs_model(case: Case) -> bool:
+    """A case that tests what a model does (flexible matching): a scripted stand-in cannot pass it honestly."""
+    return case.user_scenario.known_info.get("requires_model", "").strip().lower() == "true"
+
+
+def _select(
+    cases: list[Case], *, include_drafts: bool, ids: set[str] | None, extractor: str = "scripted"
+) -> list[Case]:
     return [
         case
         for case in cases
@@ -732,9 +742,10 @@ def _select(cases: list[Case], *, include_drafts: bool, ids: set[str] | None) ->
         and case.status != Status.RETIRED
         and (include_drafts or case.status != Status.DRAFT)
         and case.user_scenario.script
+        and (extractor == "real" or not _needs_model(case))
         and (
             "rule_id" in case.user_scenario.known_info
-            or case.user_scenario.known_info.get("label_source") in {"tool_denial", "authentication"}
+            or case.user_scenario.known_info.get("label_source") in {"tool_denial", "authentication", "no_match"}
         )
     ]
 
@@ -771,7 +782,10 @@ def main(argv: list[str] | None = None) -> int:
     ids = set(filter(None, args.ids.split(","))) or None
     root = args.cases / "dev" if (args.cases / "dev").is_dir() else args.cases
     chosen = _select(
-        [load_case(path) for path in sorted(root.glob("*.yaml"))], include_drafts=args.include_drafts, ids=ids
+        [load_case(path) for path in sorted(root.glob("*.yaml"))],
+        include_drafts=args.include_drafts,
+        ids=ids,
+        extractor=args.extractor,
     )
     if args.gold_cases:
         if args.database != "postgres":

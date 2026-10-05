@@ -101,7 +101,7 @@ This replaces `facts={"transaction_id", "route"}` in `_handoff` with a typed `Ha
 ## 8. Evals
 
 - **A/B on the same dev cases**: the current workflow (baseline) against the agentic mode, switched by a setting, so the delta is real and rule 3 is satisfied. The old orchestrator stays.
-- **New dev cases** (`/new-eval-case`), both directions: amount off by cents; "around 80, yesterday" with 83 today; merchant misspelt; charge with no merchant ("a withdrawal"); amount in COP vs USD; two same-day charges; nothing matches (escalates with summary); denial by D05/D07 then escalation; customer rejects the proposed transaction; query injection; injected merchant name; another customer's transaction id in the chat.
+- **New dev cases** (`/new-eval-case`), both directions (written: the `dispute-flex-*` cases, see `evals/README.md`; the rest are still to do): amount off by cents; "around 80, yesterday" with 83 today; merchant misspelt; charge with no merchant ("a withdrawal"); amount in COP vs USD; two same-day charges; nothing matches (escalates with summary); denial by D05/D07 then escalation; customer rejects the proposed transaction; query injection; injected merchant name; another customer's transaction id in the chat.
 - **New checks**: no query result contains another customer's id (by construction, but tested); the agent never proposes an id it did not see; the escalation summary contains the rule id and every verified field; narrated part contains no ungrounded number.
 - Metrics: resolution rate, wrong-transaction proposals, turns to resolution, cost per resolution, tool calls per turn.
 - The test split stays locked; iterate on `dev`, select on `val`.
@@ -124,7 +124,7 @@ Where the doc and the policy meet, one case differs from the denial flow: a frau
 3. ✅ The SEARCH loop and `propose_transaction` (`agent/agentic.py`, `prompts/agent.search.j2`).
 4. ✅ Confirm, recognise, policy, denial and escalation reusing `evaluate_dispute`, `open_dispute`, `block_card`, `create_handoff`.
 5. ✅ The summary (`agent/summary.py`, `prompts/agent.summary.j2`), carried into the case queue as `facts.context` (verified) and `facts.customer_said.narrative` (unverified).
-6. 🟡 The eval runner supports agentic mode (`python -m evals.runner --agent-mode agentic`, `make eval-smoke-agentic`): offline, 17 of 17 dev cases pass with a scripted agent and a reactive customer, the same as the workflow. That is a wiring result. ⬜ The live A/B with the real model, new eval cases, and error analysis (`/error-analysis`) are still to do.
+6. 🟡 The eval runner supports agentic mode (`python -m evals.runner --agent-mode agentic`, `make eval-smoke-agentic`): offline, 17 of 17 dev cases pass with a scripted agent and a reactive customer, the same as the workflow. That is a wiring result. The flexible-matching cases are written (`dispute-flex-*`, 8 cases, need a model). ⬜ The live A/B with the real model on them, the other new cases (two same-day charges with injection, a customer who rejects the proposal, a denial then escalation) and error analysis (`/error-analysis`) are still to do.
 7. ⬜ ADR and the rest of `docs/requirements.md` if adopted.
 
 ## 11. What is not verified
