@@ -140,7 +140,7 @@ def _details_from_turn(text: str, facts: WorldFacts) -> DisputeDetails:
 
 
 class FaultingLLM:
-    """Raise a provider outage on matching llm_faults before delegating."""
+    """Raise a provider timeout on matching llm_faults before delegating."""
 
     def __init__(self, inner: Any, faults: list[Any]) -> None:
         self.inner = inner
@@ -149,10 +149,7 @@ class FaultingLLM:
 
     async def respond(self, instructions: str, messages: list[dict[str, str]], **kwargs: Any) -> Any:
         self.calls += 1
-        fault = next((item for item in self.faults if item.on_call == self.calls), None)
-        if fault is not None:
-            if fault.mode != "timeout":
-                raise ValueError(f"unsupported llm fault mode: {fault.mode}")
+        if any(item.on_call == self.calls for item in self.faults):
             raise APITimeoutError(request=_LLM_FAULT_REQUEST)
         return await self.inner.respond(instructions, messages, **kwargs)
 

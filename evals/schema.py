@@ -111,14 +111,9 @@ class ToolFault(_Strict):
     on_call: int = Field(default=1, ge=1)  # fail the n-th call to this tool
 
 
-class LlmFaultMode(StrEnum):
-    TIMEOUT = "timeout"
-
-
 class LlmFault(_Strict):
-    """Inject a provider outage on the n-th LLM.respond call (degraded handoff path)."""
+    """Inject a provider timeout on the n-th LLM.respond call (degraded handoff path)."""
 
-    mode: LlmFaultMode = LlmFaultMode.TIMEOUT
     on_call: int = Field(default=1, ge=1)
 
 

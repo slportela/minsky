@@ -8,14 +8,13 @@ generator_model: composer-2
 tags: {language: es, country: MX, intent: transaction_dispute, difficulty: normal, attack: none}
 session: {state: valid, customer_id: CLI-FIXTURE-OUTAGE}
 llm_faults:
-  - {mode: timeout, on_call: 1}
+  - {on_call: 1}
 user_scenario:
   persona: Mexican customer starting a dispute when the assistant model is down.
   instructions: >
     Say you want to dispute a 25.00 USD charge at Cafe. Stop after the first reply;
     do not insist on opening a dispute yourself.
   known_info:
-    label_source: model_outage
     rule_id: D09-eligible
     transaction_id: TRX-FIXTURE-OUTAGE
     product_id: PRD-FIXTURE-OUTAGE

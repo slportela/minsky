@@ -16,13 +16,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 
-from openai import (
-    APIConnectionError,
-    APIStatusError,
-    APITimeoutError,
-    InternalServerError,
-    RateLimitError,
-)
+from openai import APIConnectionError, APIStatusError, APITimeoutError, RateLimitError
 
 from minsky_api.agent.language import default_language_detector
 from minsky_api.agent.speak import SpeechError
@@ -32,20 +26,15 @@ from minsky_api.tools.bank import create_handoff
 from minsky_api.tools.context import ToolContext
 from minsky_api.tools.schemas import CreateHandoffArgs
 
-# Wrong model id, unusable structured reply, and speech grounding that escaped local templates.
-# Provider outages are matched by is_model_failure (timeout / connection / rate-limit / 5xx only).
-# Auth, bad request, and other 4xx stay a 503 without inventing a handoff (deployment / config fault).
-MODEL_FAILURES: tuple[type[Exception], ...] = (
+# Wrong model id, unusable structured reply, escaping speech grounding, and provider outages
+# (timeout / connection / rate-limit / 5xx). Auth and other 4xx stay a 503 without a handoff.
+_HANDOFF_FAILURES: tuple[type[BaseException], ...] = (
     ModelMismatchError,
     ModelOutputError,
     SpeechError,
-)
-
-_PROVIDER_OUTAGE: tuple[type[Exception], ...] = (
     APITimeoutError,
     APIConnectionError,
     RateLimitError,
-    InternalServerError,
 )
 
 REASON = "assistant_unavailable"
@@ -65,10 +54,8 @@ _REPLY = {
 
 
 def is_model_failure(exc: BaseException) -> bool:
-    """True when the turn should hand off: model/schema/speech failures and provider outages."""
-    if isinstance(exc, MODEL_FAILURES):
-        return True
-    if isinstance(exc, _PROVIDER_OUTAGE):
+    """True when the turn should hand off rather than return a bare 503."""
+    if isinstance(exc, _HANDOFF_FAILURES):
         return True
     return isinstance(exc, APIStatusError) and exc.status_code >= 500
 

@@ -73,11 +73,11 @@ class MemoryBank(FixtureBank):
 def facts_from_case(case: Case) -> WorldFacts:
     info = case.user_scenario.known_info
     label_source = info.get("label_source", "policy")
-    if label_source not in {"policy", "tool_denial", "authentication", "data", "model_outage"}:
-        raise ValueError(f"{case.id}: label_source must be policy, tool_denial, authentication, data or model_outage")
+    if label_source not in {"policy", "tool_denial", "authentication", "data"}:
+        raise ValueError(f"{case.id}: label_source must be policy, tool_denial, authentication or data")
     if label_source == "tool_denial":
         _require(info, "other_customer_id", "other_transaction_id")
-    elif label_source in {"policy", "model_outage"}:
+    elif label_source == "policy":
         _require(
             info,
             "rule_id",
@@ -129,11 +129,10 @@ def check_label(case: Case, facts: WorldFacts) -> None:
         if expected != Outcome.CLARIFY:
             raise ValueError(f"{case.id}: a transaction the customer does not own must expect clarify, not {expected}")
         return
-    if facts.label_source == "model_outage":
+    if case.llm_faults:
+        # Injected provider outage: the graded outcome is escalate, not the healthy-model policy route.
         if expected != Outcome.ESCALATE:
-            raise ValueError(f"{case.id}: a model-outage case must expect escalate")
-        if not case.llm_faults:
-            raise ValueError(f"{case.id}: a model-outage case needs llm_faults")
+            raise ValueError(f"{case.id}: an llm_faults case must expect escalate")
         return
     decision = decide(_dispute_facts(facts), get_settings().today)
     if decision.rule_id != facts.rule_id:

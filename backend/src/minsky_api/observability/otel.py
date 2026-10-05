@@ -15,11 +15,6 @@ from opentelemetry.trace import Span, Status, StatusCode, Tracer
 _PROVIDER: TracerProvider | None = None
 _TRACER_NAME = "minsky"
 
-# Pinned with opentelemetry-api/sdk as declared in backend/pyproject.toml. The public API allows
-# set_tracer_provider only once per process; tests call reset_tracing_for_tests to clear the Once.
-_OTEL_PROVIDER_ONCE_ATTR = "_TRACER_PROVIDER_SET_ONCE"
-_OTEL_PROVIDER_ATTR = "_TRACER_PROVIDER"
-
 
 def configure_tracing(*, endpoint: str | None = None, exporter: SpanExporter | None = None) -> bool:
     """Wire a TracerProvider when an OTLP endpoint or a test exporter is given.
@@ -60,13 +55,13 @@ def shutdown_tracing() -> None:
 
 
 def reset_tracing_for_tests() -> None:
-    """Shutdown any provider and clear the process-once guard so tests can configure again."""
+    """Shutdown any provider so tests can configure again.
+
+    Uses private SDK fields: set_tracer_provider is once-only; pin matches backend/pyproject.toml.
+    """
     shutdown_tracing()
-    # Private SDK fields: documented pin above; no public reset API exists.
-    setattr(trace, _OTEL_PROVIDER_ATTR, None)
-    once = getattr(trace, _OTEL_PROVIDER_ONCE_ATTR, None)
-    if once is not None:
-        once._done = False  # noqa: SLF001
+    trace._TRACER_PROVIDER = None  # noqa: SLF001
+    trace._TRACER_PROVIDER_SET_ONCE._done = False  # noqa: SLF001
 
 
 def get_tracer() -> Tracer:
