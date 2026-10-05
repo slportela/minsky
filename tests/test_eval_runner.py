@@ -498,3 +498,15 @@ async def test_an_unwrapped_real_llm_is_still_closed(monkeypatch: pytest.MonkeyP
     await run_trial(_case("dispute-eligible-open-es"), extractor="real", budget=_BUDGET)
     assert len(_ProviderLLM.instances) == 1
     assert _ProviderLLM.instances[0].client.closed is True
+
+
+async def test_the_agentic_real_run_survives_the_outage_case_and_closes_its_client(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Same crash, agentic mode: the first model call is `step`, and the fault wrapper must fault it too."""
+    _ProviderLLM.instances = []
+    monkeypatch.setattr("evals.runner.LLM", _ProviderLLM)
+    record = await run_trial(_case("model-outage-handoff-es"), extractor="real", budget=_BUDGET, agent_mode="agentic")
+    assert record.status == "passed", (record.status, record.error_class, record.grade)
+    assert len(_ProviderLLM.instances) == 1 and _ProviderLLM.instances[0].client.closed is True
+    assert any("HO-" in text for role, text in record.messages if role == "agent")  # the degraded path handed off

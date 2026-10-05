@@ -53,3 +53,13 @@ def test_search_prompt_tells_the_agent_not_to_filter_by_what_the_customer_did_no
     assert "quitando un filtro a la vez" in text
     assert "Antes de dar not_found, pregúntale" in text
     assert "minúsculas y sin acentos" in text
+
+
+def test_search_prompt_v4_fixes_the_three_failures_of_the_25_case_live_run():
+    """Live run 3: (1) a 1-dollar margin made 25.37 and 25.38 both candidates; (2) the agent asked "is it this one?"
+    in text instead of proposing; (3) a cited transaction id of someone else was given up as out_of_scope."""
+    text = render("agent.search.j2", today="2026-06-18")
+    assert "con un margen de un centavo" in text and "no le pidas elegir entre ella y otras" in text
+    assert "no le preguntes tú" in text and "propose_transaction" in text
+    assert "out_of_scope solo si lo que pide no es reclamar una transacción" in text
+    assert "es una búsqueda como cualquier otra" in text and "nunca hablas de otros clientes" in text
