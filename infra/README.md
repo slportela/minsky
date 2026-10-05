@@ -299,6 +299,17 @@ Placeholders: `<VM_IP>` static IPv4 of the instance; `<OPERATOR_CIDR>` operator 
     option `"all"` is also rejected (use `"allow-list"`). `Content-Type` and POST `Authorization`
     are forwarded by default.
 
+### Reset the demo's cases
+
+Rehearsals leave disputes, handoffs and card blocks in `cases.*`, and a repeated D09 scenario then answers "already open". `infra/reset_cases_smoke.sh` deletes them on the VM. It needs the same SSH access as any other change to the VM (the temporary Lightsail credentials, or the key of the instance).
+
+```bash
+infra/reset_cases_smoke.sh --host ubuntu@<VM_IP> --key <KEY_FILE>           # report only: rows per table, nothing changes
+infra/reset_cases_smoke.sh --host ubuntu@<VM_IP> --key <KEY_FILE> --apply   # back up, delete, verify
+```
+
+With `--apply` it dumps `cases.*` to `/opt/minsky/backups/cases-<timestamp>.sql` (mode 600), runs `DROP SCHEMA cases CASCADE`, restarts the API container (which recreates the empty schema on startup and forgets its in-memory conversations), and checks that the API is healthy, every `cases` table is empty and the `bank.*` row counts are unchanged. If a check fails it restores the dump and says so. It does not touch `bank.*`, `ops.*` (traces), the config files, the images or the volumes. The backup is the only way back: the VM has no snapshots. The local equivalent is `make demo-reset`.
+
 ### Teardown
 
 > **NOT EXECUTED; operator-run after the demo window. Suggested after 2026-10-16.**

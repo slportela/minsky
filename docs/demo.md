@@ -51,7 +51,7 @@ Write in Portuguese to get replies in Portuguese: the language of the first mess
 
 Then open https://localhost/console with a staff credential. Every case from the chats is there, fraud first, with a due time, the verified facts, what the customer said, the actions taken, the open questions and the tool audit trail. Claim a case, then resolve it with a note. Cases are in Postgres and survive `make down` / `make up`.
 
-Rehearsing changes the data: once the D09 customer's dispute is open, the next try answers "already open" (rule D04), and a blocked card stays blocked. Before the real demo, run `make demo-reset` (it deletes every case and restarts the API; the bank read models are untouched).
+Rehearsing changes the data: once the D09 customer's dispute is open, the next try answers "already open" (rule D04), and a blocked card stays blocked. Before the real demo, run `make demo-reset` (it deletes every case and restarts the API; the bank read models are untouched). On the Lightsail demo VM use `infra/reset_cases_smoke.sh` instead (`infra/README.md`, "Reset the demo's cases"): it reports first, takes a dump before deleting and verifies afterwards.
 
 ## 5. Evidence
 
