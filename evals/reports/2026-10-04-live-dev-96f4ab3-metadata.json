@@ -1,0 +1,50 @@
+{
+  "backend_revision_label": null,
+  "backend_source_sha256": "5e6071d0bae9e9205e868bdce14b4bf4214a180305b4d3e0201b0ebf5aa50d11",
+  "git_sha": "96f4ab38e35df5992bcacc68f0f87b72e246a0a0",
+  "dirty": false,
+  "mode": "live-extraction",
+  "model": "gpt-6-luna",
+  "budget": {
+    "cap_usd": "1",
+    "reserved_usd": "0",
+    "usage_cost_usd": "0",
+    "input_usd_per_million": "0.10",
+    "output_usd_per_million": "0.50",
+    "pricing_basis": "operator-supplied uncached token rates; not an invoice"
+  },
+  "sdk_max_retries": 0,
+  "trial_timeout_s": 120,
+  "legacy_auth_baseline": false,
+  "today": "2026-06-18",
+  "trials_per_case": 3,
+  "cases": {
+    "dispute-above-limit-es": "099db384705a0ce49ca8d55b8000170c39326da1b8111b3733a58cfffb49446d",
+    "dispute-above-limit-pt": "2ccce498d3ec4e8c7a3ba7986c8015ee3eca2c40d46790924b968d2cba73cb1f",
+    "dispute-already-disputed-es": "c45985cbaf673ce1eeec7c9b7430029ba6a4b8fff89df51ed31718170d78ee59",
+    "dispute-auth-header-denied-es": "076f3869e60a9426ddd617c18b46a07e31f95c312e1758a6fb86bd2860e1eae2",
+    "dispute-clarify-retain-merchant-es": "eb84d37e528fe50a869791cb85d4d9647fa044c23ad976a422b6d463e6b99547",
+    "dispute-decimal-amount-es": "e60f8ed9d2a2440c9530d44cc51169d36ee1535fe22918dfa0585cb1e1097825",
+    "dispute-declined-not-charged-es": "8bb856e072a6cb8f73400de040faf78af0f80af1ff02477acfa7cbb64f1c3900",
+    "dispute-eligible-open-es": "839565ab30ace84d1293500dc7632dd452f53b2a2a90095b1cbb9d71ab925ffa",
+    "dispute-eligible-open-mixed": "bbd93beaa70d1bb60b9ec6dffebffeaf6e470cf393181f7d0ed996dccf874964",
+    "dispute-eligible-open-pt": "2454295ccc3c8fd08cdce46960bea78dcb5a9f16c3454a17a134e9ebecb74065",
+    "dispute-expired-session-es": "c3ea35d035206923be02dcf322663ceabe98784f7dbaa9e523c0ad759207063a",
+    "dispute-fraud-block-es": "4db2aa898ae7f04ca73dcfbb16602374f8d35e1b38890a9f2ffe0cbe34d72f83",
+    "dispute-fraud-no-block-es": "3cf01059138f710ea3a6e0de9c388e4376e72dde1c9c420a54284f28a8a47371",
+    "dispute-miss-retain-merchant-es": "222ecbdead3821a2a366fb53a7569a5d0a95d1b19a64e2f9dba0a925281aadc4",
+    "dispute-other-customer-txn-es": "a33884516509a3c63c1adb1f4bd7b0dfa0246d0caddddb64e9207b297911b2e7",
+    "dispute-policy-failure-retry-es": "67201d0bcb6fcebae8dea33745f3b3f06a3c8d01d7e27bb7f8a020a01d605582"
+  },
+  "prompts": {
+    "agent.confirm.j2": "6ce4d3739b17f1e9cf100aae4df992896c72b58b386a1930409147e6f1b770ce",
+    "agent.extract.j2": "f4124f3f3bf25ba3494373e5b34245ed51b4a215fab74d5cc3bdf22732b67399",
+    "agent.speak.j2": "984181122309c0683721ae55d3379d8b5c010920a36385fcf3987227c657e20f"
+  },
+  "unsupported_safety": [
+    "ungrounded_fact",
+    "wrong_language",
+    "followed_injected_instruction"
+  ],
+  "database": "isolated SQLite; production PostgreSQL behavior not verified"
+}
