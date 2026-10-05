@@ -79,6 +79,45 @@ export async function postChatTurn(args: {
   });
 }
 
+// ---- Demo operator (ADR 0015): a credential that chooses which customer to chat as ----
+
+export type DemoSession = {
+  credential: string;
+  customer_id: string;
+  first_name: string | null;
+  country: string | null;
+  operator_id: string;
+  expires_at: string;
+};
+
+// Is this credential a demo operator's? Null when it is not, or when the demo mode is off (404 or 401): the page
+// then treats it as an ordinary customer credential.
+export async function getDemoOperator(credential: string): Promise<string | null> {
+  try {
+    const body = await api<{ operator_id: string }>("/demo/whoami", {
+      headers: { Authorization: `Bearer ${credential}` },
+    });
+    return body.operator_id;
+  } catch (error) {
+    if (error instanceof ApiError && (error.status === 404 || error.status === 401)) {
+      return null;
+    }
+    throw error;
+  }
+}
+
+export async function postDemoSession(
+  credential: string,
+  choice: { customerId: string } | { random: true },
+): Promise<DemoSession> {
+  const body = "random" in choice ? { random: true } : { customer_id: choice.customerId };
+  return api<DemoSession>("/demo/session", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${credential}` },
+    body: JSON.stringify(body),
+  });
+}
+
 // ---- Agent console (staff credential; never a customer one) ----
 
 export type CaseSummary = {

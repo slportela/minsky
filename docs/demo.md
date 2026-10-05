@@ -30,10 +30,10 @@ make silver        # data/warehouse.duckdb (~90 s)
 ```bash
 make up            # Caddy + web + API + Postgres → https://localhost
 make gold          # builds bank.* and loads it into Postgres
-make demo-sessions # prints MINSKY_TEST_SESSIONS and MINSKY_STAFF_SESSIONS + a cheat sheet
+make demo-sessions # prints MINSKY_TEST_SESSIONS, MINSKY_STAFF_SESSIONS and the demo operators + a cheat sheet
 ```
 
-Paste the two printed lines into `.env`, then `make up` again so the API picks them up. Keep the cheat sheet: it has one real customer per policy rule, with the message to type in Spanish and Portuguese. Credentials expire (14 days by default, `--days`).
+Paste the printed lines into `.env`, then `make up` again so the API picks them up. Keep the cheat sheet: it has one real customer per policy rule, with the message to type in Spanish and Portuguese. Credentials expire (14 days by default, `--days`).
 
 ## 4. Walk through it
 
@@ -50,6 +50,12 @@ Open https://localhost/chat, paste a credential from the cheat sheet, and type i
 Write in Portuguese to get replies in Portuguese: the language of the first message sets the conversation's language.
 
 Then open https://localhost/console with a staff credential. Every case from the chats is there, fraud first, with a due time, the verified facts, what the customer said, the actions taken, the open questions and the tool audit trail. Claim a case, then resolve it with a note. Cases are in Postgres and survive `make down` / `make up`.
+
+### Any customer of the dataset (demo operators, ADR 0015)
+
+`make demo-sessions` also prints two **operator** credentials (`equipo` for us, `jurado` for the jury) and sets `MINSKY_DEMO_OPERATOR_ENABLED=true`. Paste one in `/chat` instead of a customer credential: the page asks which customer to chat as. Type a customer id (`CLI-…`) or press "Uno al azar con cargos recientes", which picks one whose charge can be taken all the way to an opened dispute. The chat is then the usual one, as that customer, for two hours; the page shows "Modo demo", the operator and the customer.
+
+It is not authentication of customers: whoever holds an operator credential can chat as any customer. It is off unless `MINSKY_DEMO_OPERATOR_ENABLED` is set and the API refuses it outside the local and demo environments. Every choice is in the audit trail with the operator's name.
 
 Rehearsing changes the data: once the D09 customer's dispute is open, the next try answers "already open" (rule D04), and a blocked card stays blocked. Before the real demo, run `make demo-reset` (it deletes every case and restarts the API; the bank read models are untouched).
 

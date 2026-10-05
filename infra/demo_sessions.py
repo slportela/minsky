@@ -1,8 +1,9 @@
 """Print demo credentials for `make up`: one customer per dispute-policy rule, plus agent-console staff.
 
 Reads the gold Parquet that `make gold` writes (data/lake/gold), so every demo customer is a real
-customer of the dataset whose transaction triggers that rule. Prints two lines to paste into .env
-(MINSKY_TEST_SESSIONS, MINSKY_STAFF_SESSIONS) and a cheat sheet with what to type in the chat.
+customer of the dataset whose transaction triggers that rule. Prints the lines to paste into .env
+(MINSKY_TEST_SESSIONS, MINSKY_STAFF_SESSIONS, plus the demo operator credentials) and a cheat sheet with what
+to type in the chat.
 
     uv run python infra/demo_sessions.py --days 14 > /tmp/demo.txt
 
@@ -33,6 +34,7 @@ SCENARIOS = (
     ("D05-outside-window", False, "older than 120 days: explained, agent offered"),
 )
 STAFF = ("ana.fraude", "luis.disputas")
+OPERATORS = ("equipo", "jurado")  # ADR 0015: credentials that choose which customer to chat as
 
 
 def _pick(con: duckdb.DuckDBPyConnection, rule: str, not_me: bool) -> tuple | None:
@@ -95,14 +97,25 @@ def main() -> None:
         for name in STAFF
     }
 
-    print("# Paste these two lines into .env, then `make up` (they expire " + expires + ")")
+    operators = {
+        f"demo-op-{name}-{secrets.token_urlsafe(12)}": {"operator_id": name, "expires_at": expires}
+        for name in OPERATORS
+    }
+
+    print("# Paste these lines into .env, then `make up` (they expire " + expires + ")")
     print("MINSKY_TEST_SESSIONS=" + json.dumps(sessions, separators=(",", ":")))
     print("MINSKY_STAFF_SESSIONS=" + json.dumps(staff, separators=(",", ":")))
+    print("MINSKY_DEMO_OPERATOR_ENABLED=true")
+    print("MINSKY_DEMO_OPERATOR_SESSIONS=" + json.dumps(operators, separators=(",", ":")))
     print("\n# Demo cheat sheet: open https://localhost/chat, paste a credential, type the message")
     print("\n".join(sheet))
     print("\n# Agent console: https://localhost/console")
     for token, record in staff.items():
         print(f"- {record['agent_id']}: {token}")
+    print("\n# Demo operators: paste one in /chat to choose ANY customer of the dataset")
+    print("# (a demo tool, not authentication of customers: ADR 0015)")
+    for token, record in operators.items():
+        print(f"- {record['operator_id']}: {token}")
 
 
 if __name__ == "__main__":

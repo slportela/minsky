@@ -1,11 +1,20 @@
 "use client";
 
-// Customer surface: trusted test-session gate, then conversation with the dispute assistant.
+// Customer surface: trusted test-session gate, then conversation with the dispute assistant. A demo operator
+// credential (ADR 0015) first chooses which customer to chat as; the chat itself is the same.
 // Shows only what the backend returns; it never builds facts or decisions on its own.
 
 import { FormEvent, useRef, useState } from "react";
 
-import { ApiError, ChatMessage, ChatResponse, postChatTurn } from "../../lib/api";
+import {
+  ApiError,
+  ChatMessage,
+  ChatResponse,
+  DemoSession,
+  getDemoOperator,
+  postChatTurn,
+  postDemoSession,
+} from "../../lib/api";
 
 function messageText(message: ChatMessage): string {
   return "user" in message ? message.user : message.agent;
@@ -43,9 +52,12 @@ export default function ChatPage() {
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [operator, setOperator] = useState<{ credential: string; operatorId: string } | null>(null);
+  const [actingAs, setActingAs] = useState<DemoSession | null>(null);
+  const [customerChoice, setCustomerChoice] = useState("");
   const inFlight = useRef(false);
 
-  function continueWithCredential(event: FormEvent) {
+  async function continueWithCredential(event: FormEvent) {
     event.preventDefault();
     const id = credential.trim();
     if (!id) {
@@ -53,13 +65,59 @@ export default function ChatPage() {
       return;
     }
     setError(null);
-    setLoggedIn(true);
+    setBusy(true);
+    try {
+      const operatorId = await getDemoOperator(id);
+      if (operatorId) {
+        setOperator({ credential: id, operatorId });
+        return;
+      }
+      setLoggedIn(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error desconocido");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function chooseCustomer(choice: { customerId: string } | { random: true }) {
+    if (!operator || inFlight.current) return;
+    inFlight.current = true;
+    setBusy(true);
+    setError(null);
+    try {
+      const session = await postDemoSession(operator.credential, choice);
+      startNewConversation();
+      setActingAs(session);
+      setCredential(session.credential);
+      setLoggedIn(true);
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setError(err.code ? `${err.code}: ${err.message}` : err.message);
+      } else {
+        setError(err instanceof Error ? err.message : "Error desconocido");
+      }
+    } finally {
+      inFlight.current = false;
+      setBusy(false);
+    }
+  }
+
+  function changeCustomer() {
+    if (inFlight.current || !operator) return;
+    startNewConversation();
+    setActingAs(null);
+    setCredential(operator.credential);
+    setLoggedIn(false);
   }
 
   function changeSession() {
     if (inFlight.current) return;
     startNewConversation();
     setCredential("");
+    setOperator(null);
+    setActingAs(null);
+    setCustomerChoice("");
     setLoggedIn(false);
   }
 
@@ -111,12 +169,57 @@ export default function ChatPage() {
     void sendText(draft, { clearDraft: true });
   }
 
+  if (!loggedIn && operator) {
+    return (
+      <main>
+        <h1>Chat</h1>
+        <p role="status" style={{ border: "1px solid", padding: "0.5rem" }}>
+          Modo demo: la credencial <code>{operator.operatorId}</code> permite elegir con qué cliente se conversa.
+          Es solo para la demostración; no es autenticación de clientes.
+        </p>
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            const id = customerChoice.trim();
+            if (!id) {
+              setError("Indica el id del cliente (por ejemplo CLI-…).");
+              return;
+            }
+            void chooseCustomer({ customerId: id });
+          }}
+        >
+          <label>
+            Cliente{" "}
+            <input
+              value={customerChoice}
+              onChange={(e) => setCustomerChoice(e.target.value)}
+              autoComplete="off"
+              placeholder="CLI-…"
+              disabled={busy}
+            />
+          </label>{" "}
+          <button type="submit" disabled={busy}>
+            Elegir
+          </button>{" "}
+          <button type="button" disabled={busy} onClick={() => void chooseCustomer({ random: true })}>
+            Uno al azar con cargos recientes
+          </button>{" "}
+          <button type="button" disabled={busy} onClick={changeSession}>
+            Cambiar credencial
+          </button>
+        </form>
+        {busy ? <p>Eligiendo…</p> : null}
+        {error ? <p role="alert">{error}</p> : null}
+      </main>
+    );
+  }
+
   if (!loggedIn) {
     return (
       <main>
         <h1>Chat</h1>
         <p>Ingresa la credencial de prueba que te proporcionó el equipo.</p>
-        <form onSubmit={continueWithCredential}>
+        <form onSubmit={(event) => void continueWithCredential(event)}>
           <label>
             Credencial de prueba{" "}
             <input
@@ -127,7 +230,9 @@ export default function ChatPage() {
               disabled={busy}
             />
           </label>{" "}
-          <button type="submit">Continuar</button>
+          <button type="submit" disabled={busy}>
+            Continuar
+          </button>
         </form>
         {error ? <p role="alert">{error}</p> : null}
       </main>
@@ -137,6 +242,13 @@ export default function ChatPage() {
   return (
     <main>
       <h1>Chat</h1>
+      {actingAs ? (
+        <p role="status" style={{ border: "1px solid", padding: "0.5rem" }}>
+          Modo demo · operador <code>{actingAs.operator_id}</code> · cliente <code>{actingAs.customer_id}</code>
+          {actingAs.first_name ? ` (${actingAs.first_name}${actingAs.country ? `, ${actingAs.country}` : ""})` : ""} ·
+          la sesión vence {new Date(actingAs.expires_at).toLocaleString("es")}.
+        </p>
+      ) : null}
       <p>
         Sesión de prueba
         {conversationId ? (
@@ -148,6 +260,13 @@ export default function ChatPage() {
         <button type="button" disabled={busy} onClick={startNewConversation}>
           Nueva conversación
         </button>{" "}
+        {actingAs ? (
+          <>
+            <button type="button" disabled={busy} onClick={changeCustomer}>
+              Cambiar cliente
+            </button>{" "}
+          </>
+        ) : null}
         <button type="button" disabled={busy} onClick={changeSession}>
           Cambiar sesión
         </button>
