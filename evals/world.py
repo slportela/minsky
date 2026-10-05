@@ -135,9 +135,9 @@ def check_label(case: Case, facts: WorldFacts) -> None:
     if decision.rule_id != facts.rule_id:
         raise ValueError(f"{case.id}: policy decides {decision.rule_id}, case says {facts.rule_id}")
     if case.llm_faults:
-        # Injected provider outage: facts/rule stay policy-true; only the graded outcome is escalate.
-        if expected != Outcome.ESCALATE:
-            raise ValueError(f"{case.id}: an llm_faults case must expect escalate")
+        # Injected provider outage: facts/rule stay policy-true; the graded outcome is abstain (maintenance message).
+        if expected != Outcome.ABSTAIN:
+            raise ValueError(f"{case.id}: an llm_faults case must expect abstain")
         return
     if facts.label_source == "unclear_replies":
         # The customer never gives a plain yes or no: facts and rule stay policy-true, the outcome is a handoff.
