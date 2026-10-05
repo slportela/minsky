@@ -38,7 +38,7 @@ What is scored: a working system, proven by evals, that knows when **not** to ac
 | `pipeline/` | Data pipeline: organizer S3 → bronze → silver → gold (dbt-duckdb) → Postgres `bank.*`; `data_dictionary.py` is the contract for silver, `docs/read_models.md` for gold |
 | `evals/` | Eval harness: schema, set checks, metrics, `cases/{dev,val,test}` |
 | `prompts/` | Versioned prompts (see `prompts/README.md`) |
-| `infra/` | Caddy, OpenTofu (`envs/demo`); local/demo/production comparison in `infra/README.md` |
+| `infra/` | Caddy, OpenTofu (`envs/demo`); local/demo/production comparison and the redeploy runbook in `infra/README.md`; `smoke_vm.sh`, `redeploy_smoke.sh`, `reset_cases_smoke.sh` operate the demo VM |
 | `compose.yaml` | The whole stack on one machine |
 | `kickoff_docs/` | Organizer documents (read-only) |
 
@@ -51,6 +51,7 @@ make test         # eval-harness + backend tests
 make eval-check   # validate eval cases (schema, leakage, coverage)
 make up / down    # full stack locally with compose (https://localhost)
 make demo-plan    # OpenTofu plan for the AWS demo (one EC2 + compose)
+infra/smoke_vm.sh status | verify [sha] | deploy <sha> | rollback   # the demo VM: runbook in infra/README.md; a deploy needs the owner's explicit yes (`/deploy-demo`)
 make pipeline     # data: bronze → mirror → silver → gold (loads Postgres bank.*) → publish
 make help         # everything else
 ```
