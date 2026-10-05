@@ -177,6 +177,11 @@ class FaultingLLM:
         self.faults = faults
         self.calls = 0
 
+    @property
+    def client(self) -> Any:
+        """The wrapped provider's client. The trial that owns this llm closes it, as it does for an unwrapped one."""
+        return self.inner.client
+
     async def respond(self, instructions: str, messages: list[dict[str, str]], **kwargs: Any) -> Any:
         self.calls += 1
         if any(item.on_call == self.calls for item in self.faults):

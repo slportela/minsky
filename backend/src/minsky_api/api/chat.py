@@ -14,7 +14,7 @@ from fastapi import APIRouter, Header, Request
 from fastapi.responses import JSONResponse
 from openai import OpenAIError
 
-from minsky_api.agent.degraded import hand_off_on_outage, is_model_failure
+from minsky_api.agent.degraded import close_on_outage, is_model_failure
 from minsky_api.agent.memory import ConversationStore
 from minsky_api.agent.orchestrator import run_turn
 from minsky_api.agent.state import ConversationState
@@ -73,7 +73,7 @@ async def chat_turn(
 ) -> ChatResponse | JSONResponse:
     """One customer turn, authenticated with a server-provisioned test credential."""
     try:
-        tool_session = resolve_session(authorization)
+        tool_session = resolve_session(authorization, getattr(request.app.state, "demo_sessions", None))
     except PermissionDenied as exc:
         return _error(ErrorCode(exc.reason), "test session credential is missing, invalid, or expired", 401)
     except RuntimeError:
@@ -157,14 +157,14 @@ async def _degraded_turn(
     *,
     language: str | None = None,
 ) -> ChatResponse | JSONResponse:
-    """The model is unavailable: hand off with context and say so (docs/architecture.md, principle 5)."""
-    logger.warning("model unavailable (%s): handing the conversation to an agent", type(failure).__name__)
+    """The model is unavailable: say the site is under maintenance and end the conversation. No case is created."""
+    logger.warning("model unavailable (%s): answering with the maintenance message", type(failure).__name__)
     try:
         async with session() as db:
             ctx = ToolContext(session=tool_session, db=db, cases=cases)
-            state, _reply = await hand_off_on_outage(ctx, live, user_text, failure, language=language)
-    except Exception:  # whatever stops the handoff: never promise one that does not exist
-        logger.warning("handoff after model outage failed (%s)", type(failure).__name__, exc_info=True)
+            state, _reply = await close_on_outage(ctx, live, user_text, language=language)
+    except Exception:  # whatever stops it (the store read of an opened dispute): an honest 503
+        logger.warning("maintenance reply after model outage failed (%s)", type(failure).__name__, exc_info=True)
         return _error(ErrorCode.SERVICE_UNAVAILABLE, "the assistant is unavailable; please try again later", 503)
     conversations.put(state)
     return _chat_response(state)

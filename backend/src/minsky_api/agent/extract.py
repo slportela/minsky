@@ -9,6 +9,7 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, ConfigDict, Field, WithJsonSchema
 
 from minsky_api.agent.prompts import render
+from minsky_api.config import get_settings
 from minsky_api.llm.client import LLM
 
 
@@ -46,9 +47,16 @@ class DisputeDetails(BaseModel):
 
 
 async def extract_dispute_details(llm: LLM, text: str) -> DisputeDetails:
+    # The model does not know what day it is: without this "ayer" or "el lunes" come back as no date at all. The date
+    # is the system's `today` (the policy windows use the same one) and goes in its own message, so the instructions
+    # stay the same text and cacheable.
+    today = get_settings().today.isoformat()
     result = await llm.respond(
         render("agent.extract.j2"),
-        [{"role": "user", "content": text}],
+        [
+            {"role": "user", "content": f"Fecha de hoy: {today}"},
+            {"role": "user", "content": text},
+        ],
         schema=DisputeDetails,
         reasoning_effort="low",
         max_output_tokens=256,

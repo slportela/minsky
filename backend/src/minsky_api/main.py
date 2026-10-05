@@ -2,12 +2,14 @@
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from datetime import timedelta
 
 from fastapi import FastAPI
 
 from minsky_api.agent.memory import ConversationStore
-from minsky_api.api import chat_router, console_router
+from minsky_api.api import chat_router, console_router, demo_router
 from minsky_api.config import Settings, get_settings
+from minsky_api.identity.demo_sessions import DemoSessionStore
 from minsky_api.observability import configure_tracing, shutdown_tracing
 from minsky_api.store.cases import CasesBackend
 from minsky_api.store.cases_memory import InMemoryCasesBackend
@@ -37,6 +39,12 @@ def create_app() -> FastAPI:
         cases = _cases_backend(settings)
         app.state.cases = cases
         app.state.conversations = ConversationStore()
+        if settings.demo_operator_enabled:
+            app.state.demo_sessions = DemoSessionStore(
+                ttl=timedelta(minutes=settings.demo_session_ttl_minutes),
+                per_minute=settings.demo_sessions_per_minute,
+                max_active=settings.demo_max_active_sessions,
+            )
         try:
             yield
         finally:
@@ -48,6 +56,7 @@ def create_app() -> FastAPI:
     app = FastAPI(title="minsky dispute intake", version="0.1.0", lifespan=lifespan)
     app.include_router(chat_router)
     app.include_router(console_router)
+    app.include_router(demo_router)
 
     @app.get("/api/health")
     def health() -> dict[str, str]:

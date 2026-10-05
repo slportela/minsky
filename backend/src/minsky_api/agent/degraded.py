@@ -1,14 +1,13 @@
-"""Degraded mode: when the model is unavailable, hand off with context and tell the customer.
+"""Degraded mode: when the model is unavailable, say the site is under maintenance and end the conversation.
 
-docs/architecture.md, principle 5: "Degrade to a human, never to a guess." The reply states only what
-is true after the fact: a handoff exists (create_handoff reads it back) and its reference, plus any
-write from the failed turn that is still visible in the store (for example an opened dispute).
-
-The handoff carries identifiers, prior acts, and the failure class, never the customer's free text.
+The model cannot ask the customer anything, so the assistant does not send a case to a person on its own (a case
+goes to a person only after the customer confirms the charge or accepts an agent). The reply is written by code:
+the site is under maintenance, ask technical service, and, if the failed turn had already opened a dispute, that
+dispute's reference, read back from the store. The conversation becomes terminal (`unavailable`).
 
 Speech grounding: compose_speech raises SpeechError. Paths that catch RuntimeError and send a code
-template (clarify, inform, DONE follow-up, _speak_verified) never reach this module. Paths that let
-SpeechError escape after the bounded _speak retries (e.g. confirm_txn) become a verified handoff here.
+template (clarify, inform, _speak_verified) never reach this module. Paths that let SpeechError escape after the
+bounded _speak retries (e.g. confirm_txn) end here too.
 """
 
 from __future__ import annotations
@@ -19,15 +18,14 @@ from openai import APIConnectionError, APIStatusError, RateLimitError
 
 from minsky_api.agent.language import default_language_detector
 from minsky_api.agent.speak import SpeechError
-from minsky_api.agent.state import ConversationState, Phase
+from minsky_api.agent.state import ConversationState, Phase, Terminal
+from minsky_api.agent.wording import terminal_reply
 from minsky_api.llm.client import ModelMismatchError, ModelOutputError
-from minsky_api.tools.bank import create_handoff
 from minsky_api.tools.context import ToolContext
-from minsky_api.tools.schemas import CreateHandoffArgs
 
 # Wrong model id, unusable structured reply, escaping speech grounding, and provider outages
 # (connection / rate-limit / 5xx; APITimeoutError is an APIConnectionError). Auth and other 4xx
-# stay a 503 without a handoff.
+# stay a 503 (a configuration fault, not something to tell the customer is maintenance).
 _HANDOFF_FAILURES: tuple[type[BaseException], ...] = (
     ModelMismatchError,
     ModelOutputError,
@@ -36,63 +34,25 @@ _HANDOFF_FAILURES: tuple[type[BaseException], ...] = (
     RateLimitError,
 )
 
-REASON = "assistant_unavailable"
-
-_REPLY = {
-    "es": (
-        "Tuve un problema técnico y no puedo seguir con tu solicitud en este momento. "
-        "Pasé tu caso a un asesor para que lo revise con la información que ya tenemos "
-        "(referencia {handoff_id}). No hace falta que repitas nada."
-    ),
-    "pt": (
-        "Tive um problema técnico e não consigo continuar com a sua solicitação agora. "
-        "Encaminhei o seu caso a um atendente, que vai analisá-lo com as informações que já temos "
-        "(referência {handoff_id}). Não precisa repetir nada."
-    ),
-}
-
-_REPLY_WITH_DISPUTE = {
-    "es": (
-        "Tuve un problema técnico y no puedo seguir con tu solicitud en este momento. "
-        "Tu reclamo {dispute_id} ya quedó registrado. Pasé tu caso a un asesor "
-        "(referencia {handoff_id}). No hace falta que repitas nada."
-    ),
-    "pt": (
-        "Tive um problema técnico e não consigo continuar com a sua solicitação agora. "
-        "Sua contestação {dispute_id} já foi registrada. Encaminhei o seu caso a um atendente "
-        "(referência {handoff_id}). Não precisa repetir nada."
-    ),
-}
-
 
 def is_model_failure(exc: BaseException) -> bool:
-    """True when the turn should hand off rather than return a bare 503."""
+    """True when the turn should answer with the maintenance message rather than a bare 503."""
     if isinstance(exc, _HANDOFF_FAILURES):
         return True
     return isinstance(exc, APIStatusError) and exc.status_code >= 500
 
 
-def outage_reply(language: str, handoff_id: str, *, dispute_id: str | None = None) -> str:
-    if dispute_id:
-        return _REPLY_WITH_DISPUTE.get(language, _REPLY_WITH_DISPUTE["es"]).format(
-            handoff_id=handoff_id, dispute_id=dispute_id
-        )
-    return _REPLY.get(language, _REPLY["es"]).format(handoff_id=handoff_id)
-
-
-async def hand_off_on_outage(
+async def close_on_outage(
     ctx: ToolContext,
     live: ConversationState,
     user_text: str,
-    failure: Exception,
     *,
     language: str | None = None,
 ) -> tuple[ConversationState, str]:
-    """Create the handoff from the live (possibly half-finished) turn and close the conversation.
+    """End the conversation with the maintenance message. Creates no case.
 
-    `live` is the state after the failed turn mutated it: side effects already committed (selected
-    transaction, opened dispute, prior acts) must reach the advisor. The idempotency key matches
-    orchestrator handoffs for this turn so a second outage path cannot enqueue a duplicate case.
+    `live` is the state after the failed turn mutated it. A dispute the failed turn already opened is visible in
+    the store and is reported by its reference; nothing else is claimed.
     """
     after = deepcopy(live)
     stripped = user_text.strip()
@@ -103,7 +63,6 @@ async def hand_off_on_outage(
     after.language = lang
 
     dispute_id: str | None = None
-    actions: list[str] = []
     if after.selected_txn_id and ctx.session.customer_id:
         existing = ctx.cases.get_dispute_by_transaction(
             customer_id=ctx.session.customer_id,
@@ -111,30 +70,11 @@ async def hand_off_on_outage(
         )
         if existing is not None:
             dispute_id = existing.dispute_id
-            actions.append(f"dispute_opened:{dispute_id}")
 
-    result = await create_handoff(
-        ctx,
-        CreateHandoffArgs(
-            # Same key shape as orchestrator._handoff: one handoff per conversation turn.
-            idempotency_key=f"{after.conversation_id}:{after.turn_count}",
-            reason=REASON,
-            rule_id=after.rule_id,
-            facts={
-                "transaction_id": after.selected_txn_id,
-                "phase": after.phase.value,
-                "failure": type(failure).__name__,
-                "language": lang,
-                "acts": list(after.acts),
-                "route": after.route,
-                "dispute_id": dispute_id,
-            },
-            actions=tuple(actions),
-        ),
-    )
-    reply = outage_reply(lang, result.handoff.handoff_id, dispute_id=dispute_id)
     after.phase = Phase.DONE
     after.pending_question = None
-    after.acts.append("handoff")
+    after.terminal = Terminal("unavailable", dispute_id=dispute_id)
+    after.acts.append("unavailable")
+    reply = terminal_reply(lang, after.terminal)
     after.messages.append(("agent", reply))
     return after, reply

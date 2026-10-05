@@ -6,8 +6,13 @@ written here. Rule ids stay internal (audit, traces, console); customers hear th
 
 from __future__ import annotations
 
+import re
 from datetime import date
 from decimal import Decimal
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from minsky_api.agent.state import Terminal
 
 from minsky_api.tools.schemas import FindTransactionsResult, MatchedTransactionView, TransactionView
 
@@ -135,17 +140,29 @@ def confirm_question(act: str, language: str, transaction_type: str | None = Non
     return "¿Bloqueo tu tarjeta ahora? Responde sí o no."
 
 
-def with_yes_no_hint(text: str, language: str) -> str:
-    """The transaction question is the model's. Code makes sure it says how to answer.
+_ONLY_YES_NO = {
+    "es": "En esta parte del proceso solo puedes responder «sí» o «no».",
+    "pt": "Nesta parte do processo você só pode responder «sim» ou «não».",
+}
+# A closing "Responde sí o no." the model (or the original question) already carries: the notice says it better.
+_CLOSING_YES_NO = re.compile(
+    r"\s*(?:responde|responda)\s+(?:sí|si|sim)\s+(?:o|ou)\s+(?:no|não|nao)\s*[.!]?\s*$", re.IGNORECASE
+)
 
-    Only a plain "sí" or "no" authorizes anything (agent.consent), and the questions for the two actions already
-    end with "Responde sí o no" from code. A question that already asks for a yes or a no is left alone.
+
+def with_only_yes_no(text: str, language: str) -> str:
+    """The reply asked the customer again: code always says that only a yes or a no works at this step.
+
+    The model rephrases the pending question; it is not trusted to say how to answer, which is exactly what
+    went missing when a customer answered "lo reconozco" and was asked for more details instead. A closing
+    "Responde sí o no" is replaced by the notice, and a text that already ends with the notice is left alone.
     """
-    folded = text.casefold()
-    if "sí o no" in folded or "sim ou não" in folded or "si o no" in folded:
-        return text
-    hint = "Responda sim ou não." if _lang(language) == "pt" else "Responde sí o no."
-    return f"{text.rstrip()} {hint}"
+    notice = _ONLY_YES_NO[_lang(language)]
+    body = text.rstrip()
+    if body.endswith(notice):
+        return body
+    body = _CLOSING_YES_NO.sub("", body).rstrip()
+    return f"{body} {notice}" if body else notice
 
 
 def with_candidates(text: str, candidates: str) -> str:
@@ -184,7 +201,9 @@ def safe_sentence(act: str, language: str, facts: dict[str, object]) -> str:
     if act == "clarify":
         return clarify_fallback(language, candidates if isinstance(candidates, str) else None)
     if act == "ask_again":
-        return "Não ficou claro. Pode responder sim ou não?" if pt else "No me quedó claro. ¿Puedes responder sí o no?"
+        pending = facts.get("pending_question")
+        lead = "Não ficou claro." if pt else "No me quedó claro."
+        return f"{lead} {pending}" if isinstance(pending, str) and pending else lead
     if act == "abort":
         return (
             "Entendido, não vou fazer nada com este caso. Se precisar de algo mais, escreva aqui."
@@ -197,19 +216,40 @@ def safe_sentence(act: str, language: str, facts: dict[str, object]) -> str:
             return reason[:1].upper() + reason[1:] + "."
         return "Com o que você me contou, posso seguir." if pt else "Con lo que me contaste, puedo seguir."
     if act == "confirm_txn":
-        merchant, amount, when = facts.get("merchant"), facts.get("amount"), facts.get("when")
-        if pt:
-            return (
-                f"Você reconhece a transação de {merchant} no valor de {amount}"
-                + (f" em {when}" if when else "")
-                + "? Responda sim ou não."
-            )
-        return (
-            f"¿Reconoces el movimiento de {merchant} por {amount}"
-            + (f" del {when}" if when else "")
-            + "? Responde sí o no."
-        )
+        return confirm_txn_question(language, facts)
     raise ValueError(f"no code-written sentence for act {act!r}")
+
+
+def _feminine(noun: str, language: str) -> bool:
+    """Gender of a transaction noun, read from the same table as its demonstrative ("esta transferencia")."""
+    for known, this in _NOUNS[_lang(language)].values():
+        if known == noun:
+            return this.startswith("esta ")
+    return False
+
+
+def confirm_txn_question(language: str, facts: dict[str, object]) -> str:
+    """The question that says which transaction the conversation is about. Code writes it, whole.
+
+    It used to be the model's, and the model wrote "¿Reconoces este cargo…?". That contradicts a customer who says
+    "no reconozco este cargo" (a "no" sounds right and is read as rejecting the charge) and one who says the amount is
+    wrong. This asks only whether it is the charge the customer means, with the facts the code verified.
+    """
+    pt = _lang(language) == "pt"
+    noun = facts.get("kind")
+    noun = noun if isinstance(noun, str) and noun else transaction_noun(None, language)
+    feminine = _feminine(noun, language)
+    merchant, amount, when = facts.get("merchant"), facts.get("amount"), facts.get("when")
+    parts = [str(merchant) if merchant else "", str(amount) if amount else ""]
+    if when:
+        parts.append(f"em {when}" if pt else f"del {when}")
+    details = ", ".join(part for part in parts if part)
+    suffix = f": {details}" if details else ""
+    if pt:
+        this, article = ("esta", "a") if feminine else ("este", "o")
+        return f"É {this} {article} {noun} a que você se refere{suffix}? Responda sim ou não."
+    this, article, relative = ("esta", "la", "a la que") if feminine else ("este", "el", "al que")
+    return f"¿Es {this} {article} {noun} {relative} te refieres{suffix}? Responde sí o no."
 
 
 def inform_fallback(language: str, rule_id: str | None, existing_dispute_id: str | None) -> str:
@@ -223,6 +263,97 @@ def inform_fallback(language: str, rule_id: str | None, existing_dispute_id: str
             else f" La referencia de tu reclamo es {existing_dispute_id}."
         )
     return text.strip() or done_fallback(language)
+
+
+_NEW_CONVERSATION = {
+    "es": "Esta conversación terminó. Si quieres disputar otro cargo, inicia una nueva conversación.",
+    "pt": "Esta conversa terminou. Se quiser contestar outra cobrança, inicie uma nova conversa.",
+}
+
+
+def terminal_reply(language: str, terminal: Terminal | None) -> str:
+    """Every message after the case is settled gets this, whatever it says. Code writes it, whole.
+
+    The model used to answer these messages and improvised: it offered "other options with the bank" to a customer
+    whose case had just gone to a specialist, and asked for details on a case that was already closed. A closed
+    conversation says its status, gives the reference, and says how to start another one.
+    """
+    pt = _lang(language) == "pt"
+    closing = _NEW_CONVERSATION["pt" if pt else "es"]  # the unavailable outcome overrides it
+    if terminal is None:
+        return done_fallback(language)
+    parts: list[str] = []
+    if terminal.outcome == "dispute_opened":
+        parts.append(
+            f"A sua contestação está aberta com a referência {terminal.reference}."
+            if pt
+            else f"Tu reclamo está abierto con la referencia {terminal.reference}."
+        )
+    elif terminal.outcome == "handoff":
+        if terminal.card_blocked:
+            parts.append("O seu cartão está bloqueado." if pt else "Tu tarjeta está bloqueada.")
+        if terminal.dispute_id:
+            parts.append(
+                f"A sua contestação {terminal.dispute_id} está aberta."
+                if pt
+                else f"Tu reclamo {terminal.dispute_id} está abierto."
+            )
+        parts.append(
+            f"O seu caso está com um especialista, referência {terminal.reference}; a equipe vai avisar você."
+            if pt
+            else f"Tu caso está con un especialista, referencia {terminal.reference}; el equipo te avisará."
+        )
+    elif terminal.outcome == "informed":
+        parts.append("Não abri nenhuma contestação nova." if pt else "No abrí ningún reclamo nuevo.")
+        if terminal.dispute_id:
+            parts.append(
+                f"A contestação já aberta é {terminal.dispute_id}."
+                if pt
+                else f"El reclamo ya abierto es {terminal.dispute_id}."
+            )
+    elif terminal.outcome == "unavailable":
+        if terminal.dispute_id:
+            parts.append(
+                f"A sua contestação {terminal.dispute_id} já foi registrada."
+                if pt
+                else f"Tu reclamo {terminal.dispute_id} ya quedó registrado."
+            )
+        parts.append(
+            "O site está em manutenção neste momento. Por favor, consulte o serviço técnico."
+            if pt
+            else "El sitio está en mantenimiento en este momento. Por favor, consulta con el servicio técnico."
+        )
+        closing = (
+            "Quando o site voltar a funcionar, inicie uma nova conversa."
+            if pt
+            else "Cuando el sitio vuelva a estar disponible, inicia una nueva conversación."
+        )
+    elif terminal.outcome == "no_case":
+        parts.append(
+            "Não abri nenhum caso nem passei você para ninguém." if pt else "No abrí ningún caso ni te pasé con nadie."
+        )
+    else:
+        parts.append("Não fiz nenhuma alteração." if pt else "No hice ningún cambio.")
+    return " ".join([*parts, closing])
+
+
+def handoff_offer_question(language: str) -> str:
+    """Offered when no charge could be identified. A handoff only happens if the customer says yes to this."""
+    if _lang(language) == "pt":
+        return (
+            "Só posso ajudar se você me indicar uma cobrança concreta: o valor, o estabelecimento ou a data. "
+            "Quer que eu passe você para um atendente humano? Responda sim ou não."
+        )
+    return (
+        "Solo puedo ayudarte si me indicas un cargo concreto: el monto, el comercio o la fecha. "
+        "¿Quieres que te pase con un asesor humano? Responde sí o no."
+    )
+
+
+def handoff_offer_declined(language: str) -> str:
+    if _lang(language) == "pt":
+        return "Entendido, não vou passar você para ninguém. Diga o valor, o estabelecimento ou a data da cobrança."
+    return "Entendido, no te paso con nadie. Dime el monto, el comercio o la fecha del cargo."
 
 
 def done_fallback(language: str) -> str:

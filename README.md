@@ -193,7 +193,7 @@ Assumptions (labeled, not measured): disputes ≈ 20 % of contacts, the peak hou
 | This bank (150k customers) | ~125 | ~5 | One small deployment |
 | 1M customers | ~830 | ~25 | Same design |
 | 10M customers | ~8,300 | ~250 | Higher Bedrock quotas, tuned autoscaling |
-| Incident surge (mass fraud) | 10-50× | bursts | Rate limits, queueing, degrade to human handoff |
+| Incident surge (mass fraud) | 10-50× | bursts | Rate limits, queueing, degrade to a maintenance message |
 
 ---
 

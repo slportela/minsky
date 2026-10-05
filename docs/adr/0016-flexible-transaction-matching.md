@@ -1,4 +1,4 @@
-# 0015. Flexible transaction matching: near amounts, days and merchants are proposed, never selected
+# 0016. Flexible transaction matching: near amounts, days and merchants are proposed, never selected
 
 - Status: proposed
 - Date: 2026-10-05
@@ -18,7 +18,7 @@
 - Rules (thresholds in `SearchConfig`; changing one needs an eval delta):
   - F1 near amount: within max(1 % , 0.10); within max(10 % , 1.00) when the customer says "about" (`approximate`).
   - F2 currency: with a currency stated, USD is compared with `amount_usd` and a local currency with `amount`; with none stated either may be meant; a currency the charge does not carry cannot match.
-  - F3 day: the calendar range as said, plus or minus 1 day as near. Relative days ("yesterday") are extracted as `days_ago` and resolved by code with the system's today, because the extraction prompt is static (prompt caching) and the model does not know the date.
+  - F3 day: the calendar range as said, plus or minus 1 day as near. Relative days ("today", "yesterday", the day before, "N days ago") are extracted as `days_ago` and resolved by code with the system's today: the arithmetic that decides which charges are near is not left to the model. The extraction prompt is static (prompt caching); the date reaches the model as a message of its own (prompt v4), which it uses only for the other relative expressions.
   - F4 combined: all described things are graded together; near or closest charges come with how each one differs.
   - F5 merchant: folded for case, accents and punctuation, in any word order (what the substring match always accepted); a misspelling is near by text similarity (0.8), and a name under 4 characters must match exactly.
   - F6 kind and category narrow, they do not find: without an amount, a day or a merchant there is nothing to propose, so "a purchase" never lists the whole history.
@@ -29,6 +29,6 @@
 ## Consequences
 - The customer hears what was close instead of "not found", and the system does not widen what it acts on: confirmation and the policy are unchanged.
 - A correction made while a proposal is pending ("no, it was 80") is not re-extracted: in `confirm_txn` only a plain yes or no is read, as before for exact proposals. A plain "no" goes back to asking for details.
-- "Pesos" alone is not a currency (MXN, COP and ARS), so it is left unknown and either amount may match. "Last Monday" and other relative expressions beyond today, yesterday, the day before and "N days ago" are not resolved yet.
+- "Pesos" alone is not a currency (MXN, COP and ARS), so it is left unknown and either amount may match. "Last Monday", "last week" and other relative expressions beyond today, yesterday, the day before and "N days ago" are resolved by the model from the date it is given (prompt v4), not by code; they were checked live on a handful of messages and are not covered by an eval case.
 - Evidence so far is offline: 7 new dev cases with scripted extraction (dev smoke 24/24, Wilson 95 % CI 86.2-100 %), about 60 new unit tests of the matcher, the extraction, the wording, the tool, the store and the flow, and a control run where 6 of the 7 cases fail with the matcher forced back to exact only (the seventh, a day with two charges, is what exact matching already did once the day is known). The 1 % and 10 % thresholds come from the collision shares above, not from customer behavior; no live model has been run on the new prompt or fields. Wrong if live extraction fills the new fields badly (type or currency invented), or if customers who confirm a near proposal are later found to have meant another charge.
 - The thresholds, the 0.8 similarity and the tiers are ours. They would be tuned with real conversations, on `val`, never on the locked test split.

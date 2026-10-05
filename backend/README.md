@@ -30,17 +30,22 @@ FastAPI service for dispute intake: the orchestrator, the policy, the mock bank 
 ## Rules for this code
 
 - `policy/` has no I/O and no model calls. It is tested rule by rule (`tests/test_policy_disputes.py`).
-- `matching/` has no I/O and no model calls either. It grades each charge against what the customer said (amount, day, merchant, kind, category) as exact, near or miss, and returns the first tier that has a charge: exact, near, closest or none, never a mix. A near or closest charge is only proposed, with what differs said by code (`agent/wording.py`); the customer still confirms and the policy still reads the charge's real facts. Thresholds are `SearchConfig`; changing one needs an eval delta (ADR 0015, `tests/test_matching_transactions.py`).
+- `matching/` has no I/O and no model calls either. It grades each charge against what the customer said (amount, day, merchant, kind, category) as exact, near or miss, and returns the first tier that has a charge: exact, near, closest or none, never a mix. A near or closest charge is only proposed, with what differs said by code (`agent/wording.py`); the customer still confirms and the policy still reads the charge's real facts. Thresholds are `SearchConfig`; changing one needs an eval delta (ADR 0016, `tests/test_matching_transactions.py`).
 - `tools/` never take a customer id from the model: they read it from the session. Every tool has a denial test. Plain async + Pydantic (no LangGraph); `open_dispute` / `block_card` require `confirmed=True`. `classify_reply` classifies a reply to a confirmation the system already sent, checks the session, writes an audit row, and does not act.
 - `store/` reads `bank.*` by entity key (async, pooled). Customer authorization is checked once in identity/tools, not on every store query. Writes go through the `CasesBackend` protocol: `SqlCasesBackend` (Postgres `cases.*`, `MINSKY_CASES_BACKEND=postgres`, the compose default) or `InMemoryCasesBackend` (tests, offline evals). Every dispute and handoff also queues a triaged back-office case (`tools/casework.py`, `policy/triage.py`), served to agents by `api/console.py` with staff credentials (`MINSKY_STAFF_SESSIONS`, ADR 0013).
 - `identity/` resolves a server-provisioned, expiring bearer credential to `ToolSession`; customer ids
   from headers or conversation text do not authenticate (ADR 0009). OTP/Cognito are pending.
+  A demo operator credential (`identity/operator.py`, ADR 0015: off by default, local and demo only) may choose which
+  customer to chat as through `api/demo.py`; the choice is audited and the session it issues names the operator.
   Conversations are customer-bound; history validation and state commit are serialized per conversation.
   Failed turns leave prior history intact; writes use idempotency for safe read-back retries.
 - `llm/` talks to an OpenAI-compatible endpoint (ADR 0008). Model ids come from config.
 - `agent/` is a code-owned state machine (`run_turn`): extract → find/clarify → policy → confirm →
   open/block/handoff; never says an action is done before the tool result has been read back.
-  Budgets: `MINSKY_MAX_TURNS`, `MINSKY_MAX_CLARIFY_ATTEMPTS`.
+  After a dispute, a handoff or a declined action the conversation is terminal: later messages get a code-written
+  status with the reference and the notice to start a new conversation (no model, no tools).
+  Budgets: `MINSKY_MAX_TURNS`, `MINSKY_MAX_CLARIFY_ATTEMPTS`, `MINSKY_MAX_UNCLEAR_REPLIES`, `MINSKY_MAX_HANDOFF_OFFERS`.
+  No handoff before the customer confirms the charge or accepts an offered human agent (`_require_confirmed_case`).
 
 ## Run
 

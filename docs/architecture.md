@@ -8,7 +8,7 @@
 2. **Same images everywhere.** The containers built for the POC are the ones production runs; only configuration and surroundings change (12-factor).
 3. **Adapters at the edges.** Identity, queue, storage and model access sit behind interfaces, so the POC uses simple implementations and production uses managed services, without rewriting the core.
 4. **Private by default.** No public database, no public tasks, and no internet path to the models (VPC endpoints).
-5. **Degrade to a human, never to a guess.** When models, tools or data are unavailable, the system hands off with context.
+5. **Degrade honestly, never to a guess.** When models, tools or data are unavailable, the system says the site is under maintenance and to ask technical service. It does not send a case to a person on its own: a handoff needs the customer's yes (to the charge, or to an offered agent), and an unavailable model cannot ask.
 6. **Everything observable and auditable.** Every turn, model call, tool call and policy decision is traced; the audit trail is append-only.
 
 ## Environments
@@ -95,7 +95,7 @@ Assumptions (labeled, to be replaced by measurements):
 | This bank (the dataset) | 150k | ~125 | ~5 | A single small deployment |
 | Mid-size bank | 1M | ~830 | ~25 | The same design; watch Bedrock quotas and cost |
 | Large bank | 10M | ~8,300 | ~250 | Quota increases or cross-region inference profiles; autoscaling tuned |
-| Incident surge (breach, mass fraud) | any | 10-50× normal | bursts | Queueing, rate limits, degraded mode (hand off with context), surge playbook |
+| Incident surge (breach, mass fraud) | any | 10-50× normal | bursts | Queueing, rate limits, degraded mode (maintenance message), surge playbook |
 
 What this tells us:
 - Even at millions of customers, the load is modest for the servers. **The binding limits are model throughput (Bedrock quotas) and cost**, then database connections.
@@ -115,7 +115,7 @@ What this tells us:
 - Multi-AZ for every stateful service. Proposed targets: **RPO ≤ 5 min** (RDS point-in-time recovery), **RTO ≤ 1 h** (restore plus redeploy through IaC).
 - Bounded retries with jitter and timeouts on every external call. A circuit breaker on Bedrock, with a fallback model (another model or region through inference profiles).
 - Idempotency keys on every write (dispute creation, card block).
-- **Degraded mode**: if models are unavailable, the system hands off to a human with the facts collected so far, and tells the customer.
+- **Degraded mode**: if models are unavailable, the system tells the customer the site is under maintenance and to ask technical service, reports a dispute the failed turn had already opened (read back from the store), and ends the conversation. It creates no case.
 
 ### Scalability and capacity
 - The API is stateless; conversation state lives in Postgres (ElastiCache later, if latency requires it).

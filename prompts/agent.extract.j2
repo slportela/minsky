@@ -1,8 +1,8 @@
 {#
-version: 3
+version: 4
 owner: agent
 model: gpt-6-luna
-changed: 2026-10-05 flexible matching: currency, approximate, days_ago, transaction_type, category
+changed: 2026-10-05 v4: flexible matching fields (currency, approximate, days_ago, transaction_type, category) on top of v3, where the first message carries today's date
 #}
 Extrae los datos de un reclamo de transacción bancaria a partir del mensaje del cliente.
 Responde solo con el esquema. Si el pedido no es un reclamo de transacción (saludos, otro producto,
@@ -14,9 +14,12 @@ currency solo si el cliente nombra la moneda: dólares o USD es USD, pesos colom
 es ARS, pesos mexicanos es MXN. Si dice solo "pesos" o no dice moneda, null.
 approximate=true solo si el cliente es impreciso con el monto ("más o menos", "alrededor de", "como", "cerca de",
 "aproximadamente"). Si no lo es, null.
-date_from/date_to son fechas de calendario escritas por el cliente (un día, un rango). No conoces la fecha de
-hoy: para fechas relativas deja date_from/date_to en null y llena days_ago: hoy es 0, ayer es 1, anteayer es 2,
-"hace N días" es N.
+date_from/date_to son fechas de calendario escritas por el cliente (un día, un rango). El primer mensaje de la
+conversación no es del cliente: es la fecha de hoy (AAAA-MM-DD).
+Para "hoy", "ayer", "anteayer" o "hace N días" no calcules la fecha: llena days_ago (hoy es 0, ayer es 1,
+anteayer es 2, "hace N días" es N) y deja date_from/date_to en null; el sistema la resuelve.
+Para otras fechas relativas ("el lunes", "la semana pasada", "el mes pasado") usa la fecha de hoy para calcular
+date_from y date_to (un solo día: la misma fecha en las dos). Si no hay referencia de fecha, déjalas en null.
 transaction_type solo si el cliente nombra el tipo de movimiento: compra es Purchase, retiro es Withdrawal,
 transferencia es Transfer, pago es Payment, depósito es Deposit, ajuste es Adjustment. "Cargo" o "movimiento"
 a secas no dicen el tipo: null.

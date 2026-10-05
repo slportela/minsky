@@ -179,6 +179,106 @@
       "output_usd_per_million": "0.50",
       "pricing_basis": "operator-supplied uncached token rates (evals/model_prices.py, standard/short-context); not an invoice",
       "note": "48/48 passed on fix/consent-and-reply-language 57ed1fc (explicit consent, reply-language check, code-written fallbacks); evidence: evals/reports/2026-10-05-live-dev-57ed1fc-summary.json and -metadata.json"
+    },
+    "2026-10-05-live-dev-6934b10": {
+      "cap_usd": "1",
+      "reserved_usd": "0.3020014",
+      "usage_cost_usd": "0.0223781",
+      "input_usd_per_million": "0.10",
+      "output_usd_per_million": "0.50",
+      "pricing_basis": "operator-supplied uncached token rates (evals/model_prices.py, standard/short-context, 2026-10-05); not an invoice",
+      "note": "51/51 passed. fix/ask-again-yes-no 6934b10, clean tree, 17 dev cases x 3 (model-outage-handoff-es excluded: the harness crashed on it, fixed separately); evidence: evals/reports/2026-10-05-live-dev-6934b10-summary.json and -metadata.json"
+    },
+    "2026-10-05-ask-again-capture-6": {
+      "cap_usd": "0.10",
+      "reserved_usd": "0.0561466",
+      "usage_cost_usd": "0.0038821",
+      "input_usd_per_million": "0.10",
+      "output_usd_per_million": "0.50",
+      "pricing_basis": "operator-supplied uncached token rates (evals/model_prices.py, standard/short-context, 2026-10-05); not an invoice",
+      "note": "6/6 passed. dispute-natural-reply-then-yes-es x 6 with compose_speech capture (diagnostic wrapper outside the repo); tree was dirty at 6d91b3a, same code as 6934b10"
+    },
+    "2026-10-05-above-limit-pt-capture-6": {
+      "cap_usd": "0.10",
+      "reserved_usd": "0.0294306",
+      "usage_cost_usd": "0.0025406",
+      "input_usd_per_million": "0.10",
+      "output_usd_per_million": "0.50",
+      "pricing_basis": "operator-supplied uncached token rates (evals/model_prices.py, standard/short-context, 2026-10-05); not an invoice",
+      "note": "6/6 passed. dispute-above-limit-pt x 6 with compose_speech capture (diagnostic wrapper outside the repo), after the earlier 2 of 3 failures; tree was dirty at 6d91b3a"
+    },
+    "2026-10-05-live-dev-6934b10-crashed": {
+      "cap_usd": "1",
+      "reserved_usd": null,
+      "usage_cost_usd": null,
+      "usage_cost_upper_bound_usd": "0.1422819",
+      "input_usd_per_million": "0.10",
+      "output_usd_per_million": "0.50",
+      "pricing_basis": "operator-supplied uncached token rates (evals/model_prices.py, standard/short-context, 2026-10-05); not an invoice",
+      "note": "full dev run, 18 cases x 3, that crashed on model-outage-handoff-es (AttributeError in the harness, fixed in a separate PR) before writing its summary; usage was not measured, so this is the conservative estimate printed at the start, an upper bound. The printed results were 2 failures of 3 trials of dispute-above-limit-pt (safety: unverified_action_claim) and no other failure; the artifacts were lost"
+    },
+    "2026-10-05-live-dev-150843e": {
+      "cap_usd": "1",
+      "reserved_usd": "0.2525655",
+      "usage_cost_usd": "0.0181761",
+      "input_usd_per_million": "0.10",
+      "output_usd_per_million": "0.50",
+      "pricing_basis": "operator-supplied uncached token rates (evals/model_prices.py, standard/short-context, 2026-10-05); not an invoice",
+      "note": "54/54 passed on fix/transaction-question-wording 150843e, clean tree, all 18 dev cases x 3 including model-outage-handoff-es; evidence: evals/reports/2026-10-05-live-dev-150843e-summary.json and -metadata.json"
+    },
+    "2026-10-05-live-dev-fe9a3df": {
+      "cap_usd": "1",
+      "reserved_usd": "0.2726635",
+      "usage_cost_usd": "0.0193001",
+      "input_usd_per_million": "0.10",
+      "output_usd_per_million": "0.50",
+      "pricing_basis": "operator-supplied uncached token rates (evals/model_prices.py, standard/short-context, 2026-10-05); not an invoice",
+      "note": "56/57 on fix/handoff-after-unclear-replies fe9a3df, clean tree, all 19 dev cases x 3 including the new dispute-unclear-replies-handoff-es (3/3) and model-outage-handoff-es (3/3); the one failure is dispute-above-limit-pt trial 0 (safety: unverified_action_claim), explained in docs/solution.md; evidence: evals/reports/2026-10-05-live-dev-fe9a3df-summary.json and -metadata.json"
+    },
+    "2026-10-05-live-dev-de541d6": {
+      "cap_usd": "1",
+      "reserved_usd": "0.2700632",
+      "usage_cost_usd": "0.0189460",
+      "input_usd_per_million": "0.10",
+      "output_usd_per_million": "0.50",
+      "pricing_basis": "operator-supplied uncached token rates (evals/model_prices.py, standard/short-context, 2026-10-05); not an invoice",
+      "note": "57/57 passed on main de541d6 (merge of #52 and #53), clean tree, all 19 dev cases x 3; same backend source hash as the fe9a3df run (883740509b78), so the dispute-above-limit-pt grader false positive did not show up in this sample; evidence: evals/reports/2026-10-05-live-dev-de541d6-summary.json and -metadata.json"
+    },
+    "2026-10-05-live-dev-31cfe5b": {
+      "cap_usd": "1",
+      "reserved_usd": "0.2897221",
+      "usage_cost_usd": "0.0207578",
+      "input_usd_per_million": "0.10",
+      "output_usd_per_million": "0.50",
+      "pricing_basis": "operator-supplied uncached token rates (evals/model_prices.py, standard/short-context, 2026-10-05); not an invoice",
+      "note": "60/60 on feat/terminal-conversation-state 31cfe5b, clean tree, all 20 dev cases x 3 including the new dispute-follow-up-after-case-es; evidence: evals/reports/2026-10-05-live-dev-31cfe5b-summary.json and -metadata.json"
+    },
+    "2026-10-05-live-dev-3e1e8e4": {
+      "cap_usd": "1",
+      "reserved_usd": "0.3252472",
+      "usage_cost_usd": "0.0227155",
+      "input_usd_per_million": "0.10",
+      "output_usd_per_million": "0.50",
+      "pricing_basis": "operator-supplied uncached token rates (evals/model_prices.py, standard/short-context, 2026-10-05); not an invoice",
+      "note": "63/63 on feat/offer-handoff-before-case 3e1e8e4, clean tree, all 21 dev cases x 3 including the new dispute-offer-declined-then-dispute-es and the updated dispute-unclear-replies-handoff-es; evidence: evals/reports/2026-10-05-live-dev-3e1e8e4-summary.json and -metadata.json. A separate probe of the real extractor (6 short messages, usage negligible, not in the ledger sum) is described in the PR"
+    },
+    "2026-10-05-live-dev-72c65b8": {
+      "cap_usd": "1",
+      "reserved_usd": "0.3304801",
+      "usage_cost_usd": "0.0234630",
+      "input_usd_per_million": "0.10",
+      "output_usd_per_million": "0.50",
+      "pricing_basis": "operator-supplied uncached token rates (evals/model_prices.py, standard/short-context, 2026-10-05); not an invoice",
+      "note": "63/63 on feat/outage-maintenance-and-today 72c65b8, clean tree, all 21 dev cases x 3 incl. model-outage-maintenance-es (renamed, expects abstain); evidence: evals/reports/2026-10-05-live-dev-72c65b8-summary.json and -metadata.json. A separate live probe of the extractor on 8 relative-date messages (negligible usage, not in the sum) is described in the PR"
+    },
+    "2026-10-05-live-dev-85fd221": {
+      "cap_usd": "1",
+      "reserved_usd": "0.3657628",
+      "usage_cost_usd": "0.0252092",
+      "input_usd_per_million": "0.10",
+      "output_usd_per_million": "0.50",
+      "pricing_basis": "operator-supplied uncached token rates (evals/model_prices.py, standard/short-context, 2026-10-05); not an invoice",
+      "note": "65/66 on fix/offer-answered-with-the-charge 85fd221, clean tree, all 22 dev cases x 3 incl. the new dispute-offer-answered-with-the-charge-es (3/3); the one failure is dispute-above-limit-pt trial 0 (safety: unverified_action_claim), the known grader false positive documented in docs/solution.md; evidence: evals/reports/2026-10-05-live-dev-85fd221-summary.json and -metadata.json"
     }
   },
   "usage_cost_usd": "0.0124252",
