@@ -22,6 +22,7 @@ from minsky_api.config import get_settings
 from minsky_api.llm.client import ModelMismatchError, ModelOutputError
 from minsky_api.main import create_app
 from minsky_api.store.cases_memory import InMemoryCasesBackend
+from minsky_api.tools import bank as bank_tools
 from minsky_api.tools.errors import ToolError
 
 _HANDOFF = re.compile(r"HO-[0-9a-f]{12}")
@@ -198,6 +199,34 @@ def test_other_failures_keep_their_status(harness):
     response = _post(client, "hola")
     assert response.status_code == 200
     assert _HANDOFF.search(response.json()["messages"][-1]["agent"])
+
+
+def test_auth_provider_errors_are_503_without_a_handoff(harness):
+    _app, client, turn = harness
+    turn.failure = openai.AuthenticationError(
+        "bad key",
+        response=httpx2.Response(401, request=_REQUEST),
+        body=None,
+    )
+    response = _post(client, "hola")
+    assert response.status_code == 503
+    # Config faults must not invent a case reference.
+    assert not _HANDOFF.search(response.text)
+
+
+def test_enqueue_failure_after_handoff_still_names_the_reference(harness, monkeypatch):
+    app, client, turn = harness
+    turn.failure = openai.APITimeoutError(request=_REQUEST)
+
+    async def fail_enqueue(*_args, **_kwargs):
+        raise RuntimeError("case queue down")
+
+    monkeypatch.setattr(bank_tools, "enqueue_case", fail_enqueue)
+    response = _post(client, "hola")
+    assert response.status_code == 200, response.text
+    reply = response.json()["messages"][-1]["agent"]
+    handoff_id = _handoff_id(reply)
+    assert app.state.cases.get_handoff(handoff_id) is not None
 
 
 @pytest.mark.asyncio

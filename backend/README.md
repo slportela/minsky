@@ -22,7 +22,7 @@ FastAPI service for dispute intake: the orchestrator, the policy, the mock bank 
    ▼
  store/          async SQLModel reads over bank.*; cases.* (disputes, handoffs, blocks, audit, case queue)
                  in Postgres (SqlCasesBackend) or in memory (tests), behind the CasesBackend protocol
- observability/  OpenTelemetry spans (turn, model, tools) when OTEL_EXPORTER_OTLP_ENDPOINT is set;
+ observability/  OpenTelemetry spans (chat.turn, llm.respond) when OTEL_EXPORTER_OTLP_ENDPOINT is set;
                  execution audit still in cases.*. Dev UI: compose profile `observability` (Phoenix).
 ```
 

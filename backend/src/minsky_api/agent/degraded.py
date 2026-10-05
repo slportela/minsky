@@ -6,13 +6,23 @@ other action, because the failed turn may have written nothing or something; the
 any reference from earlier in the conversation.
 
 The handoff carries identifiers and the failure class, never the customer's free text.
+
+Speech grounding: compose_speech raises SpeechError. Paths that catch RuntimeError and send a code
+template (clarify, inform, DONE follow-up, _speak_verified) never reach this module. Paths that let
+SpeechError escape after the bounded _speak retries (e.g. confirm_txn) become a verified handoff here.
 """
 
 from __future__ import annotations
 
 from copy import deepcopy
 
-from openai import OpenAIError
+from openai import (
+    APIConnectionError,
+    APIStatusError,
+    APITimeoutError,
+    InternalServerError,
+    RateLimitError,
+)
 
 from minsky_api.agent.language import default_language_detector
 from minsky_api.agent.speak import SpeechError
@@ -22,13 +32,20 @@ from minsky_api.tools.bank import create_handoff
 from minsky_api.tools.context import ToolContext
 from minsky_api.tools.schemas import CreateHandoffArgs
 
-# Provider errors, wrong model id, unusable structured reply, and speech grounding failures.
-# Configuration errors (LLMNotConfiguredError) stay a 503: that is a deployment fault, not an outage.
+# Wrong model id, unusable structured reply, and speech grounding that escaped local templates.
+# Provider outages are matched by is_model_failure (timeout / connection / rate-limit / 5xx only).
+# Auth, bad request, and other 4xx stay a 503 without inventing a handoff (deployment / config fault).
 MODEL_FAILURES: tuple[type[Exception], ...] = (
-    OpenAIError,
     ModelMismatchError,
     ModelOutputError,
     SpeechError,
+)
+
+_PROVIDER_OUTAGE: tuple[type[Exception], ...] = (
+    APITimeoutError,
+    APIConnectionError,
+    RateLimitError,
+    InternalServerError,
 )
 
 REASON = "assistant_unavailable"
@@ -45,6 +62,15 @@ _REPLY = {
         "(referência {handoff_id}). Não precisa repetir nada."
     ),
 }
+
+
+def is_model_failure(exc: BaseException) -> bool:
+    """True when the turn should hand off: model/schema/speech failures and provider outages."""
+    if isinstance(exc, MODEL_FAILURES):
+        return True
+    if isinstance(exc, _PROVIDER_OUTAGE):
+        return True
+    return isinstance(exc, APIStatusError) and exc.status_code >= 500
 
 
 def outage_reply(language: str, handoff_id: str) -> str:
@@ -84,6 +110,7 @@ async def hand_off_on_outage(
     after.turn_count += 1
     after.phase = Phase.DONE
     after.language = lang
+    after.acts.append("handoff")
     after.messages.append(("user", user_text))
     after.messages.append(("agent", reply))
     return after, reply

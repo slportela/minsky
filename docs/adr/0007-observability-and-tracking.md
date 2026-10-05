@@ -2,7 +2,7 @@
 
 - Status: accepted for local OTLP export; ADOT/CloudWatch pending
 - Date: 2026-09-26
-- Updated: 2026-10-04 — turn/model/tool spans export when `OTEL_EXPORTER_OTLP_ENDPOINT` is set; Phoenix remains the optional compose UI
+- Updated: 2026-10-04 — `chat.turn` and `llm.respond` spans export when `OTEL_EXPORTER_OTLP_ENDPOINT` is set; Phoenix remains the optional compose UI
 
 ## Context
 A production-ready system needs:

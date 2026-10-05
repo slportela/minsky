@@ -10,10 +10,15 @@ from opentelemetry import trace
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor, SimpleSpanProcessor, SpanExporter
-from opentelemetry.trace import Span, Tracer
+from opentelemetry.trace import Span, Status, StatusCode, Tracer
 
 _PROVIDER: TracerProvider | None = None
 _TRACER_NAME = "minsky"
+
+# Pinned with opentelemetry-api/sdk as declared in backend/pyproject.toml. The public API allows
+# set_tracer_provider only once per process; tests call reset_tracing_for_tests to clear the Once.
+_OTEL_PROVIDER_ONCE_ATTR = "_TRACER_PROVIDER_SET_ONCE"
+_OTEL_PROVIDER_ATTR = "_TRACER_PROVIDER"
 
 
 def configure_tracing(*, endpoint: str | None = None, exporter: SpanExporter | None = None) -> bool:
@@ -45,15 +50,23 @@ def configure_tracing(*, endpoint: str | None = None, exporter: SpanExporter | N
     return True
 
 
-def reset_tracing_for_tests() -> None:
-    """Shutdown any provider so tests can configure again."""
+def shutdown_tracing() -> None:
+    """Flush and shut down the process TracerProvider (app lifespan end)."""
     global _PROVIDER
-    if _PROVIDER is not None:
-        _PROVIDER.shutdown()
-        _PROVIDER = None
-    # The API allows set_tracer_provider only once per process; tests need a second chance.
-    trace._TRACER_PROVIDER = None  # noqa: SLF001
-    trace._TRACER_PROVIDER_SET_ONCE._done = False  # noqa: SLF001
+    if _PROVIDER is None:
+        return
+    _PROVIDER.shutdown()
+    _PROVIDER = None
+
+
+def reset_tracing_for_tests() -> None:
+    """Shutdown any provider and clear the process-once guard so tests can configure again."""
+    shutdown_tracing()
+    # Private SDK fields: documented pin above; no public reset API exists.
+    setattr(trace, _OTEL_PROVIDER_ATTR, None)
+    once = getattr(trace, _OTEL_PROVIDER_ONCE_ATTR, None)
+    if once is not None:
+        once._done = False  # noqa: SLF001
 
 
 def get_tracer() -> Tracer:
@@ -63,7 +76,11 @@ def get_tracer() -> Tracer:
 @contextmanager
 def start_span(name: str, **attributes: object) -> Iterator[Span]:
     """Start a span. Attributes must not carry customer free text or secrets."""
-    with get_tracer().start_as_current_span(name) as span:
+    with get_tracer().start_as_current_span(
+        name,
+        record_exception=False,
+        set_status_on_exception=False,
+    ) as span:
         for key, value in attributes.items():
             if value is None:
                 continue
@@ -71,4 +88,10 @@ def start_span(name: str, **attributes: object) -> Iterator[Span]:
                 span.set_attribute(key, value)
             else:
                 span.set_attribute(key, str(value))
-        yield span
+        try:
+            yield span
+        except Exception as exc:
+            # Exception type only: messages can carry untrusted customer or provider text.
+            span.record_exception(exc)
+            span.set_status(Status(StatusCode.ERROR, type(exc).__name__))
+            raise

@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import pytest
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
+from opentelemetry.trace import StatusCode
 
 from minsky_api.observability.otel import configure_tracing, reset_tracing_for_tests, start_span
 
@@ -25,3 +27,15 @@ def test_configure_with_exporter_records_a_span() -> None:
             pass
     names = {span.name for span in exporter.get_finished_spans()}
     assert names == {"chat.turn", "llm.respond"}
+
+
+def test_failed_span_records_error_status() -> None:
+    exporter = InMemorySpanExporter()
+    assert configure_tracing(exporter=exporter) is True
+    with pytest.raises(RuntimeError, match="boom"):
+        with start_span("llm.respond", model="gpt-6-luna"):
+            raise RuntimeError("boom")
+    spans = exporter.get_finished_spans()
+    assert len(spans) == 1
+    assert spans[0].status.status_code == StatusCode.ERROR
+    assert spans[0].status.description == "RuntimeError"

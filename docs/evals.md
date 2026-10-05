@@ -77,6 +77,7 @@ One YAML file per case, validated by `evals/schema.py` (the contract). It follow
 | `tags` | Slices for reporting: language, country, intent, attack, segment, difficulty |
 | `session` | Authentication state (`valid`, `expired`, `anonymous`) and customer |
 | `tool_faults` | Fault injection: make a tool time out, fail or return empty on the n-th call |
+| `llm_faults` | Fault injection: provider outage on the n-th `LLM.respond` (degraded handoff) |
 | `user_scenario` | **Simulator only**: persona, hidden goal, known and unknown info, fixed scripted turns |
 | `evaluation_criteria.expected_outcome` | `resolve`, `clarify`, `escalate`, `refuse`, `abstain` |
 | `evaluation_criteria.env_assertions` | Named end-state checks (dispute opened, card not blocked, handoff created, no cross-customer read, …) |

@@ -1,6 +1,6 @@
 # Late and corrected partition fixture (P4.3)
 
-Offline fixture only. Labels are by construction, not from production.
+Offline fixture for `pipeline.partition_update.apply_late_and_corrected`. Labels are by construction, not from production.
 
 | File | Role |
 |---|---|

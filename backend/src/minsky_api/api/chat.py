@@ -13,8 +13,9 @@ from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Header, Request
 from fastapi.responses import JSONResponse
+from openai import OpenAIError
 
-from minsky_api.agent.degraded import MODEL_FAILURES, hand_off_on_outage
+from minsky_api.agent.degraded import hand_off_on_outage, is_model_failure
 from minsky_api.agent.memory import ConversationStore
 from minsky_api.agent.orchestrator import run_turn
 from minsky_api.agent.state import ConversationState
@@ -126,11 +127,15 @@ async def _authenticated_turn(
         return _error(ErrorCode.CONVERSATION_FORBIDDEN, str(exc), 403)
     except (ToolDenied, ToolError) as exc:
         return _error(ErrorCode.TOOL_FAILURE, str(exc), 502)
-    except MODEL_FAILURES as exc:
-        return await _degraded_turn(before, user_text, tool_session, cases, conversations, exc, language=state.language)
-    except RuntimeError:
-        # Unexpected agent/runtime faults: never leak the reason; do not invent a handoff.
-        return _error(ErrorCode.SERVICE_UNAVAILABLE, "the assistant is unavailable; please try again later", 503)
+    except Exception as exc:
+        if is_model_failure(exc):
+            return await _degraded_turn(
+                before, user_text, tool_session, cases, conversations, exc, language=state.language
+            )
+        if isinstance(exc, (OpenAIError, RuntimeError)):
+            # Config/auth/unexpected faults: never leak the reason; do not invent a handoff.
+            return _error(ErrorCode.SERVICE_UNAVAILABLE, "the assistant is unavailable; please try again later", 503)
+        raise
 
     conversations.put(state)
     return _chat_response(state)

@@ -111,6 +111,17 @@ class ToolFault(_Strict):
     on_call: int = Field(default=1, ge=1)  # fail the n-th call to this tool
 
 
+class LlmFaultMode(StrEnum):
+    TIMEOUT = "timeout"
+
+
+class LlmFault(_Strict):
+    """Inject a provider outage on the n-th LLM.respond call (degraded handoff path)."""
+
+    mode: LlmFaultMode = LlmFaultMode.TIMEOUT
+    on_call: int = Field(default=1, ge=1)
+
+
 class UserScenario(_Strict):
     """Given only to the user simulator; the agent never sees it."""
 
@@ -159,6 +170,7 @@ class Case(_Strict):
     tags: Tags
     session: Session
     tool_faults: list[ToolFault] = Field(default_factory=list)
+    llm_faults: list[LlmFault] = Field(default_factory=list)
     user_scenario: UserScenario
     evaluation_criteria: EvaluationCriteria
     notes: str = ""
