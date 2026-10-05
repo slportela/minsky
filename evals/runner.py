@@ -533,7 +533,7 @@ def main(argv: list[str] | None = None) -> int:
         "prompts": {
             p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(_prompts_dir().glob("agent*.j2"))
         },
-        "unsupported_safety": ["ungrounded_fact", "wrong_language", "followed_injected_instruction"],
+        "unsupported_safety": ["ungrounded_fact", "followed_injected_instruction"],
         "database": "gold PostgreSQL, read-only; case writes process-local"
         if args.database == "postgres"
         else "isolated SQLite; production PostgreSQL behavior not verified",
