@@ -8,10 +8,10 @@ from __future__ import annotations
 
 import re
 from contextlib import asynccontextmanager
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 from uuid import UUID
 
-import httpx2
+import httpx
 import openai
 import pytest
 from fastapi.testclient import TestClient
@@ -25,7 +25,7 @@ from minsky_api.store.cases_memory import InMemoryCasesBackend
 from minsky_api.tools.errors import ToolError
 
 _HANDOFF = re.compile(r"HO-[0-9a-f]{12}")
-_REQUEST = httpx2.Request("POST", "https://llm.invalid/v1/responses")
+_REQUEST = httpx.Request("POST", "https://llm.invalid/v1/responses")
 
 
 def _handoff_id(reply: str) -> str:
@@ -41,8 +41,8 @@ def _provider_errors() -> list[BaseException]:
     return [
         openai.APITimeoutError(request=_REQUEST),
         openai.APIConnectionError(request=_REQUEST),
-        openai.RateLimitError("slow down", response=httpx2.Response(429, request=_REQUEST), body=None),
-        openai.InternalServerError("upstream", response=httpx2.Response(500, request=_REQUEST), body=None),
+        openai.RateLimitError("slow down", response=httpx.Response(429, request=_REQUEST), body=None),
+        openai.InternalServerError("upstream", response=httpx.Response(500, request=_REQUEST), body=None),
         ModelMismatchError("asked for gpt-6-luna, got something-else"),
         ModelOutputError("the model returned a reply that does not fit the schema"),
     ]
@@ -70,7 +70,9 @@ def harness(monkeypatch):
 
     @asynccontextmanager
     async def fake_session():
-        yield MagicMock()
+        db = MagicMock()
+        db.get = AsyncMock(return_value=None)  # enqueue_case looks up resolution benchmarks
+        yield db
 
     async def fake_run_turn(state, text, ctx, llm):
         state.turn_count += 1
@@ -156,7 +158,7 @@ def test_failure_on_a_later_turn_keeps_the_history(harness):
     first = _post(client, "hola")
     assert first.status_code == 200
     conversation_id = first.json()["conversation_id"]
-    turn.failure = openai.RateLimitError("slow down", response=httpx2.Response(429, request=_REQUEST), body=None)
+    turn.failure = openai.RateLimitError("slow down", response=httpx.Response(429, request=_REQUEST), body=None)
     body = {
         "conversation_id": conversation_id,
         "messages": [*first.json()["messages"], {"user": "sigo aquí"}],
@@ -184,8 +186,11 @@ def test_other_failures_keep_their_status(harness):
     _app, client, turn = harness
     turn.failure = ToolError("bank read failed")
     assert _post(client, "hola").status_code == 502
-    turn.failure = RuntimeError("unexpected orchestration state")
-    assert _post(client, "hola").status_code == 503
+    turn.failure = RuntimeError("compose_speech: reply drops merchant")
+    # Speech / agent RuntimeError also degrades to a verified handoff (not a bare 503).
+    response = _post(client, "hola")
+    assert response.status_code == 200
+    assert _HANDOFF.search(response.json()["messages"][-1]["agent"])
 
 
 def test_language_is_portuguese_only_on_portuguese_signals():
@@ -208,7 +213,9 @@ async def test_the_handoff_is_idempotent_per_conversation_and_turn():
 
     cases = InMemoryCasesBackend()
     session = ToolSession(session_id="s1", state=SessionState.VALID, customer_id="C1")
-    ctx = ToolContext(session=session, db=MagicMock(), cases=cases)
+    db = MagicMock()
+    db.get = AsyncMock(return_value=None)
+    ctx = ToolContext(session=session, db=db, cases=cases)
     before = ConversationState(conversation_id=uuid4(), customer_id="C1")
     failure = openai.APITimeoutError(request=_REQUEST)
     _, first = await hand_off_on_outage(ctx, before, "hola", failure)
