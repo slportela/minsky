@@ -1,4 +1,4 @@
-"""The confirmation classifier: a bare "no", a cut-off reply, and the token budget."""
+"""The confirmation classifier: a cut-off reply and the token budget. Consent itself is agent.consent."""
 
 from __future__ import annotations
 
@@ -7,20 +7,7 @@ from typing import Any
 
 import pytest
 
-from minsky_api.agent.confirm import Confirmation, classify_confirmation, is_bare_no
-
-
-@pytest.mark.parametrize("text", ["no", "No", "NO", "no.", "No!", "  no  ", "¡no!", "não", "Não.", "nao", "NAO"])
-def test_a_plain_no_is_bare(text: str):
-    assert is_bare_no(text)
-
-
-@pytest.mark.parametrize(
-    "text",
-    ["", "sí", "no sé", "no, gracias", "no quiero", "mejor no", "sí, pero no", "¿no?", "non", "nope", "no no", "n o"],
-)
-def test_anything_more_than_a_plain_no_is_not_bare(text: str):
-    assert not is_bare_no(text)
+from minsky_api.agent.confirm import Confirmation, classify_confirmation
 
 
 class _CutOff:

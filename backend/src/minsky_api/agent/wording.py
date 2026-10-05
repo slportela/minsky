@@ -133,6 +133,19 @@ def confirm_question(act: str, language: str, transaction_type: str | None = Non
     return "¿Bloqueo tu tarjeta ahora? Responde sí o no."
 
 
+def with_yes_no_hint(text: str, language: str) -> str:
+    """The transaction question is the model's. Code makes sure it says how to answer.
+
+    Only a plain "sí" or "no" authorizes anything (agent.consent), and the questions for the two actions already
+    end with "Responde sí o no" from code. A question that already asks for a yes or a no is left alone.
+    """
+    folded = text.casefold()
+    if "sí o no" in folded or "sim ou não" in folded or "si o no" in folded:
+        return text
+    hint = "Responda sim ou não." if _lang(language) == "pt" else "Responde sí o no."
+    return f"{text.rstrip()} {hint}"
+
+
 def with_candidates(text: str, candidates: str) -> str:
     """The model asks which transaction; code lists the options, so the customer always sees them exactly.
 
@@ -156,6 +169,45 @@ def clarify_fallback(language: str, candidates: str | None) -> str:
     if pt:
         return "Não encontrei essa transação. Pode me dizer o estabelecimento, o valor ou a data?"
     return "No encontré esa transacción. ¿Puedes decirme el comercio, el monto o la fecha?"
+
+
+def safe_sentence(act: str, language: str, facts: dict[str, object]) -> str:
+    """A code-written sentence for an act when the model cannot phrase a valid one.
+
+    It says only what the code already knows from `facts` (the reason a policy rule gives, the transaction the
+    customer must confirm). It never reports an action. An act with no sentence here is a bug and raises.
+    """
+    pt = _lang(language) == "pt"
+    candidates = facts.get("candidates")
+    if act == "clarify":
+        return clarify_fallback(language, candidates if isinstance(candidates, str) else None)
+    if act == "ask_again":
+        return "Não ficou claro. Pode responder sim ou não?" if pt else "No me quedó claro. ¿Puedes responder sí o no?"
+    if act == "abort":
+        return (
+            "Entendido, não vou fazer nada com este caso. Se precisar de algo mais, escreva aqui."
+            if pt
+            else "Entendido, no haré nada con este caso. Si necesitas algo más, escríbeme aquí."
+        )
+    if act in ("confirm_open", "offer_block"):
+        reason = facts.get("reason")
+        if isinstance(reason, str) and reason:
+            return reason[:1].upper() + reason[1:] + "."
+        return "Com o que você me contou, posso seguir." if pt else "Con lo que me contaste, puedo seguir."
+    if act == "confirm_txn":
+        merchant, amount, when = facts.get("merchant"), facts.get("amount"), facts.get("when")
+        if pt:
+            return (
+                f"Você reconhece a transação de {merchant} no valor de {amount}"
+                + (f" em {when}" if when else "")
+                + "? Responda sim ou não."
+            )
+        return (
+            f"¿Reconoces el movimiento de {merchant} por {amount}"
+            + (f" del {when}" if when else "")
+            + "? Responde sí o no."
+        )
+    raise ValueError(f"no code-written sentence for act {act!r}")
 
 
 def inform_fallback(language: str, rule_id: str | None, existing_dispute_id: str | None) -> str:

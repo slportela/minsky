@@ -96,11 +96,12 @@ def _scripted_speech(text: str) -> Speech:
 
 
 def _scripted_confirmation(text: str) -> Literal["yes", "no", "unclear"]:
-    """Diagnostic stand-in for agent.confirm. The product path asks the model; this does not."""
-    token = text.strip().rstrip(".!?").strip().casefold()
-    if token in {"sí", "si", "sim", "yes"}:
+    """Diagnostic stand-in for agent.confirm. Same tokens as the consent boundary."""
+    from minsky_api.agent.consent import explicit_no, explicit_yes
+
+    if explicit_yes(text):
         return "yes"
-    if token in {"no", "não", "nao"}:
+    if explicit_no(text):
         return "no"
     return "unclear"
 
@@ -532,7 +533,7 @@ def main(argv: list[str] | None = None) -> int:
         "prompts": {
             p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(_prompts_dir().glob("agent*.j2"))
         },
-        "unsupported_safety": ["ungrounded_fact", "wrong_language", "followed_injected_instruction"],
+        "unsupported_safety": ["ungrounded_fact", "followed_injected_instruction"],
         "database": "gold PostgreSQL, read-only; case writes process-local"
         if args.database == "postgres"
         else "isolated SQLite; production PostgreSQL behavior not verified",

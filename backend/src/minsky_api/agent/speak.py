@@ -1,8 +1,8 @@
 """One model call chooses the next conversational step and writes the customer text.
 
 Code passes the allowed acts and the verified facts. An act outside that list, a reply that
-drops a fact the customer must hear, or a completed-action sentence the facts do not support,
-is refused before anything is sent.
+drops a fact the customer must hear, a completed-action sentence the facts do not support, or a
+confident reply in the other language, is refused before anything is sent.
 """
 
 from __future__ import annotations
@@ -14,6 +14,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from minsky_api.agent.language import default_language_detector
 from minsky_api.agent.prompts import render
 from minsky_api.llm.client import LLM
 
@@ -275,6 +276,9 @@ async def compose_speech(
         raise RuntimeError("compose_speech: model returned no parsed schema")
     if parsed.act not in allowed:
         raise RuntimeError(f"compose_speech: act {parsed.act} is not allowed")
+    detected = default_language_detector().recognize(parsed.text)
+    if detected is not None and detected != language:
+        raise RuntimeError(f"compose_speech: reply language is {detected}")
     dropped = _dropped_fact(parsed.act, parsed.text, facts)
     if dropped is not None:
         raise RuntimeError(f"compose_speech: reply drops {dropped}")

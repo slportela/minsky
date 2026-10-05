@@ -350,3 +350,36 @@ def test_clarify_still_refuses_an_invented_number():
                 facts={"candidates": _CANDIDATES},
             )
         )
+
+
+def test_compose_speech_rejects_a_confident_reply_in_the_other_language():
+    """From #27 (Arturo Collazo Gil): a Spanish reply to a Portuguese customer used to be accepted."""
+    for language, text in (
+        ("pt", "T1: necesito el comercio y el monto."),
+        ("es", "T1: preciso do comércio e do valor."),
+    ):
+        with pytest.raises(RuntimeError, match="language"):
+            asyncio.run(
+                compose_speech(
+                    RecordingLLM("clarify", text),  # type: ignore[arg-type]
+                    language=language,
+                    allowed=("clarify",),
+                    facts={"transaction_id": "T1"},
+                )
+            )
+
+
+def test_compose_speech_accepts_a_reply_in_the_right_language():
+    for language, text in (
+        ("pt", "T1: preciso do comércio e do valor."),
+        ("es", "T1: necesito el comercio y el monto."),
+    ):
+        speech = asyncio.run(
+            compose_speech(
+                RecordingLLM("clarify", text),  # type: ignore[arg-type]
+                language=language,
+                allowed=("clarify",),
+                facts={"transaction_id": "T1"},
+            )
+        )
+        assert speech.text == text

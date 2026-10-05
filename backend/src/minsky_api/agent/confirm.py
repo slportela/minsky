@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, ValidationError
@@ -15,16 +14,6 @@ Decision = Literal["yes", "no", "unclear"]
 # The classifier reasons before it answers and that counts toward the limit: 64 cut the JSON off mid-value in
 # 2 of 180 live calls. Only the tokens used are billed, so the headroom costs nothing.
 _MAX_OUTPUT_TOKENS = 256
-
-# A reply that is only "no" (es or pt, with or without punctuation). It declines whatever the question was
-# worded like: a question that opens with "si no hiciste esta compra" made the model read a bare "no" as
-# "yes" in 5 of 60 live calls. No "?" or "¿": "¿no?" asks something back.
-_BARE_NO = re.compile(r"[\s.!¡]*(?:no|não|nao)[\s.!¡]*", re.IGNORECASE)
-
-
-def is_bare_no(text: str) -> bool:
-    """True when the whole reply is a plain "no". A decline can only stop an action, never start one."""
-    return _BARE_NO.fullmatch(text) is not None
 
 
 class Confirmation(BaseModel):
