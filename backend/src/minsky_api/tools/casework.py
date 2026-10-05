@@ -33,6 +33,10 @@ _OPEN_QUESTIONS: dict[str, tuple[str, ...]] = {
     "D08": ("Is this charge related to the customer's other recent complaint?",),
     "D05": ("The charge is older than the 120-day window: is there a reason to accept it anyway?",),
     "clarify_exhausted": ("Which transaction does the customer mean? The assistant could not find a unique match.",),
+    "unclear_confirmation": (
+        "What does the customer want? Their last replies to a yes-or-no question were not a plain yes or no, "
+        "so the assistant could not confirm what to do.",
+    ),
     "out_of_scope": ("What does the customer need? The request is outside dispute intake.",),
     "max_turns": ("The conversation hit the turn limit: what is still unresolved?",),
 }
@@ -91,6 +95,7 @@ def _summary(kind: CaseKind, reason: str, rule_id: str | None, facts: dict[str, 
         "policy_escalate_agent": "Dispute that needs an agent:",
         "policy_refuse": "Dispute outside the automatic window; the customer was offered an agent for",
         "clarify_exhausted": "The assistant could not identify the charge the customer means",
+        "unclear_confirmation": "The customer did not answer a yes-or-no question with a plain yes or no",
         "out_of_scope": "Request outside dispute intake",
         "max_turns": "Conversation reached the turn limit",
     }.get(reason, f"Handoff ({reason})")

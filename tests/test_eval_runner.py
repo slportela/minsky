@@ -33,6 +33,7 @@ SCRIPTED = (
     "dispute-fraud-no-block-es",
     "dispute-already-disputed-es",
     "dispute-natural-reply-then-yes-es",
+    "dispute-unclear-replies-handoff-es",
     "model-outage-handoff-es",
 )
 
@@ -121,3 +122,11 @@ async def test_an_unwrapped_real_llm_is_still_closed(monkeypatch: pytest.MonkeyP
     await run_trial(_case("dispute-eligible-open-es"), extractor="real", budget=_BUDGET)
     assert len(_ProviderLLM.instances) == 1
     assert _ProviderLLM.instances[0].client.closed is True
+
+
+def test_a_case_whose_customer_never_answers_yes_or_no_must_expect_escalate() -> None:
+    data = yaml.safe_load((CASES / "dev" / "dispute-unclear-replies-handoff-es.yaml").read_text())
+    data["evaluation_criteria"]["expected_outcome"] = "resolve"
+    case = Case.model_validate(data)
+    with pytest.raises(ValueError, match="never answers yes or no must expect escalate"):
+        check_label(case, facts_from_case(case))

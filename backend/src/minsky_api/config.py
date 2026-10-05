@@ -23,6 +23,9 @@ class Settings(BaseSettings):
     # Orchestrator budgets (docs/solution.md): stop runaway chats and clarify loops.
     max_turns: PositiveInt = 12
     max_clarify_attempts: PositiveInt = 2
+    # Replies in a row that are not a plain yes or no to the same question. At this one the conversation goes to a
+    # person instead of asking again: with 3 the customer is told twice how to answer first.
+    max_unclear_replies: PositiveInt = 3
     test_sessions: SecretStr | None = None
     # Back-office agents for /console: JSON mapping credential -> {agent_id, expires_at}. Separate from
     # customer sessions, so a customer credential can never read the case queue.

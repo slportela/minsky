@@ -73,11 +73,13 @@ class MemoryBank(FixtureBank):
 def facts_from_case(case: Case) -> WorldFacts:
     info = case.user_scenario.known_info
     label_source = info.get("label_source", "policy")
-    if label_source not in {"policy", "tool_denial", "authentication", "data"}:
-        raise ValueError(f"{case.id}: label_source must be policy, tool_denial, authentication or data")
+    if label_source not in {"policy", "tool_denial", "authentication", "data", "unclear_replies"}:
+        raise ValueError(
+            f"{case.id}: label_source must be policy, tool_denial, authentication, data or unclear_replies"
+        )
     if label_source == "tool_denial":
         _require(info, "other_customer_id", "other_transaction_id")
-    elif label_source == "policy":
+    elif label_source in {"policy", "unclear_replies"}:
         _require(
             info,
             "rule_id",
@@ -136,6 +138,11 @@ def check_label(case: Case, facts: WorldFacts) -> None:
         # Injected provider outage: facts/rule stay policy-true; only the graded outcome is escalate.
         if expected != Outcome.ESCALATE:
             raise ValueError(f"{case.id}: an llm_faults case must expect escalate")
+        return
+    if facts.label_source == "unclear_replies":
+        # The customer never gives a plain yes or no: facts and rule stay policy-true, the outcome is a handoff.
+        if expected != Outcome.ESCALATE:
+            raise ValueError(f"{case.id}: a case whose customer never answers yes or no must expect escalate")
         return
     from_policy = _ROUTE_OUTCOME[decision.route]
     if expected != from_policy:

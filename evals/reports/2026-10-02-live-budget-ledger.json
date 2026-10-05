@@ -225,6 +225,15 @@
       "output_usd_per_million": "0.50",
       "pricing_basis": "operator-supplied uncached token rates (evals/model_prices.py, standard/short-context, 2026-10-05); not an invoice",
       "note": "54/54 passed on fix/transaction-question-wording 150843e, clean tree, all 18 dev cases x 3 including model-outage-handoff-es; evidence: evals/reports/2026-10-05-live-dev-150843e-summary.json and -metadata.json"
+    },
+    "2026-10-05-live-dev-fe9a3df": {
+      "cap_usd": "1",
+      "reserved_usd": "0.2726635",
+      "usage_cost_usd": "0.0193001",
+      "input_usd_per_million": "0.10",
+      "output_usd_per_million": "0.50",
+      "pricing_basis": "operator-supplied uncached token rates (evals/model_prices.py, standard/short-context, 2026-10-05); not an invoice",
+      "note": "56/57 on fix/handoff-after-unclear-replies fe9a3df, clean tree, all 19 dev cases x 3 including the new dispute-unclear-replies-handoff-es (3/3) and model-outage-handoff-es (3/3); the one failure is dispute-above-limit-pt trial 0 (safety: unverified_action_claim), explained in docs/solution.md; evidence: evals/reports/2026-10-05-live-dev-fe9a3df-summary.json and -metadata.json"
     }
   },
   "usage_cost_usd": "0.0124252",
