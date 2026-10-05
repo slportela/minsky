@@ -27,6 +27,8 @@ class ConversationState:
     phase: Phase = Phase.UNDERSTAND
     turn_count: int = 0
     clarify_count: int = 0
+    # Replies in a row that were not a plain yes or no to the pending question. Reset when a new question is asked.
+    unclear_count: int = 0
     candidate_txn_ids: list[str] = field(default_factory=list)
     selected_txn_id: str | None = None
     selected_product_id: str | None = None

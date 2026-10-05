@@ -392,6 +392,7 @@ def test_settings_defaults():
     settings = Settings()
     assert settings.max_turns == 12
     assert settings.max_clarify_attempts == 2
+    assert settings.max_unclear_replies == 3
 
 
 def test_empty_extract_does_not_list_latest_txns():
@@ -1098,12 +1099,12 @@ def test_a_natural_reply_to_the_transaction_question_is_told_how_to_answer_and_t
     request for more details, and nothing ever told the customer that only sí or no moves this step on."""
     ctx = _ctx()
     state = _state()
-    llm = FakeLLM(_details(), decisions=["unclear", "unclear", "unclear", "unclear", "yes"])
+    llm = FakeLLM(_details(), decisions=["unclear", "unclear", "yes"])
     state, _ = asyncio.run(run_turn(state, "Cafe 25", ctx, llm))  # type: ignore[arg-type]
     assert state.phase == Phase.CONFIRM_TXN
     pending = state.pending_question
     assert pending
-    for natural in ("lo reconozco", "el de antes", "un cargo de 25.00 USD en Cafe del 2026-06-10", "Cafe 25"):
+    for natural in ("lo reconozco", "el de antes"):  # two tries: the third unclear reply goes to a person
         state, reply = asyncio.run(run_turn(state, natural, ctx, llm))  # type: ignore[arg-type]
         assert reply.endswith(_ONLY_ES), reply
         assert state.phase == Phase.CONFIRM_TXN
@@ -1218,3 +1219,87 @@ def test_a_customer_who_does_not_recognize_the_charge_is_not_asked_whether_they_
     assert state.customer_says_not_me is True
     state, _ = asyncio.run(run_turn(state, "sí", ctx, llm))  # type: ignore[arg-type]
     assert state.phase == Phase.CARD_OFFER  # "sí, es ese" leads to the fraud path, as the customer meant
+
+
+# ---- too many replies in a row that are not a plain yes or no: a person takes the case -------------------------
+
+
+def _unclear_turns(llm: FakeLLM, ctx: ToolContext, *texts: str) -> tuple[ConversationState, str]:
+    state = _state()
+    reply = ""
+    for text in texts:
+        state, reply = asyncio.run(run_turn(state, text, ctx, llm))  # type: ignore[arg-type]
+    return state, reply
+
+
+def test_the_third_unclear_reply_in_a_row_hands_the_case_to_a_person_and_opens_nothing():
+    ctx = _ctx()
+    llm = FakeLLM(_details(), decisions=["unclear", "unclear", "unclear"])
+    state = _state()
+    state, _ = asyncio.run(run_turn(state, "Cafe 25", ctx, llm))  # type: ignore[arg-type]
+    pending = state.pending_question
+    assert pending
+    for count, words in enumerate(("lo reconozco", "ese mismo"), start=1):
+        state, reply = asyncio.run(run_turn(state, words, ctx, llm))  # type: ignore[arg-type]
+        assert state.phase == Phase.CONFIRM_TXN and state.unclear_count == count
+        assert reply.endswith("En esta parte del proceso solo puedes responder «sí» o «no».")
+    state, reply = asyncio.run(run_turn(state, "claro que sí", ctx, llm))  # type: ignore[arg-type]
+    assert state.phase == Phase.DONE
+    assert "HO-" in reply
+    (case,) = ctx.cases.list_cases()
+    assert case.kind == "handoff" and case.reason == "unclear_confirmation"
+    assert case.facts["customer_said"]["unanswered_question"] == pending
+    assert case.facts["customer_said"]["last_customer_replies"] == ["lo reconozco", "ese mismo", "claro que sí"]
+    assert "plain yes or no" in case.summary
+    audit = ctx.cases.list_audit()
+    assert not any(a.tool in ("open_dispute", "block_card") for a in audit)
+
+
+def test_a_plain_answer_starts_the_count_again_for_the_next_question():
+    ctx = _ctx()
+    llm = FakeLLM(_details(), decisions=["unclear", "unclear", "yes", "unclear", "unclear", "yes"])
+    state, _ = _unclear_turns(llm, ctx, "Cafe 25", "lo reconozco", "ese mismo", "sí")
+    assert state.phase == Phase.CONFIRM_ACT and state.unclear_count == 0
+    for words in ("mmm", "no sé"):
+        state, _ = asyncio.run(run_turn(state, words, ctx, llm))  # type: ignore[arg-type]
+        assert state.phase == Phase.CONFIRM_ACT  # two more unclear replies to a new question: still no handoff
+    assert not any(a.tool == "create_handoff" for a in ctx.cases.list_audit())
+    state, _ = asyncio.run(run_turn(state, "sí", ctx, llm))  # type: ignore[arg-type]
+    assert state.phase == Phase.DONE
+    assert any(a.tool == "open_dispute" and a.outcome == "ok" for a in ctx.cases.list_audit())
+
+
+def test_the_limit_is_a_setting(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("MINSKY_MAX_UNCLEAR_REPLIES", "2")
+    get_settings.cache_clear()
+    try:
+        ctx = _ctx()
+        llm = FakeLLM(_details(), decisions=["unclear", "unclear"])
+        state, reply = _unclear_turns(llm, ctx, "Cafe 25", "lo reconozco", "ese mismo")
+        assert state.phase == Phase.DONE and "HO-" in reply
+    finally:
+        monkeypatch.delenv("MINSKY_MAX_UNCLEAR_REPLIES", raising=False)
+        get_settings.cache_clear()
+
+
+def test_a_fraud_customer_who_cannot_answer_the_card_offer_keeps_the_fraud_priority():
+    ctx = _ctx(_txn(is_fraud=True))
+    llm = FakeLLM(_details(customer_says_not_me=True), decisions=["yes", "unclear", "unclear", "unclear"])
+    state, _ = _unclear_turns(llm, ctx, "No fui yo en Cafe", "sí")
+    assert state.phase == Phase.CARD_OFFER
+    for words in ("mmm", "no sé", "quizás"):
+        state, reply = asyncio.run(run_turn(state, words, ctx, llm))  # type: ignore[arg-type]
+    assert state.phase == Phase.DONE and "HO-" in reply
+    (case,) = ctx.cases.list_cases()
+    assert case.reason == "unclear_confirmation"
+    assert (case.queue, case.priority) == ("fraud", "Critical")
+    assert case.rule_id and case.rule_id.startswith("D06")
+    assert ctx.cases.get_card_block("P1") is None  # nothing was blocked: no clear yes
+
+
+def test_a_dispute_handoff_carries_no_rule_so_it_does_not_repeat_the_open_reason():
+    ctx = _ctx()
+    llm = FakeLLM(_details(), decisions=["unclear", "unclear", "unclear"])
+    _unclear_turns(llm, ctx, "Cafe 25", "lo reconozco", "ese mismo", "claro que sí")
+    (case,) = ctx.cases.list_cases()
+    assert case.rule_id is None and case.queue == "general"

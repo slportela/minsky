@@ -167,6 +167,7 @@ def _ask(state: ConversationState, phase: Phase, text: str) -> str:
     state.phase = phase
     state.pending_question = text
     state.confirmation = None
+    state.unclear_count = 0
     return text
 
 
@@ -202,6 +203,7 @@ async def _handoff(
     reason: str,
     rule_id: str | None = None,
     actions: tuple[str, ...] = (),
+    facts: dict[str, object] | None = None,
 ) -> str:
     result = await create_handoff(
         ctx,
@@ -209,7 +211,7 @@ async def _handoff(
             idempotency_key=f"{state.conversation_id}:{state.turn_count}",
             reason=reason,
             rule_id=rule_id,
-            facts=_handoff_facts(state),
+            facts=_handoff_facts(state, **(facts or {})),
             actions=actions,
         ),
     )
@@ -450,6 +452,30 @@ async def _consent(ctx: ToolContext, state: ConversationState, text: str, llm: L
     return "unclear"
 
 
+async def _unclear_reply(ctx: ToolContext, state: ConversationState, llm: LLM) -> str:
+    """The reply was not a plain yes or no. Ask again, and after too many in a row hand the case to a person.
+
+    A customer who cannot or will not answer yes or no is not helped by a fourth reminder. The conversation
+    goes to the queue with the question that was left unanswered and what the customer said instead, so the
+    agent does not start from zero. Nothing is authorized by this: a handoff only stops the assistant.
+    """
+    state.unclear_count += 1
+    if state.unclear_count >= get_settings().max_unclear_replies:
+        replies = [text[:200] for role, text in state.messages if role == "user"][-state.unclear_count :]
+        # Only a fraud case keeps its rule: it decides the queue and priority, and its reason reads right in a
+        # handoff. A D09 reason ("el cargo cumple las condiciones para abrir el reclamo") would not.
+        fraud_rule = state.rule_id if (state.rule_id or "").startswith("D06") else None
+        return await _handoff(
+            ctx,
+            state,
+            llm,
+            reason="unclear_confirmation",
+            rule_id=fraud_rule,
+            facts={"unanswered_question": state.pending_question, "last_customer_replies": replies},
+        )
+    return await _ask_again(state, llm)
+
+
 async def _ask_again(state: ConversationState, llm: LLM) -> str:
     """The reply was not a plain yes or no. The model rephrases the pending question; code adds how to answer.
 
@@ -477,7 +503,7 @@ async def _phase_confirm_txn(ctx: ToolContext, state: ConversationState, text: s
         state.selected_product_id = None
         state.candidate_txn_ids = []
         return _accept(state, speech)
-    return await _ask_again(state, llm)
+    return await _unclear_reply(ctx, state, llm)
 
 
 async def _phase_confirm_act(ctx: ToolContext, state: ConversationState, text: str, llm: LLM) -> str:
@@ -488,7 +514,7 @@ async def _phase_confirm_act(ctx: ToolContext, state: ConversationState, text: s
         state.pending_question = None
         return _accept(state, speech)
     if decision != "yes":
-        return await _ask_again(state, llm)
+        return await _unclear_reply(ctx, state, llm)
     assert state.selected_txn_id is not None
     opened = await open_dispute(
         ctx,
@@ -549,7 +575,7 @@ async def _phase_card_offer(ctx: ToolContext, state: ConversationState, text: st
     if decision == "no":
         state.pending_question = None
         return await _handoff(ctx, state, llm, reason="possible_fraud_no_block", rule_id=state.rule_id)
-    return await _ask_again(state, llm)
+    return await _unclear_reply(ctx, state, llm)
 
 
 async def run_turn(
