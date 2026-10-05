@@ -403,10 +403,7 @@ def test_card_offer_without_product_does_not_claim_block():
 
 
 def test_model_yes_on_a_hedged_reply_asks_again():
-    """The deterministic floor: a model 'yes' on a reply that also says no or 'but' never acts.
-
-    A reply that is only "no" is not here: it is a plain decline (see the bare-no tests below).
-    """
+    """Consent is code's: a model 'yes' on a reply that is not an explicit yes never acts."""
     for text in ("sí, pero mejor no", "sim, mas espere", "no, gracias"):
         ctx = _ctx()
         state = _state()
@@ -415,7 +412,7 @@ def test_model_yes_on_a_hedged_reply_asks_again():
         assert state.phase == Phase.CONFIRM_TXN
         state, _ = asyncio.run(run_turn(state, text, ctx, llm))  # type: ignore[arg-type]
         assert state.phase == Phase.CONFIRM_TXN
-        assert state.confirmation == "unclear"
+        assert state.confirmation == "yes"  # the model's verdict stays on the trace; it did not authorize
         assert state.acts[-1] == "ask_again"
         assert not any(a.tool in ("open_dispute", "evaluate_dispute") for a in ctx.cases.list_audit())
 
@@ -425,7 +422,7 @@ def test_model_yes_on_a_plain_yes_still_confirms():
     state = _state()
     llm = FakeLLM(_details(), decisions=["yes"])
     state, _ = asyncio.run(run_turn(state, "Cafe 25", ctx, llm))  # type: ignore[arg-type]
-    state, _ = asyncio.run(run_turn(state, "Sí, ese mismo", ctx, llm))  # type: ignore[arg-type]
+    state, _ = asyncio.run(run_turn(state, "sí", ctx, llm))  # type: ignore[arg-type]
     assert state.phase == Phase.CONFIRM_ACT
 
 
@@ -436,13 +433,13 @@ def test_confirm_turn_classifies_before_any_other_tool():
     state, _ = asyncio.run(run_turn(state, "Cafe 25", ctx, llm))  # type: ignore[arg-type]
     assert state.pending_question
     audit_len = len(ctx.cases.list_audit())
-    # A hedged reply, not a bare "no": the model says yes and the hedge floor turns it into a question.
+    # The model says yes to a hedged reply: its verdict is recorded and code turns it into a question.
     state, _ = asyncio.run(run_turn(state, "sí, pero mejor no", ctx, llm))  # type: ignore[arg-type]
     tools = [row.tool for row in ctx.cases.list_audit()]
     assert tools[audit_len] == "classify_reply"
     assert "open_dispute" not in tools
     assert "block_card" not in tools
-    assert state.confirmation == "unclear"
+    assert state.confirmation == "yes"
     assert state.pending_question
 
 
@@ -451,7 +448,7 @@ def test_blank_confirmation_stays_in_phase_and_opens_nothing():
     state = _state()
     llm = FakeLLM(_details(), decisions=[None])
     state, _ = asyncio.run(run_turn(state, "Cafe 25", ctx, llm))  # type: ignore[arg-type]
-    state, reply = asyncio.run(run_turn(state, "sí", ctx, llm))  # type: ignore[arg-type]
+    state, reply = asyncio.run(run_turn(state, "tal vez", ctx, llm))  # type: ignore[arg-type]
     assert state.phase == Phase.CONFIRM_TXN
     assert state.confirmation == "unclear"
     assert state.acts[-1] == "ask_again"
@@ -929,7 +926,7 @@ def test_a_bare_no_to_the_card_offer_hands_off_even_if_the_model_reads_it_as_yes
     assert state.phase == Phase.CARD_OFFER
     state, reply = asyncio.run(run_turn(state, "no", ctx, llm))  # type: ignore[arg-type]
     assert state.phase == Phase.DONE
-    assert state.confirmation == "no"
+    assert state.confirmation == "yes"  # the misread stays on the trace, which is how it can be seen
     assert "HO-" in reply
     assert ctx.cases.get_card_block("P1") is None
     audit = ctx.cases.list_audit()
@@ -944,16 +941,61 @@ def test_a_bare_no_to_the_transaction_question_opens_nothing():
     state, _ = asyncio.run(run_turn(state, "Cafe 25", ctx, llm))  # type: ignore[arg-type]
     assert state.phase == Phase.CONFIRM_TXN
     state, _ = asyncio.run(run_turn(state, "No.", ctx, llm))  # type: ignore[arg-type]
-    assert state.confirmation == "no"
+    assert state.confirmation == "yes"
     assert state.phase != Phase.CONFIRM_ACT
     assert not any(a.tool == "open_dispute" for a in ctx.cases.list_audit())
 
 
-def test_a_bare_yes_still_needs_the_model_and_the_hedge_floor():
-    """The floor only ever declines. A "yes" is never decided without the model."""
+def test_an_explicit_yes_proceeds_whatever_the_model_recorded():
+    """The model's verdict is evidence. A plain "sí" is consent even when the classifier returned nothing usable."""
     ctx = _ctx()
     state = _state()
-    llm = FakeLLM(_details(), decisions=["no"])
+    llm = FakeLLM(_details(), decisions=[None])
     state, _ = asyncio.run(run_turn(state, "Cafe 25", ctx, llm))  # type: ignore[arg-type]
     state, _ = asyncio.run(run_turn(state, "sí", ctx, llm))  # type: ignore[arg-type]
-    assert state.confirmation == "no"  # the model's verdict decides, not the word
+    assert state.phase == Phase.CONFIRM_ACT  # the next question is already asked, so the verdict is on the audit
+    assert any(
+        r.tool == "classify_reply" and r.outcome == "ok" and r.reason == "unclear" for r in ctx.cases.list_audit()
+    )
+
+
+# ---- ported from #27 (c841def, Arturo Collazo Gil): consent is explicit, whatever the model says ----------------
+
+
+def test_explicit_no_does_not_open_when_the_model_says_yes():
+    ctx = _ctx()
+    state = _state()
+    llm = FakeLLM(_details(), decisions=["yes", "yes"])
+    state, _ = asyncio.run(run_turn(state, "Cafe 25", ctx, llm))  # type: ignore[arg-type]
+    state, _ = asyncio.run(run_turn(state, "sí", ctx, llm))  # type: ignore[arg-type]
+    assert state.phase == Phase.CONFIRM_ACT
+    state, _ = asyncio.run(run_turn(state, "no,", ctx, llm))  # type: ignore[arg-type]
+    assert state.phase == Phase.DONE
+    assert state.confirmation == "yes"
+    assert not any(row.tool == "open_dispute" and row.outcome == "ok" for row in ctx.cases.list_audit())
+
+
+def test_a_sentence_yes_does_not_open_even_when_the_model_says_yes():
+    ctx = _ctx()
+    state = _state()
+    llm = FakeLLM(_details(), decisions=["yes", "yes"])
+    state, _ = asyncio.run(run_turn(state, "Cafe 25", ctx, llm))  # type: ignore[arg-type]
+    state, _ = asyncio.run(run_turn(state, "sí", ctx, llm))  # type: ignore[arg-type]
+    assert state.phase == Phase.CONFIRM_ACT
+    state, _ = asyncio.run(run_turn(state, "sí, es ese", ctx, llm))  # type: ignore[arg-type]
+    assert state.phase == Phase.CONFIRM_ACT
+    assert state.acts[-1] == "ask_again"
+    assert not any(row.tool == "open_dispute" and row.outcome == "ok" for row in ctx.cases.list_audit())
+
+
+def test_explicit_no_does_not_block_the_card_when_the_model_says_yes():
+    txn = _txn(is_fraud=True)
+    ctx = _ctx(txn)
+    state = _state()
+    llm = FakeLLM(_details(customer_says_not_me=True), decisions=["yes", "yes"])
+    state, _ = asyncio.run(run_turn(state, "No fui yo en Cafe", ctx, llm))  # type: ignore[arg-type]
+    state, _ = asyncio.run(run_turn(state, "sí", ctx, llm))  # type: ignore[arg-type]
+    assert state.phase == Phase.CARD_OFFER
+    state, _ = asyncio.run(run_turn(state, "não", ctx, llm))  # type: ignore[arg-type]
+    assert ctx.cases.get_card_block("P1") is None
+    assert not any(row.tool == "block_card" and row.outcome == "ok" for row in ctx.cases.list_audit())

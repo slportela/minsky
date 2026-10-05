@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 
+from minsky_api.agent.consent import explicit_no, explicit_yes
 from minsky_api.agent.extract import DisputeDetails, extract_dispute_details
 from minsky_api.agent.language import LanguageDetector, default_language_detector
 from minsky_api.agent.speak import Speech, compose_speech
@@ -49,14 +50,9 @@ from minsky_api.tools.schemas import (
     TransactionView,
 )
 
-# A bare number picks a candidate. Yes/no is a model decision, not a token list.
+# A bare number picks a candidate. Consent is explicit_yes / explicit_no (agent.consent); the model's
+# classification of a reply is evidence on the audit trail, not consent.
 _PICK = re.compile(r"^\s*(\d+)\s*$")
-# Deterministic floor under the model's "yes": a reply that also says no, cancel or "but" is not a clear
-# yes, so the system asks again instead of acting. It can only turn a yes into a question, never the reverse.
-_HEDGE = re.compile(
-    r"\b(?:no|não|nao|nunca|cancel\w*|espera|espere|aguarde|pero|mas|porém|todavia|mejor|melhor|tal vez|talvez)\b",
-    re.IGNORECASE,
-)
 
 
 def _lang(state: ConversationState) -> str:
@@ -399,7 +395,7 @@ async def _phase_clarify(ctx: ToolContext, state: ConversationState, text: str, 
 
 
 async def _remember_decision(ctx: ToolContext, state: ConversationState, text: str, llm: LLM) -> str:
-    """Classify through the tool before any other tool. Only 'yes' may act."""
+    """Classify through the tool before any other tool. The result is evidence, not consent."""
     if not state.pending_question:
         state.confirmation = "unclear"
         return "unclear"
@@ -408,11 +404,23 @@ async def _remember_decision(ctx: ToolContext, state: ConversationState, text: s
         ClassifyReplyArgs(question=state.pending_question, text=text),
         llm,
     )
-    decision = result.decision
-    if decision == "yes" and _HEDGE.search(text):
-        decision = "unclear"
-    state.confirmation = decision
-    return decision
+    state.confirmation = result.decision
+    return result.decision
+
+
+async def _consent(ctx: ToolContext, state: ConversationState, text: str, llm: LLM) -> str:
+    """Classify for the audit trail. Only an explicit yes may authorize a write."""
+    if not state.pending_question:
+        state.confirmation = "unclear"
+        return "unclear"
+    decision = await _remember_decision(ctx, state, text, llm)
+    if explicit_no(text):
+        return "no"
+    if explicit_yes(text):
+        return "yes"
+    if decision == "no":
+        return "no"
+    return "unclear"
 
 
 async def _ask_again(state: ConversationState, llm: LLM) -> str:
@@ -421,7 +429,7 @@ async def _ask_again(state: ConversationState, llm: LLM) -> str:
 
 
 async def _phase_confirm_txn(ctx: ToolContext, state: ConversationState, text: str, llm: LLM) -> str:
-    decision = await _remember_decision(ctx, state, text, llm)
+    decision = await _consent(ctx, state, text, llm)
     if decision == "yes":
         return await _apply_policy(ctx, state, llm)
     if decision == "no":
@@ -440,7 +448,7 @@ async def _phase_confirm_txn(ctx: ToolContext, state: ConversationState, text: s
 
 
 async def _phase_confirm_act(ctx: ToolContext, state: ConversationState, text: str, llm: LLM) -> str:
-    decision = await _remember_decision(ctx, state, text, llm)
+    decision = await _consent(ctx, state, text, llm)
     if decision == "no":
         speech = await _speak(state, llm, ("abort",))
         state.phase = Phase.DONE
@@ -471,7 +479,8 @@ async def _phase_confirm_act(ctx: ToolContext, state: ConversationState, text: s
 
 
 async def _phase_card_offer(ctx: ToolContext, state: ConversationState, text: str, llm: LLM) -> str:
-    if await _remember_decision(ctx, state, text, llm) == "yes":
+    decision = await _consent(ctx, state, text, llm)
+    if decision == "yes":
         actions: list[str] = []
         blocked_ok = False
         if state.selected_product_id:
@@ -504,7 +513,7 @@ async def _phase_card_offer(ctx: ToolContext, state: ConversationState, text: st
             card_blocked=blocked_ok,
             rule_id=state.rule_id,
         )
-    if state.confirmation == "no":
+    if decision == "no":
         state.pending_question = None
         return await _handoff(ctx, state, llm, reason="possible_fraud_no_block", rule_id=state.rule_id)
     return await _ask_again(state, llm)
