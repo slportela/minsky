@@ -127,12 +127,10 @@ async def _authenticated_turn(
     except (ToolDenied, ToolError) as exc:
         return _error(ErrorCode.TOOL_FAILURE, str(exc), 502)
     except MODEL_FAILURES as exc:
-        return await _degraded_turn(before, user_text, tool_session, cases, conversations, exc)
+        return await _degraded_turn(before, user_text, tool_session, cases, conversations, exc, language=state.language)
     except RuntimeError:
-        # compose_speech grounding and other agent failures: hand off when possible
-        return await _degraded_turn(
-            before, user_text, tool_session, cases, conversations, RuntimeError("assistant_runtime_error")
-        )
+        # Unexpected agent/runtime faults: never leak the reason; do not invent a handoff.
+        return _error(ErrorCode.SERVICE_UNAVAILABLE, "the assistant is unavailable; please try again later", 503)
 
     conversations.put(state)
     return _chat_response(state)
@@ -152,13 +150,15 @@ async def _degraded_turn(
     cases: CasesBackend,
     conversations: ConversationStore,
     failure: Exception,
+    *,
+    language: str | None = None,
 ) -> ChatResponse | JSONResponse:
     """The model is unavailable: hand off with context and say so (docs/architecture.md, principle 5)."""
     logger.warning("model unavailable (%s): handing the conversation to an agent", type(failure).__name__)
     try:
         async with session() as db:
             ctx = ToolContext(session=tool_session, db=db, cases=cases)
-            state, _reply = await hand_off_on_outage(ctx, before, user_text, failure)
+            state, _reply = await hand_off_on_outage(ctx, before, user_text, failure, language=language)
     except Exception:  # whatever stops the handoff: never promise one that does not exist
         logger.warning("handoff after model outage failed (%s)", type(failure).__name__, exc_info=True)
         return _error(ErrorCode.SERVICE_UNAVAILABLE, "the assistant is unavailable; please try again later", 503)

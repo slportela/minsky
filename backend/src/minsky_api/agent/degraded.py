@@ -10,25 +10,28 @@ The handoff carries identifiers and the failure class, never the customer's free
 
 from __future__ import annotations
 
-import re
 from copy import deepcopy
 
 from openai import OpenAIError
 
+from minsky_api.agent.language import default_language_detector
+from minsky_api.agent.speak import SpeechError
 from minsky_api.agent.state import ConversationState, Phase
 from minsky_api.llm.client import ModelMismatchError, ModelOutputError
 from minsky_api.tools.bank import create_handoff
 from minsky_api.tools.context import ToolContext
 from minsky_api.tools.schemas import CreateHandoffArgs
 
-# Provider errors (timeout, connection, rate limit, 5xx), a wrong model id, and an unusable reply.
+# Provider errors, wrong model id, unusable structured reply, and speech grounding failures.
 # Configuration errors (LLMNotConfiguredError) stay a 503: that is a deployment fault, not an outage.
-MODEL_FAILURES: tuple[type[Exception], ...] = (OpenAIError, ModelMismatchError, ModelOutputError)
+MODEL_FAILURES: tuple[type[Exception], ...] = (
+    OpenAIError,
+    ModelMismatchError,
+    ModelOutputError,
+    SpeechError,
+)
 
 REASON = "assistant_unavailable"
-
-# Portuguese-only signals (no Spanish word uses ã, õ or ç). Spanish is the default.
-_PORTUGUESE = re.compile(r"[ãõç]|\b(?:você|voce|não|nao|obrigad[oa]|quero|minha|meu|tenho|fatura|olá)\b", re.IGNORECASE)
 
 _REPLY = {
     "es": (
@@ -44,24 +47,25 @@ _REPLY = {
 }
 
 
-def language_of(texts: list[str]) -> str:
-    """ "pt" when any customer message carries a Portuguese-only signal, else "es"."""
-    return "pt" if any(_PORTUGUESE.search(text) for text in texts) else "es"
-
-
 def outage_reply(language: str, handoff_id: str) -> str:
-    return _REPLY[language].format(handoff_id=handoff_id)
+    return _REPLY.get(language, _REPLY["es"]).format(handoff_id=handoff_id)
 
 
 async def hand_off_on_outage(
-    ctx: ToolContext, before: ConversationState, user_text: str, failure: Exception
+    ctx: ToolContext,
+    before: ConversationState,
+    user_text: str,
+    failure: Exception,
+    *,
+    language: str | None = None,
 ) -> tuple[ConversationState, str]:
     """Create the handoff and return the conversation as it stands after the failed turn.
 
     `before` is the snapshot taken before the turn: the failed turn may have changed the live state
     halfway, and only the snapshot is consistent with what the customer has been told so far.
+    `language` is the language already detected on the live state (before the turn it is often unset).
     """
-    language = language_of([text for role, text in before.messages if role == "user"] + [user_text])
+    lang = language or before.language or default_language_detector().detect(user_text)
     result = await create_handoff(
         ctx,
         CreateHandoffArgs(
@@ -71,14 +75,15 @@ async def hand_off_on_outage(
                 "transaction_id": before.selected_txn_id,
                 "phase": before.phase.value,
                 "failure": type(failure).__name__,
-                "language": language,
+                "language": lang,
             },
         ),
     )
-    reply = outage_reply(language, result.handoff.handoff_id)
+    reply = outage_reply(lang, result.handoff.handoff_id)
     after = deepcopy(before)
     after.turn_count += 1
     after.phase = Phase.DONE
+    after.language = lang
     after.messages.append(("user", user_text))
     after.messages.append(("agent", reply))
     return after, reply

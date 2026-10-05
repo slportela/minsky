@@ -75,8 +75,12 @@ def harness(monkeypatch):
         yield db
 
     async def fake_run_turn(state, text, ctx, llm):
+        from minsky_api.agent.language import default_language_detector
+
         state.turn_count += 1
         state.messages.append(("user", text))
+        if state.language is None:
+            state.language = default_language_detector().detect(text)
         if turn.partial_txn:
             state.selected_txn_id = turn.partial_txn  # progress of a turn that then fails
         if turn.failure is not None:
@@ -183,23 +187,17 @@ def test_if_the_handoff_cannot_be_created_the_answer_is_an_honest_503(harness, m
 
 
 def test_other_failures_keep_their_status(harness):
+    from minsky_api.agent.speak import SpeechError
+
     _app, client, turn = harness
     turn.failure = ToolError("bank read failed")
     assert _post(client, "hola").status_code == 502
-    turn.failure = RuntimeError("compose_speech: reply drops merchant")
-    # Speech / agent RuntimeError also degrades to a verified handoff (not a bare 503).
+    turn.failure = RuntimeError("unexpected orchestration state")
+    assert _post(client, "hola").status_code == 503
+    turn.failure = SpeechError("compose_speech: reply drops merchant")
     response = _post(client, "hola")
     assert response.status_code == 200
     assert _HANDOFF.search(response.json()["messages"][-1]["agent"])
-
-
-def test_language_is_portuguese_only_on_portuguese_signals():
-    from minsky_api.agent.degraded import language_of
-
-    assert language_of(["No reconozco este cargo"]) == "es"
-    assert language_of(["Hola, quiero disputar un cargo"]) == "es"
-    assert language_of(["Não reconheço esta cobrança"]) == "pt"
-    assert language_of(["hola", "tenho uma dúvida"]) == "pt"
 
 
 @pytest.mark.asyncio
@@ -216,8 +214,8 @@ async def test_the_handoff_is_idempotent_per_conversation_and_turn():
     db = MagicMock()
     db.get = AsyncMock(return_value=None)
     ctx = ToolContext(session=session, db=db, cases=cases)
-    before = ConversationState(conversation_id=uuid4(), customer_id="C1")
+    before = ConversationState(conversation_id=uuid4(), customer_id="C1", language="es")
     failure = openai.APITimeoutError(request=_REQUEST)
-    _, first = await hand_off_on_outage(ctx, before, "hola", failure)
-    _, again = await hand_off_on_outage(ctx, before, "hola", failure)
+    _, first = await hand_off_on_outage(ctx, before, "hola", failure, language="es")
+    _, again = await hand_off_on_outage(ctx, before, "hola", failure, language="es")
     assert _handoff_id(first) == _handoff_id(again)
