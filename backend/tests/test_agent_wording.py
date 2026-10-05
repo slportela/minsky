@@ -71,8 +71,8 @@ def test_clarify_fallback_is_a_complete_question_in_both_languages():
     assert clarify_fallback("pt", None) != clarify_fallback("es", None)
 
 
-_TXN = {"kind": "cargo", "merchant": "Cafe", "amount": "25.00 USD", "when": "10 de junio de 2026"}
-_REASON = {"reason": "el cargo cumple las condiciones para abrir el reclamo ahora mismo"}
+_TXN: dict[str, object] = {"kind": "cargo", "merchant": "Cafe", "amount": "25.00 USD", "when": "10 de junio de 2026"}
+_REASON: dict[str, object] = {"reason": "el cargo cumple las condiciones para abrir el reclamo ahora mismo"}
 
 
 def test_every_act_that_can_be_refused_has_a_code_written_sentence_in_both_languages():

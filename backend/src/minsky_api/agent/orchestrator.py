@@ -106,7 +106,10 @@ async def _speak_safe(state: ConversationState, llm: LLM, allowed: tuple[str, ..
         raise
     except RuntimeError:
         act = allowed[0]
-        return Speech(act=act, text=safe_sentence(act, _lang(state), _public_facts(state, **facts)))
+        # model_validate, not the constructor: an act that is not a valid Act fails loudly instead of being cast.
+        return Speech.model_validate(
+            {"act": act, "text": safe_sentence(act, _lang(state), _public_facts(state, **facts))}
+        )
 
 
 async def _speak_verified(state: ConversationState, llm: LLM, allowed: tuple[str, ...], **facts: object) -> str:

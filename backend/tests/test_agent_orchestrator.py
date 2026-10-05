@@ -1012,7 +1012,7 @@ _REFUSED = "Te cobraremos 900 USD de comisión."  # an invented amount: the grou
 
 
 def _refused(act: str) -> Speech:
-    return Speech(act=act, text=_REFUSED)
+    return Speech.model_validate({"act": act, "text": _REFUSED})
 
 
 def _turns(llm: FakeLLM, ctx: ToolContext, *texts: str) -> tuple[ConversationState, str]:
