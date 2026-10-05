@@ -33,6 +33,8 @@ FastAPI service for dispute intake: the orchestrator, the policy, the mock bank 
 - `store/` reads `bank.*` by entity key (async, pooled). Customer authorization is checked once in identity/tools, not on every store query. Writes go through the `CasesBackend` protocol: `SqlCasesBackend` (Postgres `cases.*`, `MINSKY_CASES_BACKEND=postgres`, the compose default) or `InMemoryCasesBackend` (tests, offline evals). Every dispute and handoff also queues a triaged back-office case (`tools/casework.py`, `policy/triage.py`), served to agents by `api/console.py` with staff credentials (`MINSKY_STAFF_SESSIONS`, ADR 0013).
 - `identity/` resolves a server-provisioned, expiring bearer credential to `ToolSession`; customer ids
   from headers or conversation text do not authenticate (ADR 0009). OTP/Cognito are pending.
+  A demo operator credential (`identity/operator.py`, ADR 0015: off by default, local and demo only) may choose which
+  customer to chat as through `api/demo.py`; the choice is audited and the session it issues names the operator.
   Conversations are customer-bound; history validation and state commit are serialized per conversation.
   Failed turns leave prior history intact; writes use idempotency for safe read-back retries.
 - `llm/` talks to an OpenAI-compatible endpoint (ADR 0008). Model ids come from config.

@@ -36,3 +36,4 @@ What gets easier, what gets harder, what we must now do. How we would know it wa
 | [0012](0012-second-aws-account-for-demo-compute.md) | A second AWS account of the same owner for demo compute | accepted for the demo hosting; deployment pending (data placement superseded by 0014) |
 | [0013](0013-case-queue-and-console.md) | Cases in Postgres, a triaged back-office queue and an agent console | proposed |
 | [0014](0014-consolidate-into-one-account.md) | One account: the lake and bronze move to the second account; Bedrock follows when a model is invocable | accepted for the lake and bronze; Bedrock not usable yet |
+| [0015](0015-demo-operator-credentials.md) | Demo operator credentials that choose which customer to chat as | accepted for the demo only |
