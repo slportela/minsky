@@ -14,6 +14,7 @@ from minsky_api.agent.wording import (
     policy_reason,
     safe_sentence,
     with_candidates,
+    with_only_yes_no,
     with_yes_no_hint,
 )
 
@@ -123,3 +124,48 @@ def test_a_question_that_already_asks_for_a_yes_or_no_is_left_alone():
         "¿Es este? Dime si o no.",
     ):
         assert with_yes_no_hint(text, "es") == text
+
+
+_ONLY_ES = "En esta parte del proceso solo puedes responder «sí» o «no»."
+_ONLY_PT = "Nesta parte do processo você só pode responder «sim» ou «não»."
+
+
+def test_asking_again_always_says_that_only_yes_or_no_works_here():
+    assert (
+        with_only_yes_no("¿Es este el cargo de Cafe por 25.00 USD?", "es")
+        == f"¿Es este el cargo de Cafe por 25.00 USD? {_ONLY_ES}"
+    )
+    assert with_only_yes_no("Esta é a cobrança do Cafe?", "pt") == f"Esta é a cobrança do Cafe? {_ONLY_PT}"
+
+
+def test_a_closing_yes_or_no_instruction_is_replaced_not_repeated():
+    for text in (
+        "¿Es ese el cargo? Responde sí o no.",
+        "¿Es ese el cargo? RESPONDE SI O NO",
+        "¿Es ese el cargo?   responde sí o no!",
+    ):
+        assert with_only_yes_no(text, "es") == f"¿Es ese el cargo? {_ONLY_ES}"
+    assert with_only_yes_no("Essa é a cobrança? Responda sim ou não.", "pt") == f"Essa é a cobrança? {_ONLY_PT}"
+
+
+def test_the_notice_is_not_added_twice_and_a_middle_instruction_is_kept():
+    once = with_only_yes_no("¿Es ese el cargo?", "es")
+    assert with_only_yes_no(once, "es") == once
+    assert once.count("solo puedes responder") == 1
+    middle = "Responde sí o no cuando estés lista. ¿Es ese el cargo?"
+    assert with_only_yes_no(middle, "es").startswith(middle)  # only a closing instruction is replaced
+
+
+def test_an_empty_reply_becomes_just_the_notice():
+    assert with_only_yes_no("", "es") == _ONLY_ES
+    assert with_only_yes_no("   ", "pt") == _ONLY_PT
+
+
+def test_the_ask_again_fallback_repeats_the_pending_question():
+    pending = "¿Reconoces este cargo de Cafe por 25.00 USD? Responde sí o no."
+    assert safe_sentence("ask_again", "es", {"pending_question": pending}) == f"No me quedó claro. {pending}"
+    assert (
+        safe_sentence("ask_again", "pt", {"pending_question": "Esta é a cobrança?"})
+        == "Não ficou claro. Esta é a cobrança?"
+    )
+    assert safe_sentence("ask_again", "es", {}) == "No me quedó claro."

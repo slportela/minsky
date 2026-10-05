@@ -22,6 +22,7 @@ from minsky_api.agent.wording import (
     safe_sentence,
     transaction_noun,
     with_candidates,
+    with_only_yes_no,
     with_yes_no_hint,
 )
 from minsky_api.config import get_settings
@@ -446,8 +447,14 @@ async def _consent(ctx: ToolContext, state: ConversationState, text: str, llm: L
 
 
 async def _ask_again(state: ConversationState, llm: LLM) -> str:
-    speech = await _speak_safe(state, llm, ("ask_again",))
-    return _accept(state, speech)
+    """The reply was not a plain yes or no. The model rephrases the pending question; code adds how to answer.
+
+    The question is not replaced: `pending_question` stays as it was, so every further unclear reply is asked
+    the same thing again, and the classifier still sees the question that was really asked.
+    """
+    facts = {"pending_question": state.pending_question} if state.pending_question else {}
+    speech = await _speak_safe(state, llm, ("ask_again",), **facts)
+    return with_only_yes_no(_accept(state, speech), _lang(state))
 
 
 async def _phase_confirm_txn(ctx: ToolContext, state: ConversationState, text: str, llm: LLM) -> str:
