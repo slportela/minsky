@@ -71,12 +71,16 @@ def _public_facts(state: ConversationState, **extra: object) -> dict[str, object
     raw: dict[str, object] = {"reason": policy_reason(rule_id if isinstance(rule_id, str) else None, _lang(state))}
     raw.update(extra)
     facts = {key: value for key, value in raw.items() if value is not None}
-    # Every path that carries an id here is about to report it, so remember it for a later turn.
+    _remember_reference(state, facts)
+    return facts
+
+
+def _remember_reference(state: ConversationState, facts: dict[str, object]) -> None:
+    """Every path that carries an id into the facts is about to report it, so keep it for a later turn."""
     for key in ("dispute_id", "existing_dispute_id", "handoff_id"):
         value = facts.get(key)
         if isinstance(value, str) and value:
             state.reference = value
-    return facts
 
 
 def _txn_facts(txn: TransactionView, language: str) -> dict[str, object]:

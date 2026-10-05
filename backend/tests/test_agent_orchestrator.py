@@ -880,9 +880,9 @@ def test_a_transfer_is_not_called_a_charge():
         == "¿Quieres que abra el reclamo por esta transferencia? Responde sí o no, por favor."
     )
     assert "cargo" in confirm_question("confirm_open", "es", None)
-    # Portuguese contracts the preposition: "a contestação desta cobrança", never "de esta cobrança".
-    assert "a contestação desta cobrança" in confirm_question("confirm_open", "pt", "Purchase")
-    assert "a contestação deste saque" in confirm_question("confirm_open", "pt", "Withdrawal")
+    # pt uses the verb, so no preposition has to be contracted; the noun still has to be the right one.
+    assert "conteste esta cobrança" in confirm_question("confirm_open", "pt", "Purchase")
+    assert "conteste este saque" in confirm_question("confirm_open", "pt", "Withdrawal")
 
 
 # ---- clarify: the model asks, code owns the option list -------------------------------------------------------

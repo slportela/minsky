@@ -13,7 +13,7 @@ A live `--extractor real --trials 3` run on the dev split is still required befo
 
 | Check | Result |
 |---|---|
-| `make ci` | green: 519 unit tests, eval-check clean, 4/4 regression smoke, 17/17 offline dev smoke, frontend typecheck and API tests |
+| `make ci` | green: 520 unit tests, eval-check clean, 4/4 regression smoke, 17/17 offline dev smoke, frontend typecheck and API tests |
 | Claim reading of every code-owned sentence, before vs. after | no new claim in any of the 34 sentences across `es` and `pt`; one pre-existing claim removed |
 | Live dev run (48 trials, pass rate, provider cost) | **not run** |
 
@@ -62,8 +62,8 @@ handoff id) now claim nothing.
 |---|---|---|
 | Transaction question (model refused) | ¿Reconoces el movimiento de Cafe por 25.00 USD del 10 de junio de 2026? Responde sí o no. | Gracias por contarme. Encontré esta transacción: Cafe, 25.00 USD, 10 de junio de 2026. ¿Es esa la que quieres revisar? Responde sí o no, por favor. |
 | Open confirmation (D09) | El cargo cumple las condiciones para abrir el reclamo ahora mismo. ¿Abro el reclamo por este cargo? Responde sí o no. | Gracias por confirmarlo. El cargo cumple las condiciones para abrir el reclamo ahora mismo. ¿Quieres que abra el reclamo por este cargo? Responde sí o no, por favor. |
-| Card-block offer (D06) | Si no hiciste esta compra, alguien podría estar usando tu tarjeta. ¿Bloqueo tu tarjeta ahora? Responde sí o no. | Gracias por avisarnos. Si no hiciste esta compra, alguien podría estar usando tu tarjeta. ¿Quieres que bloquee tu tarjeta ahora, para proteger tu cuenta? Responde sí o no, por favor. |
-| Unclear answer | No me quedó claro. ¿Puedes responder sí o no? | Disculpa, no te entendí bien. ¿Puedes responder sí o no, por favor? |
+| Card-block offer (D06) | Si no hiciste esta compra, alguien podría estar usando tu tarjeta. ¿Bloqueo tu tarjeta ahora? Responde sí o no. | Gracias por confirmarlo. Si no hiciste esta compra, alguien podría estar usando tu tarjeta. ¿Quieres que bloquee tu tarjeta ahora, para proteger tu cuenta? Responde sí o no, por favor. |
+| Unclear answer | No me quedó claro. ¿Puedes responder sí o no? | Disculpa, no te entendí bien. Responde sí o no, por favor. |
 | Customer declines | Entendido, no haré nada con este caso. Si necesitas algo más, escríbeme aquí. | Entendido, gracias por decírmelo: no haré nada con este caso. Si necesitas algo más, escríbeme aquí y te ayudo. |
 | No transaction found | No encontré esa transacción. ¿Puedes decirme el comercio, el monto o la fecha? | Disculpa, no encontré esa transacción. ¿Me puedes decir el comercio, el monto o la fecha, por favor? Con cualquiera de esos datos la busco de nuevo. |
 | Several candidates | Encontré más de una transacción que coincide. ¿Cuál es la que quieres revisar? | Gracias por los datos. Encontré más de una transacción que coincide y prefiero no elegir por ti: ¿cuál es la que quieres revisar? |
@@ -71,10 +71,12 @@ handoff id) now claim nothing.
 | D04, already disputed | Ya hay un reclamo abierto para ese cargo. La referencia de tu reclamo es DSP-…. | Gracias por contárnoslo. Ya hay un reclamo abierto para ese cargo. La referencia de tu reclamo es DSP-…. Si tienes otra duda sobre este caso, escríbeme aquí. |
 | Settled case, a case was opened | Tu caso ya quedó registrado con la referencia que te envié. Si necesitas algo más, escríbeme aquí. | Gracias por escribirme de nuevo. La referencia de tu caso es DSP-…, y nuestro equipo te avisará de cada avance. Si necesitas algo más, cuéntame y te ayudo. |
 | Settled case, nothing was written (D01-D03, abort) | Tu caso ya quedó registrado con la referencia que te envié. Si necesitas algo más, escríbeme aquí. *(false)* | Gracias por escribirme de nuevo. Sobre este caso ya te compartí lo que tengo. Si necesitas algo más, cuéntame y te ayudo. |
-| Open confirmation (pt) | Posso abrir a contestação **de esta** cobrança? Responda sim ou não. | Você quer que eu abra a contestação **desta** cobrança? Responda sim ou não, por favor. |
+| Open confirmation (pt) | Posso abrir a contestação **de esta** cobrança? Responda sim ou não. | Você quer que eu **conteste** esta cobrança? Responda sim ou não, por favor. |
 
-The last row is a grammar fix: Portuguese contracts the preposition, and the old sentence read
-wrong in every `confirm_open` turn in `pt`.
+The last row is a grammar fix. `a contestação de esta cobrança` needs the preposition contracted
+(`desta`), and the old sentence read wrong in every `confirm_open` turn in `pt`. Rather than
+contract it, the question now uses the verb `contestar` — already the verb in the D03 and D05
+reasons — so there is no preposition to get wrong and no helper to maintain.
 
 The `confirm_txn` row is more than a tone change. The old fallback asked a *recognition*
 question ("¿Reconoces el movimiento…?") while `_phase_confirm_txn` reads the answer as an
@@ -97,6 +99,11 @@ holds on every path, with two orchestrator tests driving the two paths that brok
 - The literal `Responde sí o no` / `Responda sim ou não` stays in every confirmation. Only an
   exact token authorizes a write (`agent/consent.py`), so softening to "¿te parece bien?"
   would invite replies that authorize nothing and send the customer around the loop again.
+  It is now written once (`wording.yes_no_hint`) and detected once (`wording.asks_yes_or_no`),
+  so the sentence we append and the sentence we look for cannot drift. The cost is that
+  `ask_again` lost its question form: "Disculpa, no te entendí bien. Responde sí o no, por favor"
+  is a shade less gentle than the question it replaced, on the turn where the customer is already
+  confused. It repeats the exact instruction they did not follow, which is the trade accepted.
 - The two action offers stay questions. A declarative "bloqueo tu tarjeta" is read as a
   completed block by `evals/claims.py`; the question form and an offer marker keep it an offer.
 - No reassurance about the money returning, and no mention of a specialist unless `facts`

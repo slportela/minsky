@@ -7,7 +7,9 @@ from decimal import Decimal
 
 from minsky_api.agent.speak import action_claims
 from minsky_api.agent.wording import (
+    asks_yes_or_no,
     clarify_fallback,
+    confirm_question,
     fallback_sentence,
     human_amount,
     human_date,
@@ -15,6 +17,7 @@ from minsky_api.agent.wording import (
     safe_sentence,
     with_candidates,
     with_yes_no_hint,
+    yes_no_hint,
 )
 
 
@@ -118,6 +121,20 @@ def test_the_transaction_question_always_tells_the_customer_how_to_answer():
         with_yes_no_hint("Você reconhece esta cobrança?", "pt")
         == "Você reconhece esta cobrança? Responda sim ou não, por favor."
     )
+
+
+def test_the_hint_the_code_writes_is_the_hint_the_code_detects():
+    """One sentence and one check, so the text we append and the text we look for cannot drift apart."""
+    for language in ("es", "pt"):
+        hint = yes_no_hint(language)
+        assert asks_yes_or_no(hint)
+        already = f"¿Es este el cargo? {hint}"
+        assert with_yes_no_hint(already, language) == already
+        assert with_yes_no_hint("¿Es este el cargo?", language).endswith(hint)
+        for act in ("confirm_open", "offer_block"):
+            assert asks_yes_or_no(confirm_question(act, language, "Purchase")), (act, language)
+            assert asks_yes_or_no(safe_sentence("ask_again", language, {})), language
+    assert not asks_yes_or_no("¿Reconoces este cargo?")
 
 
 def test_a_question_that_already_asks_for_a_yes_or_no_is_left_alone():
