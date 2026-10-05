@@ -821,6 +821,31 @@ def test_follow_up_after_the_case_gets_a_code_answer_when_the_model_invents_a_da
     assert "20 de junio" not in reply and "referencia" in reply
 
 
+def test_follow_up_after_the_case_uses_template_on_provider_outage():
+    """A DONE-phase timeout must not open a second assistant_unavailable handoff."""
+    import httpx2
+    import openai
+
+    ctx = _ctx()
+    state = _state()
+    llm = FakeLLM(_details())
+    for text in ("Cafe 25", "sí", "sí"):
+        state, _ = asyncio.run(run_turn(state, text, ctx, llm))  # type: ignore[arg-type]
+    assert state.phase == Phase.DONE
+    before_cases = len(ctx.cases.list_cases())
+
+    class _TimeoutLLM(FakeLLM):
+        async def respond(self, *args: Any, schema: type | None = None, **kwargs: Any) -> LLMResult[Any]:
+            if schema is not None and schema.__name__ == "Speech":
+                raise openai.APITimeoutError(request=httpx2.Request("POST", "https://llm.invalid/v1/responses"))
+            return await super().respond(*args, schema=schema, **kwargs)
+
+    state, reply = asyncio.run(run_turn(state, "¿Cuándo se resuelve?", ctx, _TimeoutLLM(_details())))  # type: ignore[arg-type]
+    assert state.phase == Phase.DONE
+    assert "referencia" in reply
+    assert len(ctx.cases.list_cases()) == before_cases
+
+
 def test_a_transfer_is_not_called_a_charge():
     from minsky_api.agent.wording import confirm_question, transaction_noun
 

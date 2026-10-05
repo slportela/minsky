@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 
 from minsky_api.agent.consent import explicit_no, explicit_yes
+from minsky_api.agent.degraded import is_model_failure
 from minsky_api.agent.extract import DisputeDetails, extract_dispute_details
 from minsky_api.agent.language import LanguageDetector, default_language_detector
 from minsky_api.agent.speak import Speech, compose_speech
@@ -569,8 +570,11 @@ async def run_turn(
         if state.phase == Phase.DONE:
             try:
                 reply = _accept(state, await _speak(state, llm, ("inform",)))
-            except RuntimeError:
-                # A follow-up after the case is settled ("¿cuándo se resuelve?") gets no invented dates: code answers.
+            except Exception as exc:
+                # Settled case: template on speech/schema faults and provider outages. Never open a
+                # second assistant_unavailable handoff for a conversation that is already closed.
+                if not (isinstance(exc, RuntimeError) or is_model_failure(exc)):
+                    raise
                 state.acts.append("inform")
                 reply = done_fallback(_lang(state))
             state.messages.append(("agent", reply))

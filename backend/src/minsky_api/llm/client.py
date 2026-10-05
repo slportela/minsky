@@ -15,7 +15,7 @@ import time
 from dataclasses import dataclass
 from typing import Literal
 
-from openai import AsyncOpenAI
+from openai import AsyncOpenAI, ContentFilterFinishReasonError, LengthFinishReasonError
 from pydantic import BaseModel, ValidationError
 
 from minsky_api.config import Settings, get_settings
@@ -98,7 +98,8 @@ class LLM:
             if schema is not None:
                 try:
                     response = await self.client.responses.parse(text_format=schema, **common)
-                except ValidationError as exc:  # a ValueError: it must not read as a bad customer request
+                except (ValidationError, LengthFinishReasonError, ContentFilterFinishReasonError) as exc:
+                    # Cut-off / filtered / invalid schema: degrade or re-ask, never a customer 400.
                     raise ModelOutputError("the model reply does not fit the requested schema") from exc
                 parsed = response.output_parsed
             else:

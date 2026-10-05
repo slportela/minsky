@@ -145,17 +145,35 @@ def test_handoff_carries_identifiers_not_the_customer_text(harness):
     assert handoff.facts["phase"] == "understand"
 
 
-def test_state_is_the_one_before_the_failed_turn(harness):
+def test_handoff_keeps_progress_from_the_failed_turn(harness):
     app, client, turn = harness
     turn.failure = openai.APITimeoutError(request=_REQUEST)
     turn.partial_txn = "T-PARTIAL"  # the failed turn had already set this on the live state
     response = _post(client, "hola")
     state = app.state.conversations.get(UUID(response.json()["conversation_id"]))
     assert state.phase == Phase.DONE
-    assert state.selected_txn_id is None
+    assert state.selected_txn_id == "T-PARTIAL"
     assert [role for role, _ in state.messages] == ["user", "agent"]
     reply = response.json()["messages"][-1]["agent"]
-    assert app.state.cases.get_handoff(_handoff_id(reply)).facts["transaction_id"] is None
+    handoff = app.state.cases.get_handoff(_handoff_id(reply))
+    assert handoff is not None
+    assert handoff.facts["transaction_id"] == "T-PARTIAL"
+
+
+def test_handoff_reports_a_dispute_opened_before_the_failure(harness):
+    app, client, turn = harness
+    turn.failure = openai.APITimeoutError(request=_REQUEST)
+    turn.partial_txn = "T1"
+    app.state.cases.create_dispute(customer_id="C1", transaction_id="T1", reason="unrecognized")
+    response = _post(client, "hola")
+    assert response.status_code == 200, response.text
+    reply = response.json()["messages"][-1]["agent"]
+    handoff = app.state.cases.get_handoff(_handoff_id(reply))
+    assert handoff is not None
+    dispute_id = handoff.facts["dispute_id"]
+    assert isinstance(dispute_id, str) and dispute_id.startswith("DSP-")
+    assert dispute_id in reply
+    assert f"dispute_opened:{dispute_id}" in handoff.actions
 
 
 def test_failure_on_a_later_turn_keeps_the_history(harness):
@@ -214,8 +232,8 @@ def test_auth_provider_errors_are_503_without_a_handoff(harness):
     assert not _HANDOFF.search(response.text)
 
 
-def test_enqueue_failure_after_handoff_still_names_the_reference(harness, monkeypatch):
-    app, client, turn = harness
+def test_enqueue_failure_after_handoff_is_an_honest_503(harness, monkeypatch):
+    _app, client, turn = harness
     turn.failure = openai.APITimeoutError(request=_REQUEST)
 
     async def fail_enqueue(*_args, **_kwargs):
@@ -223,10 +241,8 @@ def test_enqueue_failure_after_handoff_still_names_the_reference(harness, monkey
 
     monkeypatch.setattr(bank_tools, "enqueue_case", fail_enqueue)
     response = _post(client, "hola")
-    assert response.status_code == 200, response.text
-    reply = response.json()["messages"][-1]["agent"]
-    handoff_id = _handoff_id(reply)
-    assert app.state.cases.get_handoff(handoff_id) is not None
+    assert response.status_code == 503
+    assert not _HANDOFF.search(response.text)
 
 
 @pytest.mark.asyncio
@@ -243,8 +259,48 @@ async def test_the_handoff_is_idempotent_per_conversation_and_turn():
     db = MagicMock()
     db.get = AsyncMock(return_value=None)
     ctx = ToolContext(session=session, db=db, cases=cases)
-    before = ConversationState(conversation_id=uuid4(), customer_id="C1", language="es")
+    live = ConversationState(conversation_id=uuid4(), customer_id="C1", language="es", turn_count=1)
+    live.messages.append(("user", "hola"))
     failure = openai.APITimeoutError(request=_REQUEST)
-    _, first = await hand_off_on_outage(ctx, before, "hola", failure, language="es")
-    _, again = await hand_off_on_outage(ctx, before, "hola", failure, language="es")
+    _, first = await hand_off_on_outage(ctx, live, "hola", failure, language="es")
+    _, again = await hand_off_on_outage(ctx, live, "hola", failure, language="es")
     assert _handoff_id(first) == _handoff_id(again)
+
+
+@pytest.mark.asyncio
+async def test_outage_reuses_an_existing_handoff_for_the_same_turn():
+    """max_turns (or similar) must not yield a second queue case when speech then fails."""
+    from uuid import uuid4
+
+    from minsky_api.agent.degraded import hand_off_on_outage
+    from minsky_api.agent.state import ConversationState
+    from minsky_api.identity.session import SessionState, ToolSession
+    from minsky_api.tools.context import ToolContext
+
+    cases = InMemoryCasesBackend()
+    session = ToolSession(session_id="s1", state=SessionState.VALID, customer_id="C1")
+    db = MagicMock()
+    db.get = AsyncMock(return_value=None)
+    ctx = ToolContext(session=session, db=db, cases=cases)
+    conversation_id = uuid4()
+    existing = cases.create_handoff(
+        customer_id="C1",
+        reason="max_turns",
+        rule_id=None,
+        facts={"transaction_id": "T1"},
+        actions=(),
+        idempotency_key=f"{conversation_id}:3",
+    )
+    live = ConversationState(
+        conversation_id=conversation_id,
+        customer_id="C1",
+        language="es",
+        turn_count=3,
+        selected_txn_id="T1",
+    )
+    live.messages.append(("user", "hola"))
+    _, reply = await hand_off_on_outage(ctx, live, "hola", openai.APITimeoutError(request=_REQUEST), language="es")
+    assert _handoff_id(reply) == existing.handoff_id
+    assert cases.get_handoff(existing.handoff_id) is not None
+    assert cases.get_case(existing.handoff_id) is not None
+    assert len(cases.list_cases()) == 1

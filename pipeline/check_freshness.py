@@ -19,7 +19,13 @@ REQUIRED_TABLES = ("transactions", "customers", "products")
 
 def max_age_hours() -> float:
     raw = os.environ.get("MINSKY_FRESHNESS_MAX_AGE_HOURS", "168")
-    return float(raw)
+    try:
+        value = float(raw)
+    except ValueError as exc:
+        raise ValueError(f"invalid MINSKY_FRESHNESS_MAX_AGE_HOURS={raw!r}") from exc
+    if value <= 0:
+        raise ValueError(f"MINSKY_FRESHNESS_MAX_AGE_HOURS must be > 0, got {value}")
+    return value
 
 
 def stale_tables(
@@ -45,7 +51,11 @@ def stale_tables(
 
 def main() -> int:
     url = os.environ.get("GOLD_DATABASE_URL", DEFAULT_URL)
-    age = timedelta(hours=max_age_hours())
+    try:
+        age = timedelta(hours=max_age_hours())
+    except ValueError as exc:
+        print(f"freshness-check: {exc}", file=sys.stderr)
+        return 2
     now = datetime.now(UTC)
     try:
         with psycopg.connect(url) as conn:

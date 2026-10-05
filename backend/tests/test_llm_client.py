@@ -5,7 +5,7 @@ from decimal import Decimal
 
 import httpx2
 import pytest
-from openai import AsyncOpenAI
+from openai import AsyncOpenAI, ContentFilterFinishReasonError, LengthFinishReasonError
 from pydantic import BaseModel, SecretStr, ValidationError
 
 from minsky_api.agent.extract import DisputeDetails
@@ -120,6 +120,24 @@ def test_dispute_amount_schema_is_provider_compatible_and_preserves_cents():
 def test_a_reply_that_does_not_fit_the_schema_is_a_model_failure_not_a_bad_request():
     # pydantic.ValidationError is a ValueError, which the chat route answers as the customer's 400
     llm = _llm(_response('{"amount": "not-a-number"}'), [])
+    with pytest.raises(ModelOutputError):
+        asyncio.run(llm.respond("Extract.", [{"role": "user", "content": "x"}], schema=DisputeDetails))
+
+
+@pytest.mark.parametrize(
+    "error_cls",
+    [LengthFinishReasonError, ContentFilterFinishReasonError],
+    ids=["length", "content_filter"],
+)
+def test_truncated_or_filtered_parse_is_a_model_output_error(error_cls, monkeypatch):
+    class _Completion:
+        usage = None
+
+    async def boom(**_kwargs):
+        raise error_cls(completion=_Completion())
+
+    llm = LLM(SETTINGS, client=AsyncOpenAI(api_key="test", base_url="https://llm.invalid/v1"))
+    monkeypatch.setattr(llm.client.responses, "parse", boom)
     with pytest.raises(ModelOutputError):
         asyncio.run(llm.respond("Extract.", [{"role": "user", "content": "x"}], schema=DisputeDetails))
 

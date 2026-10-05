@@ -39,3 +39,7 @@ def test_failed_span_records_error_status() -> None:
     assert len(spans) == 1
     assert spans[0].status.status_code == StatusCode.ERROR
     assert spans[0].status.description == "RuntimeError"
+    attrs = spans[0].attributes or {}
+    assert attrs.get("exception.type") == "RuntimeError"
+    # No exception event: record_exception would export str(exc) and the stacktrace.
+    assert all(event.name != "exception" for event in spans[0].events)

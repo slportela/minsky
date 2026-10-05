@@ -7,7 +7,6 @@ Conversations are bound to that customer id; client history must match the serve
 from __future__ import annotations
 
 import logging
-from copy import deepcopy
 from typing import Annotated
 from uuid import UUID, uuid4
 
@@ -116,7 +115,6 @@ async def _authenticated_turn(
     except LLMNotConfiguredError:
         return _error(ErrorCode.SERVICE_UNAVAILABLE, "LLM is not configured (MINSKY_LLM_API_KEY)", 503)
 
-    before = deepcopy(state)  # the failed turn can mutate the live state before it raises
     try:
         async with session() as db:
             ctx = ToolContext(session=tool_session, db=db, cases=cases)
@@ -129,8 +127,9 @@ async def _authenticated_turn(
         return _error(ErrorCode.TOOL_FAILURE, str(exc), 502)
     except Exception as exc:
         if is_model_failure(exc):
+            # Pass the live state: the failed turn may already have committed side effects.
             return await _degraded_turn(
-                before, user_text, tool_session, cases, conversations, exc, language=state.language
+                state, user_text, tool_session, cases, conversations, exc, language=state.language
             )
         if isinstance(exc, (OpenAIError, RuntimeError)):
             # Config/auth/unexpected faults: never leak the reason; do not invent a handoff.
@@ -149,7 +148,7 @@ def _chat_response(state: ConversationState) -> ChatResponse:
 
 
 async def _degraded_turn(
-    before: ConversationState,
+    live: ConversationState,
     user_text: str,
     tool_session: ToolSession,
     cases: CasesBackend,
@@ -163,7 +162,7 @@ async def _degraded_turn(
     try:
         async with session() as db:
             ctx = ToolContext(session=tool_session, db=db, cases=cases)
-            state, _reply = await hand_off_on_outage(ctx, before, user_text, failure, language=language)
+            state, _reply = await hand_off_on_outage(ctx, live, user_text, failure, language=language)
     except Exception:  # whatever stops the handoff: never promise one that does not exist
         logger.warning("handoff after model outage failed (%s)", type(failure).__name__, exc_info=True)
         return _error(ErrorCode.SERVICE_UNAVAILABLE, "the assistant is unavailable; please try again later", 503)

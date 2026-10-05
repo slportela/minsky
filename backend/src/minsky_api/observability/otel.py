@@ -86,7 +86,7 @@ def start_span(name: str, **attributes: object) -> Iterator[Span]:
         try:
             yield span
         except Exception as exc:
-            # Exception type only: messages can carry untrusted customer or provider text.
-            span.record_exception(exc)
+            # Exception type only: messages / stack traces can carry untrusted customer or provider text.
+            span.set_attribute("exception.type", type(exc).__name__)
             span.set_status(Status(StatusCode.ERROR, type(exc).__name__))
             raise

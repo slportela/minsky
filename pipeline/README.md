@@ -47,4 +47,6 @@ make freshness-check           # exit 1 if customers/products/transactions loads
 # MINSKY_FRESHNESS_MAX_AGE_HOURS=24 make freshness-check
 ```
 
+Manual today: not part of `make ci` or compose. Production should schedule the same check and alarm on non-zero exit (P4.2). Invalid `MINSKY_FRESHNESS_MAX_AGE_HOURS` exits 2 (config fault), distinct from exit 1 (stale).
+
 A late/corrected partition fixture lives in `pipeline/fixtures/late_corrected/` (P4.3 offline proof; not a production scheduler).

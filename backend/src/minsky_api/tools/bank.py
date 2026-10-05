@@ -21,7 +21,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import logging
 from collections.abc import Awaitable, Callable
 from typing import Any, NoReturn, Protocol
 
@@ -58,8 +57,6 @@ from minsky_api.tools.schemas import (
     OpenDisputeResult,
     TransactionView,
 )
-
-logger = logging.getLogger(__name__)
 
 
 def _args_digest(payload: dict[str, Any]) -> str:
@@ -391,22 +388,19 @@ async def create_handoff(ctx: ToolContext, args: CreateHandoffArgs) -> CreateHan
     verified = ctx.cases.get_handoff(created.handoff_id)
     if verified is None:
         raise ToolError("create_handoff read-back failed")
-    try:
-        await enqueue_case(
-            ctx,
-            kind=CaseKind.HANDOFF,
-            case_id=verified.handoff_id,
-            customer_id=customer_id,
-            reason=verified.reason,
-            rule_id=verified.rule_id,
-            txn=txn,
-            customer_facts=dict(verified.facts),
-            actions=verified.actions,
-            created_at=verified.created_at,
-        )
-    except Exception:
-        # The handoff row is verified; case-queue failure must not hide it from the customer.
-        logger.warning("enqueue_case after create_handoff failed for %s", verified.handoff_id, exc_info=True)
+    # Fail loud: a handoff without a queue row is not a verified action (retry is idempotent).
+    await enqueue_case(
+        ctx,
+        kind=CaseKind.HANDOFF,
+        case_id=verified.handoff_id,
+        customer_id=customer_id,
+        reason=verified.reason,
+        rule_id=verified.rule_id,
+        txn=txn,
+        customer_facts=dict(verified.facts),
+        actions=verified.actions,
+        created_at=verified.created_at,
+    )
     result = CreateHandoffResult(handoff=HandoffView.model_validate(verified))
     _audit(ctx, tool="create_handoff", args=audit_args, outcome="ok", customer_id=customer_id)
     return result

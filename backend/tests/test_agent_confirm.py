@@ -10,17 +10,18 @@ import pytest
 from openai import AsyncOpenAI
 from pydantic import SecretStr
 
-from minsky_api.agent.confirm import Confirmation, classify_confirmation
+from minsky_api.agent.confirm import classify_confirmation
 from minsky_api.config import Settings
 from minsky_api.llm.client import LLM
 
 
 class _CutOff:
-    """The provider's reply stopped mid-value, as seen live: responses.parse then raises a ValidationError."""
+    """LLM.respond wraps a cut-off schema parse as ModelOutputError; confirm must stay unclear."""
 
     async def respond(self, *args: Any, **kwargs: Any) -> Any:
-        Confirmation.model_validate_json('{"decision":"')
-        raise AssertionError("unreachable")
+        from minsky_api.llm.client import ModelOutputError
+
+        raise ModelOutputError("the model reply does not fit the requested schema")
 
 
 class _ApiDown:
