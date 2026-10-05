@@ -19,7 +19,7 @@ from openai import APIConnectionError, APIStatusError, RateLimitError
 
 from minsky_api.agent.language import default_language_detector
 from minsky_api.agent.speak import SpeechError
-from minsky_api.agent.state import ConversationState, Phase
+from minsky_api.agent.state import ConversationState, Phase, Terminal
 from minsky_api.llm.client import ModelMismatchError, ModelOutputError
 from minsky_api.tools.bank import create_handoff
 from minsky_api.tools.context import ToolContext
@@ -135,6 +135,7 @@ async def hand_off_on_outage(
     reply = outage_reply(lang, result.handoff.handoff_id, dispute_id=dispute_id)
     after.phase = Phase.DONE
     after.pending_question = None
+    after.terminal = Terminal("handoff", result.handoff.handoff_id, dispute_id=dispute_id)
     after.acts.append("handoff")
     after.messages.append(("agent", reply))
     return after, reply

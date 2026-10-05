@@ -5,22 +5,21 @@ from __future__ import annotations
 import re
 
 from minsky_api.agent.consent import explicit_no, explicit_yes
-from minsky_api.agent.degraded import is_model_failure
 from minsky_api.agent.extract import DisputeDetails, extract_dispute_details
 from minsky_api.agent.language import LanguageDetector, default_language_detector
 from minsky_api.agent.speak import Speech, compose_speech
-from minsky_api.agent.state import ConversationState, Phase
+from minsky_api.agent.state import ConversationState, Phase, Terminal
 from minsky_api.agent.wording import (
     clarify_fallback,
     confirm_question,
     confirm_txn_question,
-    done_fallback,
     fallback_sentence,
     human_amount,
     human_date,
     inform_fallback,
     policy_reason,
     safe_sentence,
+    terminal_reply,
     transaction_noun,
     with_candidates,
     with_only_yes_no,
@@ -195,6 +194,20 @@ def _merge_details(state: ConversationState, incoming: DisputeDetails) -> Disput
     return state.search_details
 
 
+def _finish(
+    state: ConversationState,
+    outcome: str,
+    reference: str | None = None,
+    *,
+    card_blocked: bool = False,
+    dispute_id: str | None = None,
+) -> None:
+    """Close the conversation: from here on every message gets the code-written status (`terminal_reply`)."""
+    state.phase = Phase.DONE
+    state.pending_question = None
+    state.terminal = Terminal(outcome, reference, card_blocked, dispute_id)
+
+
 async def _handoff(
     ctx: ToolContext,
     state: ConversationState,
@@ -215,8 +228,7 @@ async def _handoff(
             actions=actions,
         ),
     )
-    state.phase = Phase.DONE
-    state.pending_question = None
+    _finish(state, "handoff", result.handoff.handoff_id)
     return await _speak_verified(state, llm, ("handoff",), handoff_id=result.handoff.handoff_id, rule_id=rule_id)
 
 
@@ -345,8 +357,7 @@ async def _apply_policy(ctx: ToolContext, state: ConversationState, llm: LLM) ->
                 actions=(),
             ),
         )
-        state.phase = Phase.DONE
-        state.pending_question = None
+        _finish(state, "handoff", result.handoff.handoff_id)
         return await _speak_verified(
             state,
             llm,
@@ -354,8 +365,7 @@ async def _apply_policy(ctx: ToolContext, state: ConversationState, llm: LLM) ->
             handoff_id=result.handoff.handoff_id,
             rule_id=decision.rule_id,
         )
-    state.phase = Phase.DONE
-    state.pending_question = None
+    _finish(state, "informed", dispute_id=decision.existing_dispute_id)
     try:
         speech = await _speak(
             state,
@@ -494,8 +504,7 @@ async def _phase_confirm_txn(ctx: ToolContext, state: ConversationState, text: s
     if decision == "no":
         speech = await _speak_safe(state, llm, ("clarify", "abort"))
         if speech.act == "abort":
-            state.phase = Phase.DONE
-            state.pending_question = None
+            _finish(state, "cancelled")
             return _accept(state, speech)
         state.phase = Phase.CLARIFY
         state.pending_question = None
@@ -510,8 +519,7 @@ async def _phase_confirm_act(ctx: ToolContext, state: ConversationState, text: s
     decision = await _consent(ctx, state, text, llm)
     if decision == "no":
         speech = await _speak_safe(state, llm, ("abort",))
-        state.phase = Phase.DONE
-        state.pending_question = None
+        _finish(state, "cancelled")
         return _accept(state, speech)
     if decision != "yes":
         return await _unclear_reply(ctx, state, llm)
@@ -526,8 +534,7 @@ async def _phase_confirm_act(ctx: ToolContext, state: ConversationState, text: s
         ),
     )
     verified = await get_dispute(ctx, GetDisputeArgs(dispute_id=opened.dispute.dispute_id))
-    state.phase = Phase.DONE
-    state.pending_question = None
+    _finish(state, "dispute_opened", verified.dispute.dispute_id)
     return await _speak_verified(
         state,
         llm,
@@ -562,8 +569,7 @@ async def _phase_card_offer(ctx: ToolContext, state: ConversationState, text: st
                 actions=tuple(actions),
             ),
         )
-        state.phase = Phase.DONE
-        state.pending_question = None
+        _finish(state, "handoff", result.handoff.handoff_id, card_blocked=blocked_ok)
         return await _speak_verified(
             state,
             llm,
@@ -605,15 +611,9 @@ async def run_turn(
             state.language = (detector or default_language_detector()).detect(stripped)
 
         if state.phase == Phase.DONE:
-            try:
-                reply = _accept(state, await _speak(state, llm, ("inform",)))
-            except Exception as exc:
-                # Settled case: template on speech/schema faults and provider outages. Never open a
-                # second assistant_unavailable handoff for a conversation that is already closed.
-                if not (isinstance(exc, RuntimeError) or is_model_failure(exc)):
-                    raise
-                state.acts.append("inform")
-                reply = done_fallback(_lang(state))
+            # Terminal: no model, no tools. The status, the reference, and how to start another conversation.
+            reply = terminal_reply(_lang(state), state.terminal)
+            state.acts.append("closed")
             state.messages.append(("agent", reply))
             return state, reply
 
