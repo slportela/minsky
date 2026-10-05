@@ -1,0 +1,39 @@
+{
+  "passed": 51,
+  "attempted": 51,
+  "errors": 0,
+  "graded": 51,
+  "by_language": {
+    "es": {
+      "cases": 14,
+      "trials": 42,
+      "passed": 42,
+      "graded": 42,
+      "rate": "100.0% (42/42, 95% CI 91.6%-100.0%)"
+    },
+    "pt": {
+      "cases": 2,
+      "trials": 6,
+      "passed": 6,
+      "graded": 6,
+      "rate": "100.0% (6/6, 95% CI 61.0%-100.0%)"
+    },
+    "mixed": {
+      "cases": 1,
+      "trials": 3,
+      "passed": 3,
+      "graded": 3,
+      "rate": "100.0% (3/3, 95% CI 43.8%-100.0%)"
+    }
+  },
+  "provider_cost_usd": "0.0223781",
+  "budget": {
+    "cap_usd": "1",
+    "reserved_usd": "0.3020014",
+    "usage_cost_usd": "0.0223781",
+    "input_usd_per_million": "0.10",
+    "output_usd_per_million": "0.50",
+    "pricing_basis": "operator-supplied uncached token rates; not an invoice"
+  },
+  "limitation": "partial safety checks and draft dev cases; not a headline result. Language slices count generated dev drafts; replies were not held out."
+}
