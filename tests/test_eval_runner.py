@@ -35,6 +35,7 @@ SCRIPTED = (
     "dispute-natural-reply-then-yes-es",
     "dispute-unclear-replies-handoff-es",
     "dispute-offer-declined-then-dispute-es",
+    "dispute-offer-answered-with-the-charge-es",
     "dispute-follow-up-after-case-es",
     "model-outage-maintenance-es",
 )
