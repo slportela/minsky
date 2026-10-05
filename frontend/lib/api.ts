@@ -97,6 +97,22 @@ export async function postChatTurn(args: {
 
 // ---- Demo operator (ADR 0015): a credential that chooses which customer to chat as ----
 
+export type DemoCharge = {
+  transaction_id: string;
+  merchant: string | null;
+  amount: string | null;
+  currency: string | null;
+  amount_usd: string;
+  date: string | null;
+  transaction_type: string | null;
+  status: string | null;
+  route: string;
+  rule_id: string;
+  hint: string | null;
+  existing_dispute_id: string | null;
+  suggested_message: string;
+};
+
 export type DemoSession = {
   credential: string;
   customer_id: string;
@@ -104,6 +120,8 @@ export type DemoSession = {
   country: string | null;
   operator_id: string;
   expires_at: string;
+  // null: the charges could not be read, the session is still good.
+  recent_charges: DemoCharge[] | null;
 };
 
 // Is this credential a demo operator's? Null when it is not, or when the demo mode is off (404 or 401): the page

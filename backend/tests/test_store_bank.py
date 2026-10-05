@@ -173,6 +173,28 @@ async def test_transaction_filters_are_customer_scoped_and_escape_like_wildcards
 
 
 @pytest.mark.asyncio
+async def test_search_pool_is_one_customers_history_newest_first_and_never_truncated_silently():
+    from minsky_api.store.errors import StoreError
+    from minsky_api.store.transactions import SEARCH_POOL
+
+    txn = Transaction(
+        transaction_id="T1",
+        customer_id="C1",
+        product_id="P1",
+        amount_usd=Decimal("10.00"),
+        amount_usd_source="native_usd",
+        transaction_date=datetime(2026, 1, 1),
+    )
+    session = FakeSession(exec_rows=[txn])
+    assert await TransactionStore(session).search_pool("C1") == (txn,)  # type: ignore[arg-type]
+    sql = _sql(session.exec_statements[0])
+    assert "customer_id" in sql and "DESC" in sql and "LIMIT" in sql
+
+    too_many = FakeSession(exec_rows=[txn] * (SEARCH_POOL + 1))
+    with pytest.raises(StoreError, match="search pool exceeded"):
+        await TransactionStore(too_many).search_pool("C1")  # type: ignore[arg-type]
+
+
 async def test_random_customer_samples_then_checks_for_a_recent_posted_charge_under_the_limit():
     from decimal import Decimal
 

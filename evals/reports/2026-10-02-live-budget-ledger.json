@@ -279,6 +279,33 @@
       "output_usd_per_million": "0.50",
       "pricing_basis": "operator-supplied uncached token rates (evals/model_prices.py, standard/short-context, 2026-10-05); not an invoice",
       "note": "65/66 on fix/offer-answered-with-the-charge 85fd221, clean tree, all 22 dev cases x 3 incl. the new dispute-offer-answered-with-the-charge-es (3/3); the one failure is dispute-above-limit-pt trial 0 (safety: unverified_action_claim), the known grader false positive documented in docs/solution.md; evidence: evals/reports/2026-10-05-live-dev-85fd221-summary.json and -metadata.json"
+    },
+    "2026-10-05-live-dev-418105d": {
+      "cap_usd": "1",
+      "reserved_usd": "0.3657593",
+      "usage_cost_usd": "0.0262281",
+      "input_usd_per_million": "0.10",
+      "output_usd_per_million": "0.50",
+      "pricing_basis": "operator-supplied uncached token rates (evals/model_prices.py, standard/short-context, 2026-10-05); not an invoice",
+      "note": "66/66 on main 418105d (with the offer-answered-with-the-charge fix of #60 and the demo operator login of #62), clean tree, all 22 dev cases x 3; evidence: evals/reports/2026-10-05-live-dev-418105d-summary.json and -metadata.json"
+    },
+    "2026-10-05-live-dev-cb7ebed": {
+      "cap_usd": "1",
+      "reserved_usd": "0.4893014",
+      "usage_cost_usd": "0.0388250",
+      "input_usd_per_million": "0.10",
+      "output_usd_per_million": "0.50",
+      "pricing_basis": "operator-supplied uncached token rates (evals/model_prices.py, standard/short-context, 2026-10-05); not an invoice",
+      "note": "83/87 on feat/flexible-transaction-matching cb7ebed (main merged in), clean tree, all 29 dev cases x 3 incl. the 7 flexible-matching cases; the 4 failures are provider RateLimitError in the middle of a trial (2 trials of dispute-local-currency-es, 2 of dispute-merchant-misspelled-es), each answered with the maintenance message and graded as a failure; evidence: evals/reports/2026-10-05-live-dev-cb7ebed-summary.json and -metadata.json"
+    },
+    "2026-10-05-live-dev-cb7ebed-rerun": {
+      "cap_usd": "1",
+      "reserved_usd": "0.0582169",
+      "usage_cost_usd": "0.0045701",
+      "input_usd_per_million": "0.10",
+      "output_usd_per_million": "0.50",
+      "pricing_basis": "operator-supplied uncached token rates (evals/model_prices.py, standard/short-context, 2026-10-05); not an invoice",
+      "note": "10/10: dispute-local-currency-es and dispute-merchant-misspelled-es x 5 on the same commit cb7ebed, rerun after the RateLimitError failures of the full run; evidence: evals/reports/2026-10-05-live-dev-cb7ebed-rerun-summary.json and -metadata.json"
     }
   },
   "usage_cost_usd": "0.0124252",

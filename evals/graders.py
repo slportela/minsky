@@ -163,7 +163,7 @@ def _env_reasons(case: Case, cases: InMemoryCasesBackend, customer_id: str, agen
             ok_reads = [
                 row
                 for row in cases.list_audit()
-                if row.tool in {"get_transaction", "get_transactions"} and row.outcome == "ok"
+                if row.tool in {"get_transaction", "get_transactions", "find_transactions"} and row.outcome == "ok"
             ]
             other = case.user_scenario.known_info.get("other_customer_id", "")
             if ok_reads:

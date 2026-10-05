@@ -146,6 +146,26 @@ _NOT_ME_PHRASES = (
 )
 
 
+_APPROXIMATE = ("aproximadamente", "más o menos", "mas o menos", "cerca de", "alrededor de")
+_DAYS_AGO = (("anteayer", 2), ("ayer", 1), ("hoy", 0))
+_CURRENCIES = (("dólares", "USD"), ("dolares", "USD"), ("usd", "USD"), ("cop", "COP"), ("ars", "ARS"))
+_KINDS = (
+    ("retiro", "Withdrawal"),
+    ("transferencia", "Transfer"),
+    ("depósito", "Deposit"),
+    ("pago", "Payment"),
+    ("compra", "Purchase"),
+)
+_CATEGORIES = (("comida", "Food"), ("salud", "Health"), ("transporte", "Transport"), ("servicios", "Services"))
+# A merchant the customer typed, as a model would extract it: the capitalized words after "en".
+_TYPED_MERCHANT = re.compile(r"\ben ([A-ZÁÉÍÓÚÑ][\wáéíóúñ]*(?: [A-ZÁÉÍÓÚÑ][\wáéíóúñ]*)*)")
+
+
+def _first_of(table: tuple[tuple[str, Any], ...], text: str) -> Any:
+    folded = text.casefold()
+    return next((value for word, value in table if re.search(rf"\b{word}\b", folded)), None)
+
+
 def _details_from_turn(text: str, facts: WorldFacts) -> DisputeDetails:
     transaction_id = None
     if facts.other_transaction_id and facts.other_transaction_id in text:
@@ -153,11 +173,21 @@ def _details_from_turn(text: str, facts: WorldFacts) -> DisputeDetails:
     elif facts.transaction_id and facts.transaction_id in text:
         transaction_id = facts.transaction_id
     merchant = facts.merchant if facts.merchant and facts.merchant.casefold() in text.casefold() else None
+    if merchant is None and (typed := _TYPED_MERCHANT.search(text)):
+        merchant = typed[1]
     match = re.search(r"(?<![\w-])(\d+(?:[.,]\d{1,2})?)(?![\w-])", text)
     amount = Decimal(match[1].replace(",", ".")) if match else None
     says_not_me = any(phrase in text.casefold() for phrase in _NOT_ME_PHRASES)
     return DisputeDetails(
-        merchant=merchant, amount=amount, customer_says_not_me=says_not_me, transaction_id=transaction_id
+        merchant=merchant,
+        amount=amount,
+        currency=_first_of(_CURRENCIES, text),
+        approximate=True if any(phrase in text.casefold() for phrase in _APPROXIMATE) else None,
+        days_ago=_first_of(_DAYS_AGO, text),
+        transaction_type=_first_of(_KINDS, text),
+        category=_first_of(_CATEGORIES, text),
+        customer_says_not_me=says_not_me,
+        transaction_id=transaction_id,
     )
 
 
@@ -199,8 +229,17 @@ def _query_for(details: DisputeDetails, *, relaxed: bool) -> str | None:
         tolerance = max(1.0, amount * 0.05) if relaxed else 0.005
         where.append(f"abs(amount_usd - {amount}) < {tolerance}")
     if details.merchant:
-        where.append(f"fold(merchant_name) LIKE {_sql_literal('%' + details.merchant.casefold() + '%')}")
-    return f"{select} WHERE {' AND '.join(where)}" if where else None
+        merchant = details.merchant.casefold()[:4] if relaxed else details.merchant.casefold()
+        where.append(f"fold(merchant_name) LIKE {_sql_literal('%' + merchant + '%')}")
+    if details.days_ago is not None:
+        offset = int(details.days_ago)
+        when = f"date(today(), '-{offset} day')"
+        where.append(f"abs(julianday(date(transaction_date)) - julianday({when})) <= {1 if relaxed else 0}")
+    if details.transaction_type:
+        where.append(f"transaction_type = {_sql_literal(details.transaction_type)}")
+    if details.category:
+        where.append(f"merchant_category = {_sql_literal(details.category)}")
+    return f"{select} WHERE {' AND '.join(where)} ORDER BY transaction_date DESC" if where else None
 
 
 def _scripted_agent_step(items: list[dict[str, Any]], facts: WorldFacts) -> AgentStep:
@@ -240,6 +279,17 @@ def _scripted_agent_step(items: list[dict[str, Any]], facts: WorldFacts) -> Agen
                 return _tool_step("query_transactions", sql=near)
         return _text_step(clarify_fallback(language, None))
 
+    if texts and texts[-1].strip().isdigit():
+        previous = [i for i in items[:last_user] if i.get("type") == "function_call_output"]
+        if previous and not str(previous[-1]["output"]).startswith("error:"):
+            result = json.loads(previous[-1]["output"])
+            pick = int(texts[-1].strip()) - 1
+            if "transaction_id" in result.get("columns", []) and 0 <= pick < len(result["rows"]):
+                return _tool_step(
+                    "propose_transaction",
+                    transaction_id=result["rows"][pick][result["columns"].index("transaction_id")],
+                    customer_says_not_me=False,
+                )
     exact = _query_for(_merged_details(texts, facts), relaxed=False)
     return _tool_step("query_transactions", sql=exact) if exact else _text_step(clarify_fallback(language, None))
 
@@ -254,6 +304,9 @@ def _merged_details(texts: list[str], facts: WorldFacts) -> DisputeDetails:
                 "merchant": found.merchant or merged.merchant,
                 "amount": found.amount if found.amount is not None else merged.amount,
                 "transaction_id": found.transaction_id or merged.transaction_id,
+                "days_ago": found.days_ago if found.days_ago is not None else merged.days_ago,
+                "transaction_type": found.transaction_type or merged.transaction_type,
+                "category": found.category or merged.category,
             }
         )
     return merged
@@ -549,7 +602,7 @@ def _patched(
                 stack.enter_context(patch.object(agentic, tool, instrument(tool, getattr(agentic, tool))))
         for tool in (
             "get_transaction",
-            "get_transactions",
+            "find_transactions",
             "evaluate_dispute",
             "open_dispute",
             "get_dispute",

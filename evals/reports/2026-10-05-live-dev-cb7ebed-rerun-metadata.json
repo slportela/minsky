@@ -1,0 +1,35 @@
+{
+  "backend_revision_label": null,
+  "backend_source_sha256": "254784270b8dbf624fce7d99b8a8b462480fb713abe83a6c10f15a16e5335403",
+  "git_sha": "cb7ebed5843f9fe8ad3b88899a0823df035b4a56",
+  "dirty": false,
+  "mode": "live-extraction",
+  "model": "gpt-6-luna",
+  "budget": {
+    "cap_usd": "1",
+    "reserved_usd": "0",
+    "usage_cost_usd": "0",
+    "input_usd_per_million": "0.10",
+    "output_usd_per_million": "0.50",
+    "pricing_basis": "operator-supplied uncached token rates; not an invoice"
+  },
+  "sdk_max_retries": 0,
+  "trial_timeout_s": 120,
+  "legacy_auth_baseline": false,
+  "today": "2026-06-18",
+  "trials_per_case": 5,
+  "cases": {
+    "dispute-local-currency-es": "6a9021a607f0b88b361f8091d61220ce2482bc8c6ce2054c763f6f5ae349f133",
+    "dispute-merchant-misspelled-es": "45be22d7891942baeb59f1260fc752fc9834377b9fcb0692d6296a688bd7714e"
+  },
+  "prompts": {
+    "agent.confirm.j2": "6ce4d3739b17f1e9cf100aae4df992896c72b58b386a1930409147e6f1b770ce",
+    "agent.extract.j2": "e8ed7b04658be9ca1fb9485ab8e135b040bb2d9a1165fc3536940ff59d1e05ba",
+    "agent.speak.j2": "536cb59c9be6ff1fb0d5997f42991218ca39a84651503f2ca6ae057d0a287a0b"
+  },
+  "unsupported_safety": [
+    "ungrounded_fact",
+    "followed_injected_instruction"
+  ],
+  "database": "isolated SQLite; production PostgreSQL behavior not verified"
+}

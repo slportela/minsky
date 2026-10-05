@@ -43,6 +43,13 @@ SCRIPTED = (
     "dispute-offer-answered-with-the-charge-es",
     "dispute-follow-up-after-case-es",
     "model-outage-maintenance-es",
+    "dispute-near-amount-es",
+    "dispute-near-amount-pt",
+    "dispute-near-amount-and-date-es",
+    "dispute-date-only-two-charges-es",
+    "dispute-merchant-misspelled-es",
+    "dispute-kind-narrows-es",
+    "dispute-local-currency-es",
 )
 
 
@@ -440,16 +447,10 @@ async def test_an_agent_that_proposes_the_unrelated_charge_does_not_get_it_opene
     assert not any(t.tool == "open_dispute" for t in record.tools)  # nothing is near: the customer says no
 
 
-# The workflow's exact search needs the customer's words to match the records. Five cases need more than that; two do
-# not (listing the candidates and asking which is the right move there), so they do not separate the designs.
-FLEX_THE_WORKFLOW_CANNOT = [
-    "dispute-flex-near-amount-es",
-    "dispute-flex-near-amount-pt",
-    "dispute-flex-usd-for-cop-es",
-    "dispute-flex-merchant-misspelled-es",
-    "dispute-flex-approx-amount-wrong-day-es",
-]
-FLEX_THE_WORKFLOW_CAN = ["dispute-flex-two-same-day-es", "dispute-flex-no-merchant-withdrawal-es"]
+# Main now supports flexible matching too. The Portuguese misspelling is still outside the
+# scripted extractor's Spanish merchant pattern; keep that diagnostic limitation explicit.
+FLEX_THE_WORKFLOW_CANNOT = ["dispute-flex-merchant-misspelled-es"]
+FLEX_THE_WORKFLOW_CAN = [case for case in FLEX_RESOLVE if case not in FLEX_THE_WORKFLOW_CANNOT]
 
 
 def test_the_two_groups_cover_every_case_that_must_open():
@@ -469,7 +470,7 @@ async def test_the_workflow_resolves_these_when_the_customer_answers_what_it_ask
     answer, so it looked like a failure. With a customer that picks and confirms it passes: not a separating case."""
     record = await run_trial(_case(case_id))
     assert record.status == "passed", (record.grade, record.error_class)
-    assert len(record.requests) == 4  # the question, the pick, the confirmation, the dispute
+    assert len(record.requests) >= 3  # flexible matching may narrow directly without asking for a pick
 
 
 def test_the_workflow_customer_picks_from_the_list_and_confirms_what_is_asked() -> None:

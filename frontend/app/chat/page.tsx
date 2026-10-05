@@ -213,85 +213,138 @@ export default function ChatPage() {
 
   if (!loggedIn && operator) {
     return (
-      <main>
-        <h1>Chat</h1>
-        <p role="status" style={{ border: "1px solid", padding: "0.5rem" }}>
-          Modo demo: la credencial <code>{operator.operatorId}</code> permite elegir con qué cliente se conversa.
-          Es solo para la demostración; no es autenticación de clientes.
-        </p>
-        <form
-          onSubmit={(event) => {
-            event.preventDefault();
-            const id = customerChoice.trim();
-            if (!id) {
-              setError("Indica el id del cliente (por ejemplo CLI-…).");
-              return;
-            }
-            void chooseCustomer({ customerId: id });
-          }}
-        >
-          <label>
-            Cliente{" "}
-            <input
-              value={customerChoice}
-              onChange={(e) => setCustomerChoice(e.target.value)}
-              autoComplete="off"
-              placeholder="CLI-…"
-              disabled={busy}
-            />
-          </label>{" "}
-          <button type="submit" disabled={busy}>
-            Elegir
-          </button>{" "}
-          <button type="button" disabled={busy} onClick={() => void chooseCustomer({ random: true })}>
-            Uno al azar con cargos recientes
-          </button>{" "}
-          <button type="button" disabled={busy} onClick={changeSession}>
-            Cambiar credencial
-          </button>
-        </form>
-        {busy ? <p>Eligiendo…</p> : null}
-        {error ? <p role="alert">{error}</p> : null}
+      <main className="chat-page">
+        <div className="gate card">
+          <h1>Chat</h1>
+          <p role="status" className="notice">
+            Modo demo: la credencial <code>{operator.operatorId}</code> permite elegir con qué cliente se conversa.
+            Es solo para la demostración; no es autenticación de clientes.
+          </p>
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              const id = customerChoice.trim();
+              if (!id) {
+                setError("Indica el id del cliente (por ejemplo CLI-…).");
+                return;
+              }
+              void chooseCustomer({ customerId: id });
+            }}
+          >
+            <label>
+              Cliente{" "}
+              <input
+                value={customerChoice}
+                onChange={(e) => setCustomerChoice(e.target.value)}
+                autoComplete="off"
+                placeholder="CLI-…"
+                disabled={busy}
+              />
+            </label>{" "}
+            <button type="submit" disabled={busy}>
+              Elegir
+            </button>{" "}
+            <button type="button" disabled={busy} onClick={() => void chooseCustomer({ random: true })}>
+              Uno al azar con cargos recientes
+            </button>{" "}
+            <button type="button" disabled={busy} onClick={changeSession}>
+              Cambiar credencial
+            </button>
+          </form>
+          {busy ? <p>Eligiendo…</p> : null}
+          {error ? <p role="alert">{error}</p> : null}
+        </div>
       </main>
     );
   }
 
   if (!loggedIn) {
     return (
-      <main>
-        <h1>Chat</h1>
-        <p>Ingresa la credencial de prueba que te proporcionó el equipo.</p>
-        <form onSubmit={(event) => void continueWithCredential(event)}>
-          <label>
-            Credencial de prueba{" "}
-            <input
-              value={credential}
-              onChange={(e) => setCredential(e.target.value)}
-              type="password"
-              autoComplete="off"
-              disabled={busy}
-            />
-          </label>{" "}
-          <button type="submit" disabled={busy}>
-            Continuar
-          </button>
-        </form>
-        {error ? <p role="alert">{error}</p> : null}
+      <main className="chat-page">
+        <div className="gate card">
+          <h1>Chat</h1>
+          <p className="muted">Ingresa la credencial de prueba que te proporcionó el equipo.</p>
+          <form onSubmit={(event) => void continueWithCredential(event)}>
+            <label>
+              Credencial de prueba{" "}
+              <input
+                value={credential}
+                onChange={(e) => setCredential(e.target.value)}
+                type="password"
+                autoComplete="off"
+                disabled={busy}
+              />
+            </label>{" "}
+            <button type="submit" disabled={busy}>
+              Continuar
+            </button>
+          </form>
+          {error ? <p role="alert">{error}</p> : null}
+        </div>
       </main>
     );
   }
 
   return (
-    <main>
-      <h1>Chat</h1>
+    <main className="chat-page">
+      <div className="chat-head">
+        <h1>Asistente de disputas</h1>
+        <p>Cuéntame qué cargo no reconoces o no es correcto, y lo reviso contigo.</p>
+      </div>
       {actingAs ? (
-        <p role="status" style={{ border: "1px solid", padding: "0.5rem" }}>
+        <p role="status" className="notice">
           Modo demo · operador <code>{actingAs.operator_id}</code> · cliente <code>{actingAs.customer_id}</code>
           {actingAs.first_name ? ` (${actingAs.first_name}${actingAs.country ? `, ${actingAs.country}` : ""})` : ""} ·
           la sesión vence {new Date(actingAs.expires_at).toLocaleString("es")}.
         </p>
       ) : null}
-      <p>
+      {actingAs ? (
+        <details open className="card charges">
+          <summary>Cargos recientes de este cliente (últimos 120 días)</summary>
+          {actingAs.recent_charges === null ? (
+            <p>No se pudieron leer los cargos; la sesión sigue siendo válida.</p>
+          ) : actingAs.recent_charges.length === 0 ? (
+            <p>Este cliente no tiene cargos en los últimos 120 días: cualquier reclamo sería fuera de plazo.</p>
+          ) : (
+            <table>
+              <thead>
+                <tr>
+                  <th>Fecha</th>
+                  <th>Comercio</th>
+                  <th>Monto</th>
+                  <th>Estado</th>
+                  <th>Qué haría el sistema</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {actingAs.recent_charges.map((charge) => (
+                  <tr key={charge.transaction_id}>
+                    <td>{charge.date ?? "?"}</td>
+                    <td>{charge.merchant ?? "(sin comercio)"}</td>
+                    <td>
+                      {charge.amount ?? charge.amount_usd} {charge.currency ?? "USD"}
+                    </td>
+                    <td>{charge.status ?? "?"}</td>
+                    <td>
+                      {charge.existing_dispute_id
+                        ? `ya tiene el reclamo ${charge.existing_dispute_id}`
+                        : (charge.hint ?? charge.rule_id)}{" "}
+                      <small>({charge.rule_id})</small>
+                    </td>
+                    <td>
+                      <button type="button" disabled={busy} onClick={() => setDraft(charge.suggested_message)}>
+                        Usar
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </details>
+      ) : null}
+      <p className="toolbar">
         Sesión de prueba
         {conversationId ? (
           <>
@@ -336,27 +389,40 @@ export default function ChatPage() {
       ) : null}
 
       <section aria-live="polite" style={{ display: "grid", gap: "0.75rem", marginBottom: "1.5rem" }}>
-        {messages.length === 0 ? <p>Escribe el cargo que quieres disputar.</p> : null}
+        {messages.length === 0 && !busy ? <p className="empty">Escribe el cargo que quieres disputar.</p> : null}
         {messages.map((message, index) => (
-          <div key={`${messageRole(message)}-${index}`}>
-            <strong>{messageRole(message) === "user" ? "Tú" : "Asistente"}</strong>
-            <div style={{ whiteSpace: "pre-wrap" }}>{messageText(message)}</div>
+          <div key={`${messageRole(message)}-${index}`} className={`msg ${messageRole(message)}`}>
+            <span className="who">{messageRole(message) === "user" ? "Tú" : "Asistente"}</span>
+            <div className="bubble">{messageText(message)}</div>
           </div>
         ))}
+        {busy ? (
+          <span className="typing" role="status" aria-label="Pensando…">
+            <i />
+            <i />
+            <i />
+          </span>
+        ) : null}
       </section>
 
-      <form onSubmit={onSubmit} style={{ display: "grid", gap: "0.5rem", maxWidth: "40rem" }}>
+      <form onSubmit={onSubmit} className="composer">
         <label>
           Mensaje
           <textarea
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
-            rows={3}
+            onKeyDown={(e) => {
+              // Enter sends, Shift+Enter breaks the line; never while an IME composition is open.
+              if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+                e.preventDefault();
+                void sendText(draft, { clearDraft: true });
+              }
+            }}
+            rows={2}
             disabled={busy}
-            style={{ display: "block", width: "100%" }}
           />
         </label>
-        <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+        <div className="actions">
           <button type="submit" disabled={busy || !draft.trim()}>
             Enviar
           </button>
@@ -366,9 +432,9 @@ export default function ChatPage() {
           <button type="button" disabled={busy} onClick={() => void sendText("no")}>
             No
           </button>
+          <span className="hint">Enter envía · Mayús+Enter salto de línea</span>
         </div>
       </form>
-      {busy ? <p>Pensando…</p> : null}
       {error ? <p role="alert">{error}</p> : null}
     </main>
   );

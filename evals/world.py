@@ -53,7 +53,8 @@ class WorldFacts:
     other_customer_id: str | None
     other_transaction_id: str | None
     existing_dispute: bool = False  # the trial starts with a dispute already open on the transaction (rule D04)
-    transaction_type: str | None = None  # Purchase, Withdrawal, Transfer...; default from the merchant
+    transaction_type: str | None = None  # Purchase, Withdrawal, ...: what the customer calls it
+    merchant_category: str | None = None  # Food, Health, ...
 
 
 class MemoryBank(FixtureBank):
@@ -126,6 +127,7 @@ def facts_from_case(case: Case) -> WorldFacts:
         other_transaction_id=info.get("other_transaction_id") or None,
         existing_dispute=_flag(info["existing_dispute"]) if "existing_dispute" in info else False,
         transaction_type=info.get("transaction_type") or None,
+        merchant_category=info.get("merchant_category") or None,
     )
 
 
@@ -245,14 +247,17 @@ def _extra_transaction(customer_id: str, facts: WorldFacts, extra: dict[str, Any
         "merchant_name": merchant,
         "amount": amount,
         "amount_usd": Decimal(extra["amount_usd"]) if "amount_usd" in extra else amount,
-        "transaction_type": extra.get("transaction_type") or ("Purchase" if merchant else base["transaction_type"]),
+        "transaction_type": extra.get("transaction_type", extra.get("type"))
+        or ("Purchase" if merchant else base["transaction_type"]),
     }
     if "currency" in extra:
         overrides["currency"] = extra["currency"]
     if "transaction_status" in extra:
         overrides["transaction_status"] = extra["transaction_status"]
-    if "transaction_date" in extra:
-        overrides["transaction_date"] = _when(extra["transaction_date"])
+    if "transaction_date" in extra or "date" in extra:
+        overrides["transaction_date"] = _when(extra.get("transaction_date", extra.get("date")))
+    if "merchant_category" in extra or "category" in extra:
+        overrides["merchant_category"] = extra.get("merchant_category", extra.get("category"))
     return Transaction.model_validate({**base, **overrides})
 
 
@@ -284,6 +289,7 @@ def _transaction(customer_id: str, facts: WorldFacts) -> Transaction:
         # The bank always records a type, and only purchases have a merchant (data_findings.md): a world with
         # NULLs here made every query that filtered by type find nothing.
         transaction_type=facts.transaction_type or ("Purchase" if facts.merchant else "Transfer"),
+        merchant_category=facts.merchant_category,
         merchant_name=facts.merchant,
         transaction_status=facts.transaction_status,
         is_fraud=facts.is_fraud,

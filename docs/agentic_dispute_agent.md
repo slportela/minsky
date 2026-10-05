@@ -161,3 +161,15 @@ Where the doc and the policy meet, one case differs from the denial flow: a frau
 - **Concurrency.** The query runs in `asyncio.to_thread`, so a slow query of one customer cannot freeze the other conversations (before, SQLite ran on the event loop and a bad query held it for up to the 0.5 s deadline; tests show three slow queries now overlap). What stays process-local: `ConversationStore`, so several API servers would need a shared store (`docs/requirements.md`, P2.1).
 - **The sandbox holds a customer's whole history in memory per turn** (max 150 rows in this data). Fine here; a customer with thousands of rows would need paging, and `list_history` refuses more than 500 instead of cutting.
 - **Console:** cases from agentic mode carry `facts.context`; the console page renders it as its own table (nested values appear as JSON, as `customer_said` already does). The frontend type check was run, the page was not looked at in a browser.
+
+## Integration with main's flexible matching
+
+The latest integration keeps both `TransactionStore.search_pool` (workflow matching) and `list_history`
+(agentic SQL). Eval decoys accept both field conventions (`date`/`transaction_date`, `type`/`transaction_type`,
+`category`/`merchant_category`). The scripted search now handles relative dates, transaction kind, category,
+merchant prefixes on a relaxed search, and numbered picks. These are offline diagnostics, not production logic.
+
+Main's workflow now also supports flexible matching. The earlier exact-search comparison is historical;
+its failures must not be used as the current baseline. Integration tests now expect it to resolve the supported
+flexible cases; the scripted extractor still cannot read the Portuguese merchant phrase in one fixture.
+A matched live comparison after this integration remains pending.
