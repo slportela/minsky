@@ -5,14 +5,16 @@ from uuid import uuid4
 
 import pytest
 import yaml
+from sqlmodel import select
 
 from evals.evidence import ToolEvidence
 from evals.graders import grade_trial
 from evals.runner import _ReactiveUser, _select, run_case, run_trial
 from evals.schema import Case, RewardComponent, load_case, load_cases
-from evals.world import check_label, facts_from_case
+from evals.world import build_bank, check_label, facts_from_case
 from minsky_api.agent.state import ConversationState, Phase
 from minsky_api.store.cases_memory import InMemoryCasesBackend
+from minsky_api.store.models import Transaction
 
 CASES = Path(__file__).resolve().parent.parent / "evals" / "cases"
 SCRIPTED = (
@@ -253,3 +255,15 @@ def test_the_cli_records_the_agent_mode_in_the_run_metadata(tmp_path: Path) -> N
     assert (
         "search" in json.loads(next(out.glob("dispute-eligible-open-es-*.json")).read_text())["tools"][0]["prior_phase"]
     )
+
+
+def test_the_world_records_a_transaction_type_like_the_bank_does() -> None:
+    """Live run 1: rows without a type made every query that filtered by it find nothing (an eval bug)."""
+    for case_id, kind in (("dispute-eligible-open-es", "Purchase"), ("dispute-above-limit-es", "Purchase")):
+        case = _case(case_id)
+        bank = build_bank(case, facts_from_case(case))
+        try:
+            types = {row.transaction_type for row in bank.session.exec(select(Transaction)).all()}
+        finally:
+            bank.close()
+        assert None not in types and kind in types, (case_id, types)

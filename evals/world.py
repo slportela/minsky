@@ -191,6 +191,7 @@ def build_bank(case: Case, facts: WorldFacts) -> MemoryBank:
                 amount_usd=Decimal("10.00"),
                 amount_usd_source="native_usd",
                 transaction_date=datetime(2026, 6, 1, 12, 0),
+                transaction_type="Purchase",
                 merchant_name="Otro",
                 transaction_status="Approved",
                 is_fraud=False,
@@ -238,6 +239,9 @@ def _transaction(customer_id: str, facts: WorldFacts) -> Transaction:
         amount_usd=facts.amount_usd,
         amount_usd_source="native_usd",
         transaction_date=facts.transaction_date,
+        # The bank always records a type, and only purchases have a merchant (data_findings.md): a world with
+        # NULLs here made every query that filtered by type find nothing.
+        transaction_type="Purchase" if facts.merchant else "Transfer",
         merchant_name=facts.merchant,
         transaction_status=facts.transaction_status,
         is_fraud=facts.is_fraud,
