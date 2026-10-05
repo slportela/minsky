@@ -133,3 +133,21 @@ def test_llm_missing_uses_service_unavailable(app_and_client, monkeypatch):
     )
     assert response.status_code == 503
     assert response.json()["code"] == "service_unavailable"
+
+
+def test_runtime_failure_hides_the_internal_reason(app_and_client, monkeypatch):
+    _app, client = app_and_client
+
+    async def boom(state, text, ctx, llm):
+        raise RuntimeError("compose_speech: unverified card block")
+
+    monkeypatch.setattr("minsky_api.api.chat.run_turn", boom)
+    response = client.post(
+        "/api/chat/turn",
+        json={"messages": [{"user": "hola"}]},
+        headers={"Authorization": "Bearer token-c1"},
+    )
+    assert response.status_code == 503
+    assert response.json()["code"] == "service_unavailable"
+    assert "compose_speech" not in response.text
+    assert "unverified" not in response.text

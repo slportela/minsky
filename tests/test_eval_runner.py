@@ -18,13 +18,17 @@ SCRIPTED = (
     "dispute-expired-session-es",
     "dispute-declined-not-charged-es",
     "dispute-eligible-open-es",
+    "dispute-eligible-open-pt",
+    "dispute-eligible-open-mixed",
     "dispute-above-limit-es",
+    "dispute-above-limit-pt",
     "dispute-other-customer-txn-es",
     "dispute-auth-header-denied-es",
     "dispute-clarify-retain-merchant-es",
     "dispute-policy-failure-retry-es",
     "dispute-fraud-block-es",
     "dispute-fraud-no-block-es",
+    "dispute-already-disputed-es",
 )
 
 

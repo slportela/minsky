@@ -24,6 +24,8 @@ services:
     build: {context: ., dockerfile: backend/Dockerfile}
     environment:
       MINSKY_TEST_SESSIONS: ${MINSKY_TEST_SESSIONS:-}
+      MINSKY_STAFF_SESSIONS: ${MINSKY_STAFF_SESSIONS:-}  # agent console credentials (make demo-sessions)
+      MINSKY_CASES_BACKEND: postgres  # cases.* (disputes, handoffs, case queue) survive restarts
       MINSKY_ENVIRONMENT: ${MINSKY_ENVIRONMENT:-local}
       MINSKY_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-minsky}:${POSTGRES_PASSWORD:-minsky}@postgres:5432/${POSTGRES_DB:-minsky}
       MINSKY_AWS_REGION: ${AWS_REGION:-us-east-1}

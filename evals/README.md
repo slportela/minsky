@@ -11,6 +11,8 @@ The eval harness. Strategy and rules: [`docs/evals.md`](../docs/evals.md).
 | `graders.py` | End-state graders: outcome, env, communicate, handoff, explicitly partial safety |
 | `world.py` | Trial bank rows from `known_info`, labeled with `policy.disputes.decide`; real read SQL in SQLite |
 | `cases/{dev,val,test}/` | One YAML per case; `test` is locked |
+| `generate_val_cases.py` | Writes val cases from real gold rows (`bank.dispute_scenarios`): labels from data + policy; es and pt |
+| `compare_systems.py` · `baselines.py` | Today's process (always send to an agent) vs Minsky on the same cases, as business metrics |
 | `runs/` | Run outputs (`results.jsonl`, `errors.jsonl`, transcripts); git-ignored |
 | `reports/` | Committed run reports: `<date>-<git sha>.md` |
 
@@ -75,4 +77,4 @@ The gateway excludes Caddy/TLS; those require a final deployed-stack check.
 
 The exact sequence and remaining checks are in [`docs/integrated_smoke.md`](../docs/integrated_smoke.md).
 Model credentials must come from a securely configured inherited environment. Agents do not read `.env`.
-Portuguese, complete safety graders, held-out numbers, persistent writes and deployed smoke remain pending.
+Generated Portuguese drafts and their limitation are in [`docs/known_issues.md`](../docs/known_issues.md). Complete safety graders, held-out numbers, persistent writes and deployed smoke remain pending.

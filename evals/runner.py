@@ -18,7 +18,7 @@ from contextlib import ExitStack, asynccontextmanager, contextmanager
 from dataclasses import asdict
 from decimal import Decimal
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 from unittest.mock import patch
 from uuid import UUID, uuid4
 
@@ -27,11 +27,13 @@ from httpx import ASGITransport, AsyncClient
 from evals.budget import SpendBudget
 from evals.evidence import ToolEvidence, TrialRecord
 from evals.graders import TrialGrade, grade_trial
-from evals.metrics import Rate
+from evals.metrics import Rate, language_rates
 from evals.schema import Case, Split, Status, load_case
 from evals.world import MemoryBank, WorldFacts, build_bank, check_label, facts_from_case
 from minsky_api.agent import orchestrator
+from minsky_api.agent.confirm import Confirmation
 from minsky_api.agent.extract import DisputeDetails
+from minsky_api.agent.speak import Speech
 from minsky_api.api import chat as chat_api
 from minsky_api.config import get_settings
 from minsky_api.llm.client import LLM, LLMResult
@@ -51,10 +53,29 @@ class ScriptedLLM:
     def __init__(self, facts: WorldFacts) -> None:
         self._facts = facts
 
-    async def respond(
-        self, instructions: str, messages: list[dict[str, str]], **kwargs: Any
-    ) -> LLMResult[DisputeDetails]:
-        details = _details_from_turn(messages[-1]["content"], self._facts)
+    async def respond(self, instructions: str, messages: list[dict[str, str]], **kwargs: Any) -> LLMResult[Any]:
+        text = messages[-1]["content"]
+        if kwargs.get("schema") is Speech:
+            speech = _scripted_speech(text)
+            return LLMResult(
+                text=speech.model_dump_json(),
+                parsed=speech,
+                model=SCRIPTED_MODEL,
+                input_tokens=0,
+                output_tokens=0,
+                latency_ms=0,
+            )
+        if kwargs.get("schema") is Confirmation:
+            confirmation = Confirmation(decision=_scripted_confirmation(text))
+            return LLMResult(
+                text=confirmation.model_dump_json(),
+                parsed=confirmation,
+                model=SCRIPTED_MODEL,
+                input_tokens=0,
+                output_tokens=0,
+                latency_ms=0,
+            )
+        details = _details_from_turn(text, self._facts)
         return LLMResult(
             text=details.model_dump_json(),
             parsed=details,
@@ -63,6 +84,40 @@ class ScriptedLLM:
             output_tokens=0,
             latency_ms=0,
         )
+
+
+def _scripted_speech(text: str) -> Speech:
+    """Diagnostic stand-in: the first allowed act, and the fact ids the customer must hear."""
+    payload = json.loads(text)
+    facts = payload.get("facts") or {}
+    parts = [str(value) for value in facts.values() if not isinstance(value, bool)]
+    body = " ".join(parts).strip() or str(payload.get("language") or "es")
+    return Speech(act=payload["allowed"][0], text=body, claims_card_blocked=facts.get("card_blocked") is True)
+
+
+def _scripted_confirmation(text: str) -> Literal["yes", "no", "unclear"]:
+    """Diagnostic stand-in for agent.confirm. The product path asks the model; this does not."""
+    token = text.strip().rstrip(".!?").strip().casefold()
+    if token in {"sí", "si", "sim", "yes"}:
+        return "yes"
+    if token in {"no", "não", "nao"}:
+        return "no"
+    return "unclear"
+
+
+_NOT_ME_PHRASES = (
+    "no fui yo",
+    "no es mío",
+    "no es mio",
+    "no reconozco",
+    "yo no hice",
+    "não fui eu",
+    "nao fui eu",
+    "não reconheço",
+    "nao reconheco",
+    "eu não fiz",
+    "eu nao fiz",
+)
 
 
 def _details_from_turn(text: str, facts: WorldFacts) -> DisputeDetails:
@@ -74,7 +129,7 @@ def _details_from_turn(text: str, facts: WorldFacts) -> DisputeDetails:
     merchant = facts.merchant if facts.merchant and facts.merchant.casefold() in text.casefold() else None
     match = re.search(r"(?<![\w-])(\d+(?:[.,]\d{1,2})?)(?![\w-])", text)
     amount = Decimal(match[1].replace(",", ".")) if match else None
-    says_not_me = any(phrase in text.casefold() for phrase in ("no fui yo", "no es mío", "no es mio", "no reconozco"))
+    says_not_me = any(phrase in text.casefold() for phrase in _NOT_ME_PHRASES)
     return DisputeDetails(
         merchant=merchant, amount=amount, customer_says_not_me=says_not_me, transaction_id=transaction_id
     )
@@ -141,7 +196,7 @@ def _patched(
 
     def instrument(tool: str, call: Callable[..., Awaitable[Any]]) -> Callable[..., Awaitable[Any]]:
         async def wrapped(ctx: Any, args: Any = None) -> Any:
-            state = current.get("state")
+            state = current.get("active_state") or current.get("state")
             event = ToolEvidence(
                 tool=tool,
                 turn_index=current["index"],
@@ -152,6 +207,7 @@ def _patched(
                 selected_transaction_id=state.selected_txn_id if state else None,
                 selected_product_id=state.selected_product_id if state else None,
                 user_text=current["text"],
+                confirmation=state.confirmation if state else None,
             )
             record.tools.append(event)
             calls[tool] = calls.get(tool, 0) + 1
@@ -173,10 +229,18 @@ def _patched(
 
         return wrapped
 
+    async def traced_run_turn(*args: Any, **kwargs: Any) -> Any:
+        current["active_state"] = args[0]
+        try:
+            return await orchestrator.run_turn(*args, **kwargs)
+        finally:
+            current.pop("active_state", None)
+
     with ExitStack() as stack:
         if bank is not None:
             stack.enter_context(patch.object(chat_api, "session", session))
         stack.enter_context(patch.object(chat_api, "LLM", lambda: RecordedLLM(inner, record, budget)))
+        stack.enter_context(patch.object(chat_api, "run_turn", traced_run_turn))
         for tool in (
             "get_transaction",
             "get_transactions",
@@ -203,6 +267,7 @@ async def run_trial(
     timeout_s: float = 120,
     database: str = "sqlite",
     legacy_auth_baseline: bool = False,
+    allow_val: bool = False,
 ) -> TrialRecord:
     record = TrialRecord(case_id=case.id)
     started = time.perf_counter()
@@ -213,8 +278,8 @@ async def run_trial(
             raise ValueError("unknown extractor or database mode")
         if extractor == "real" and budget is None:
             raise ValueError("real extraction requires a shared spend budget")
-        if case.split != Split.DEV:
-            raise ValueError("this diagnostic runner only runs dev cases")
+        if case.split == Split.TEST or (case.split == Split.VAL and not allow_val):
+            raise ValueError("this diagnostic runner only runs dev cases (val only through evals.compare_systems)")
         if case.session.customer_id is None or not case.user_scenario.script:
             raise ValueError("scripted trial requires customer identity and user turns")
         facts = facts_from_case(case)
@@ -250,6 +315,13 @@ async def run_trial(
         with patch.dict("os.environ", {"MINSKY_TEST_SESSIONS": mapping}):
             get_settings.cache_clear()
             async with app.router.lifespan_context(app):
+                if facts.existing_dispute and facts.transaction_id:
+                    # Rule D04 needs a dispute opened before this conversation.
+                    app.state.cases.create_dispute(
+                        customer_id=case.session.customer_id,
+                        transaction_id=facts.transaction_id,
+                        reason="opened_in_an_earlier_conversation",
+                    )
                 try:
                     with _patched(bank, facts, record, current, case, extractor, budget):
                         async with (
@@ -294,7 +366,19 @@ async def run_trial(
                                     conversation_id = payload["conversation_id"]
                                     history = payload["messages"]
                                 record.messages = [_pair(item) for item in history]
-                        grade = grade_trial(case, app.state.cases, record.messages, facts, record.tools)
+                        stored = (
+                            app.state.conversations.get(UUID(conversation_id)) if conversation_id is not None else None
+                        )
+                        grade = grade_trial(
+                            case,
+                            app.state.cases,
+                            record.messages,
+                            facts,
+                            record.tools,
+                            acts=list(stored.acts) if stored is not None else [],
+                            rule_id=stored.rule_id if stored is not None else None,
+                            claims_card_blocked=stored.claims_card_blocked if stored is not None else False,
+                        )
                         record.grade = asdict(grade)
                         record.status = "passed" if grade.passed else "failed"
                 finally:
@@ -455,6 +539,9 @@ def main(argv: list[str] | None = None) -> int:
     }
     (output / "metadata.json").write_text(json.dumps(metadata, indent=2))
     passed = errors = 0
+    language_rows: list[tuple[str, int, int]] = []
+    language_cases: dict[str, set[str]] = {}
+    language_trials: dict[str, int] = {}
     for case in chosen:
         for trial in range(args.trials):
             record = asyncio.run(
@@ -473,16 +560,35 @@ def main(argv: list[str] | None = None) -> int:
                 stream.write(record.model_dump_json() + "\n")
             passed += record.status == "passed"
             errors += record.status == "error"
+            graded = int(record.status != "error")
+            language = str(case.tags.language)
+            language_cases.setdefault(language, set()).add(case.id)
+            language_trials[language] = language_trials.get(language, 0) + 1
+            language_rows.append((language, int(record.status == "passed"), graded))
             print(record.status, case.id, record.grade.get("reasons", []) if record.grade else record.error_class)
     attempted = len(chosen) * args.trials
+    by_language = {
+        language: {
+            "cases": len(language_cases.get(language, ())),
+            "trials": language_trials.get(language, 0),
+            "passed": rate.numerator,
+            "graded": rate.denominator,
+            "rate": str(rate),
+        }
+        for language, rate in language_rates(language_rows).items()
+    }
     summary = {
         "passed": passed,
         "attempted": attempted,
         "errors": errors,
         "graded": attempted - errors,
+        "by_language": by_language,
         "provider_cost_usd": str(budget.observed_usd) if budget else 0,
         "budget": budget.report() if budget else None,
-        "limitation": "partial safety checks and draft dev cases; not a headline result",
+        "limitation": (
+            "partial safety checks and draft dev cases; not a headline result. "
+            "Language slices count generated dev drafts; replies were not held out."
+        ),
     }
     (output / "summary.json").write_text(json.dumps(summary, indent=2))
     print(
