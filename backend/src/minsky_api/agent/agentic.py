@@ -30,7 +30,7 @@ from minsky_api.agent.agentic_wording import (
 from minsky_api.agent.language import LanguageDetector, default_language_detector
 from minsky_api.agent.orchestrator import _ask, _classify_first_message, _consent, _get_owned_txn, _lang
 from minsky_api.agent.prompts import render
-from minsky_api.agent.sandbox import SandboxError
+from minsky_api.agent.sandbox import SandboxError, fold_text
 from minsky_api.agent.speak import action_claims, ungrounded_number
 from minsky_api.agent.state import ConversationState, Phase
 from minsky_api.agent.summary import build_handoff_facts
@@ -95,6 +95,8 @@ SEARCH_TOOLS: tuple[ToolSpec, ...] = (
 _MAX_TEXT_RETRIES = 1
 _RULE_ID = re.compile(r"\bD0\d\b")
 _ISO_DATE = re.compile(r"(\d{4})-(\d{2})-(\d{2})")
+_SENTENCE_BREAK = re.compile(r"[.!?¿¡\n]+\s*")
+_LETTERS = re.compile(r"[^\W\d_]+")
 
 
 @dataclass
@@ -125,6 +127,30 @@ def _grounding(state: ConversationState) -> dict[str, object]:
     }
 
 
+def _unknown_name(text: str, state: ConversationState) -> str | None:
+    """A capitalised word in the reply that no query result and no customer message contains: an invented merchant.
+
+    The first word of a sentence is capitalised anyway and is not checked, and short all-capital words are
+    codes (USD, COP, ATM, POS). Accents and case are ignored, so "Cafe" matches "Café".
+    """
+    grounding = _grounding(state)
+    corpus = " ".join(
+        [*map(str, grounding["tool_results"]), *map(str, grounding["customer"]), str(grounding["today"])]  # type: ignore[arg-type]
+    )
+    known = set(_LETTERS.findall(fold_text(corpus)))
+    for sentence in _SENTENCE_BREAK.split(text):
+        for word in sentence.split()[1:]:
+            letters = _LETTERS.match(word.strip("«»\"'(),;:"))
+            if letters is None:
+                continue
+            name = letters.group(0)
+            if len(name) < 2 or not name[0].isupper() or (name.isupper() and len(name) <= 5):
+                continue
+            if fold_text(name) not in known:
+                return name
+    return None
+
+
 def _text_problem(text: str, state: ConversationState) -> str | None:
     """Why the agent's reply must not reach the customer, or None. Same checks as the workflow's replies."""
     if not text.strip():
@@ -139,6 +165,9 @@ def _text_problem(text: str, state: ConversationState) -> str | None:
     invented = ungrounded_number(text, _grounding(state))
     if invented is not None:
         return f"the number or date {invented} is in no query result and not from the customer"
+    unknown = _unknown_name(text, state)
+    if unknown is not None:
+        return f"the name {unknown} is in no query result and not from the customer"
     return None
 
 
@@ -349,7 +378,16 @@ async def _phase_confirm_dispute(ctx: ToolContext, state: ConversationState, tex
         state.selected_txn_id = state.selected_product_id = state.selected_type = None
         note = f"el cliente dijo que la transacción {rejected} no es la que busca; no la propongas otra vez."
         return await _phase_search(ctx, state, text, llm, note=note)
-    return _repeat_question(state)
+    if state.confirmation == "yes":
+        return _repeat_question(state)  # an affirmative with extra words: only a plain yes authorizes, ask for it
+    # Neither yes nor no: the customer is saying something else (a correction, a new detail). The agent takes it.
+    shown = state.selected_txn_id
+    state.selected_txn_id = state.selected_product_id = state.selected_type = None
+    note = (
+        f"el cliente respondió a la ficha de la transacción {shown} con otra cosa en vez de sí o no: atiende su "
+        "mensaje. Si sigue siendo esa la transacción correcta puedes proponerla de nuevo."
+    )
+    return await _phase_search(ctx, state, text, llm, note=note)
 
 
 async def _phase_recognize(ctx: ToolContext, state: ConversationState, text: str, llm: LLM) -> str:

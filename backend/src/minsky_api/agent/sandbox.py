@@ -11,6 +11,7 @@ from __future__ import annotations
 import re
 import sqlite3
 import time
+import unicodedata
 from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import date
@@ -41,6 +42,7 @@ _COLUMN_NAMES = frozenset(name for name, _ in COLUMNS)
 
 MAX_ROWS = 20
 MAX_SQL_CHARS = 1500
+MAX_VALUE_CHARS = 20_000  # longest string, blob or row a query may build: printf('%10000000d') is refused
 DEADLINE_S = 0.5
 _PROGRESS_EVERY = 5_000  # SQLite VM steps between deadline checks
 
@@ -66,14 +68,14 @@ class QueryResult:
     truncated: bool  # more than MAX_ROWS rows matched: the model must narrow the query
 
 
-def _fold(text: str | None) -> str | None:
+def fold_text(text: str) -> str:
     """Lower case without accents, so 'Cafe' finds 'Café' and 'jose' finds 'José'."""
-    if text is None:
-        return None
-    import unicodedata
-
     decomposed = unicodedata.normalize("NFD", str(text).casefold())
     return "".join(ch for ch in decomposed if unicodedata.category(ch) != "Mn")
+
+
+def _fold_sql(value: str | None) -> str | None:
+    return None if value is None else fold_text(value)
 
 
 def _authorize(action: int, arg1: str | None, arg2: str | None, _db: str | None, _source: str | None) -> int:
@@ -98,7 +100,7 @@ class QuerySandbox:
     def __init__(self, transactions: Iterable[Transaction], *, today: date) -> None:
         self._con = sqlite3.connect(":memory:")
         self._con.create_function("today", 0, lambda: today.isoformat(), deterministic=True)
-        self._con.create_function("fold", 1, _fold, deterministic=True)
+        self._con.create_function("fold", 1, _fold_sql, deterministic=True)
         names = ", ".join(name for name, _ in COLUMNS)
         self._con.execute(f"CREATE TABLE {TABLE} ({', '.join(f'{n} {t}' for n, t in COLUMNS)})")
         rows = [self._row(txn) for txn in transactions]
@@ -108,6 +110,7 @@ class QuerySandbox:
         # Locked after loading: from here on the connection can only run the authorized SELECT.
         self._con.execute("PRAGMA query_only = ON")
         self._con.setlimit(sqlite3.SQLITE_LIMIT_SQL_LENGTH, MAX_SQL_CHARS)
+        self._con.setlimit(sqlite3.SQLITE_LIMIT_LENGTH, MAX_VALUE_CHARS)
         self._con.setlimit(sqlite3.SQLITE_LIMIT_EXPR_DEPTH, 20)
         self._con.setlimit(sqlite3.SQLITE_LIMIT_COMPOUND_SELECT, 3)
         self._con.setlimit(sqlite3.SQLITE_LIMIT_LIKE_PATTERN_LENGTH, 60)
@@ -161,6 +164,8 @@ def _explain(exc: sqlite3.Error) -> str:
     message = str(exc)
     if "not authorized" in message or "authoriz" in message:
         return "not allowed: only SELECT on the transactions table, with plain functions"
+    if "too big" in message:
+        return "the query builds a value that is too large: make it simpler"
     if "interrupted" in message:
         return "the query took too long: make it simpler"
     return message

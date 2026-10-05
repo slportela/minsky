@@ -169,7 +169,8 @@ class ScriptedAgent:
         name = schema.__name__ if schema else ""
         if name == "Confirmation":
             said = messages[-1]["content"].strip().rstrip(".!?").casefold()
-            decision = "yes" if said in {"sí", "si", "sim"} else "no" if said in {"no", "não"} else "unclear"
+            affirmative = said in {"sí", "si", "sim"} or said.startswith(("sí,", "si,", "sí ", "si "))
+            decision = "yes" if affirmative else "no" if said in {"no", "não"} else "unclear"
             parsed = schema(decision=decision)  # type: ignore[misc]
         elif name == "_NarrativeOut":
             parsed = schema(text=self.narrative)  # type: ignore[misc]
@@ -380,15 +381,31 @@ async def test_a_customer_who_rejects_the_proposal_sends_the_agent_back_to_searc
     assert any("already said that is not" in o for o in retried)
 
 
-async def test_a_reply_that_is_not_yes_or_no_never_acts():
-    chat = Chat(
-        [txn("T1", "123.10", "Cafe Sur", JUNE_10)],
-        ScriptedAgent([sql(FIND_123), call("propose_transaction", transaction_id="T1", customer_says_not_me=False)]),
+async def test_a_reply_that_is_neither_yes_nor_no_goes_back_to_the_agent_and_never_acts():
+    agent = ScriptedAgent(
+        [
+            sql(FIND_123),
+            call("propose_transaction", transaction_id="T1", customer_says_not_me=False),
+            say("Entiendo, ¿me puedes decir en qué comercio fue y más o menos qué día?"),
+        ]
     )
+    chat = Chat([txn("T1", "123.10", "Cafe Sur", JUNE_10)], agent)
     await chat.say("No reconozco un cargo de 123 dólares")
-    reply = await chat.say("tal vez")
-    assert chat.state.phase == Phase.CONFIRM_DISPUTE
-    assert "sí o no" in reply
+    reply = await chat.say("no es ese, es otro de unos 80")
+    assert chat.state.phase == Phase.SEARCH and chat.state.selected_txn_id is None
+    assert "comercio" in reply
+    note = agent.requests[-1][-1]["content"]
+    assert note.startswith("SISTEMA") and "T1" in note and "en vez de sí o no" in note
+    assert chat.state.rejected_txn_ids == []  # not a flat no: the agent may propose it again
+    assert not chat.audit("open_dispute")
+
+
+async def test_a_yes_with_extra_words_asks_for_a_plain_yes_instead_of_acting_or_calling_the_agent():
+    agent = ScriptedAgent([sql(FIND_123), call("propose_transaction", transaction_id="T1", customer_says_not_me=False)])
+    chat = Chat([txn("T1", "123.10", "Cafe Sur", JUNE_10)], agent)
+    await chat.say("No reconozco un cargo de 123 dólares")
+    reply = await chat.say("sí, ese mismo")  # the agent has no more scripted steps: it must not be called
+    assert chat.state.phase == Phase.CONFIRM_DISPUTE and "sí o no" in reply
     assert not chat.audit("open_dispute")
 
 
@@ -412,6 +429,44 @@ async def test_a_reply_that_claims_an_action_or_invents_a_fact_never_reaches_the
     assert reply == ASK
     assert "SISTEMA" in agent.requests[1][-1]["content"]
     assert bad not in [m for _, m in chat.state.messages]
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        "Encontré un cargo de 123.1 en Amazon del 10 de junio. ¿Es ese?",
+        "No vi nada con ese monto, pero hay uno en Starbucks. ¿Es ese?",
+    ],
+)
+async def test_a_merchant_the_agent_made_up_never_reaches_the_customer(bad):
+    agent = ScriptedAgent([sql(FIND_123), say(bad), say(ASK)])
+    chat = Chat([txn("T1", "123.10", "Cafe Sur", JUNE_10)], agent)
+    reply = await chat.say("No reconozco un cargo de 123 dólares")
+    assert reply == ASK
+    assert "the name" in agent.requests[-1][-1]["content"]
+
+
+@pytest.mark.parametrize(
+    "good",
+    [
+        "Encontré un cargo de 123.1 USD en Café Sur del 10 de junio. ¿Es ese?",
+        "No vi 123.00 exacto, pero sí 123.1 en CAFE SUR. ¿Es ese?",
+        "Encontré uno en Cafe Sur. Cafe Sur cobró 123.1 USD, ¿es ese?",
+        "¿Fue en Cafe Sur o en otro lado? Dime y lo busco.",
+    ],
+)
+async def test_real_merchants_are_allowed_whatever_the_accents_case_or_position(good):
+    agent = ScriptedAgent([sql(FIND_123), say(good)])
+    chat = Chat([txn("T1", "123.10", "Cafe Sur", JUNE_10)], agent)
+    reply = await chat.say("No reconozco un cargo de 123 dólares")
+    assert reply == good
+
+
+async def test_a_merchant_the_customer_named_may_be_repeated():
+    agent = ScriptedAgent([sql(FIND_123), say("No encontré nada en Netflix con ese monto. ¿Recuerdas el día?")])
+    chat = Chat([txn("T1", "123.10", "Cafe Sur", JUNE_10)], agent)
+    reply = await chat.say("No reconozco un cargo de 123 dólares de Netflix")
+    assert "Netflix" in reply
 
 
 async def test_an_agent_that_keeps_failing_the_checks_gets_a_code_written_question_not_an_error():

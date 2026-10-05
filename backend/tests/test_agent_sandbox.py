@@ -148,3 +148,20 @@ def test_the_sandbox_holds_only_the_rows_it_was_given():
     assert _sandbox().row_count == 3
     other = QuerySandbox([], today=TODAY)
     assert other.query("SELECT count(*) FROM transactions").rows == ((0,),)
+
+
+@pytest.mark.parametrize(
+    "sql",
+    [
+        "SELECT length(replace(printf('%10000d', 1), ' ', 'abcdefghij'))",
+        "SELECT length(replace(printf('%5000d', 1), ' ', 'abcdefghijklmnopqrstuvwxyz'))",
+    ],
+)
+def test_a_query_cannot_build_a_huge_value(sql):
+    with pytest.raises(SandboxError, match="too large"):
+        _sandbox().query(sql)
+
+
+def test_a_huge_printf_is_cut_before_it_fills_memory():
+    result = _sandbox().query("SELECT length(printf('%10000000d', 1))")
+    assert result.rows == ((None,),)  # SQLite refuses the value: it is never built
