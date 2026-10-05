@@ -173,7 +173,7 @@ The cases in `evals/cases/` follow the flow above. Each step's branches become c
 **Model path and deployment**
 
 - Serving calls the interim provider directly (ADR 0008), a deviation from rule 6 of `AGENTS.md`. Moving to Bedrock is not a configuration change: in the second AWS account no model was invocable on 2026-10-04 (`gpt-6-luna` is denied; Claude needs the Anthropic use-case form), and the client makes OpenAI Responses API calls (`responses.parse`) whose support on Bedrock's OpenAI-compatible endpoint has not been verified here. The comment in `backend/src/minsky_api/config.py` that describes a switch by base URL and model id should be corrected.
-- The S3 lake (bronze, silver, gold) was rebuilt from the organizer source in the second AWS account on 2026-10-04; `bank.transactions` has 4,425,008 rows, the count ADR 0012 recorded. The decision to consolidate there is not yet recorded in an ADR, and ADR 0012 still says the lake stays in the first account.
+- The S3 lake (bronze, silver, gold) was rebuilt from the organizer source in the second AWS account on 2026-10-04; `bank.transactions` has 4,425,008 rows, the count ADR 0012 recorded. The decision is recorded in ADR 0014, which supersedes the data placement of ADR 0012. Bronze holds 12 of the 13 source tables: `digital_events` was not ingested, so it is not a complete copy of the source.
 - `MINSKY_TEST_SESSIONS` credentials minted for the demo must expire after 2026-10-16, the date the link has to stay up.
 
 ## Stack
