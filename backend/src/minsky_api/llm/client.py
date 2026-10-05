@@ -15,10 +15,11 @@ import time
 from dataclasses import dataclass
 from typing import Literal
 
-from openai import AsyncOpenAI
-from pydantic import BaseModel
+from openai import AsyncOpenAI, ContentFilterFinishReasonError, LengthFinishReasonError
+from pydantic import BaseModel, ValidationError
 
 from minsky_api.config import Settings, get_settings
+from minsky_api.observability import start_span
 
 ReasoningEffort = Literal["none", "low", "medium", "high", "xhigh", "max"]
 
@@ -38,6 +39,10 @@ def model_matches(pinned: str, returned: str) -> bool:
 
 class ModelMismatchError(RuntimeError):
     """The provider answered with a different model than the pinned one."""
+
+
+class ModelOutputError(RuntimeError):
+    """The provider answered, but the reply does not fit the requested schema."""
 
 
 class LLMNotConfiguredError(RuntimeError):
@@ -80,31 +85,36 @@ class LLM:
         max_output_tokens: int = 1024,
     ) -> LLMResult[T]:
         """One model turn. With `schema`, the reply is parsed into it (structured output)."""
-        started = time.perf_counter()
-        common = {
-            "model": self.settings.llm_model,
-            "instructions": instructions,
-            "input": messages,
-            "reasoning": {"effort": reasoning_effort},
-            "max_output_tokens": max_output_tokens,
-            "store": False,  # nothing kept on the provider's side beyond its own retention policy
-        }
-        if schema is not None:
-            response = await self.client.responses.parse(text_format=schema, **common)
-            parsed = response.output_parsed
-        else:
-            response = await self.client.responses.create(**common)
-            parsed = None
-        latency_ms = (time.perf_counter() - started) * 1000
+        with start_span("llm.respond", model=self.settings.llm_model):
+            started = time.perf_counter()
+            common = {
+                "model": self.settings.llm_model,
+                "instructions": instructions,
+                "input": messages,
+                "reasoning": {"effort": reasoning_effort},
+                "max_output_tokens": max_output_tokens,
+                "store": False,  # nothing kept on the provider's side beyond its own retention policy
+            }
+            if schema is not None:
+                try:
+                    response = await self.client.responses.parse(text_format=schema, **common)
+                except (ValidationError, LengthFinishReasonError, ContentFilterFinishReasonError) as exc:
+                    # Cut-off / filtered / invalid schema: degrade or re-ask, never a customer 400.
+                    raise ModelOutputError("the model reply does not fit the requested schema") from exc
+                parsed = response.output_parsed
+            else:
+                response = await self.client.responses.create(**common)
+                parsed = None
+            latency_ms = (time.perf_counter() - started) * 1000
 
-        if not model_matches(self.settings.llm_model, response.model):
-            raise ModelMismatchError(f"asked for {self.settings.llm_model}, got {response.model}")
-        usage = response.usage
-        return LLMResult(
-            text=response.output_text,
-            parsed=parsed,
-            model=response.model,
-            input_tokens=usage.input_tokens if usage else 0,
-            output_tokens=usage.output_tokens if usage else 0,
-            latency_ms=latency_ms,
-        )
+            if not model_matches(self.settings.llm_model, response.model):
+                raise ModelMismatchError(f"asked for {self.settings.llm_model}, got {response.model}")
+            usage = response.usage
+            return LLMResult(
+                text=response.output_text,
+                parsed=parsed,
+                model=response.model,
+                input_tokens=usage.input_tokens if usage else 0,
+                output_tokens=usage.output_tokens if usage else 0,
+                latency_ms=latency_ms,
+            )

@@ -443,3 +443,7 @@ from main.call_transcripts t;
 All text (transcripts, complaints, survey comments) is Spanish (`call_transcripts.detected_language` is always `es`). The brief requires Spanish **and Portuguese** interactions; there is no Portuguese data to ground answers or to evaluate on.
 
 **Handling:** the bank text stays Spanish. The reply language is chosen once from the first customer message by lingua, restricted to Spanish and Portuguese; if lingua cannot decide, the reply stays Spanish. The model writes the sentence from the allowed step and the verified facts. Generated dev drafts (`dispute-eligible-open-pt`, `dispute-above-limit-pt`, `dispute-eligible-open-mixed`) reuse the Spanish policy fixtures; the wording does not change the label. Offline smoke checks that `sim` / `não` classify and that verified ids are copied into the stand-in text; it does not score a live Portuguese sentence. There is still no Portuguese source text, and these drafts are not a held-out result.
+
+## Observability and demo state
+
+Conversation state is process-local (a restart ends open chats; cases can persist in Postgres). OpenTelemetry spans export only when `OTEL_EXPORTER_OTLP_ENDPOINT` is set (Phoenix via compose profile `observability`); production ADOT/CloudWatch is not wired. VictoriaLogs is not used.

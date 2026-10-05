@@ -22,7 +22,8 @@ FastAPI service for dispute intake: the orchestrator, the policy, the mock bank 
    ▼
  store/          async SQLModel reads over bank.*; cases.* (disputes, handoffs, blocks, audit, case queue)
                  in Postgres (SqlCasesBackend) or in memory (tests), behind the CasesBackend protocol
- observability/  one trace per turn: model calls, tool calls, policy decisions, versions
+ observability/  OpenTelemetry spans (chat.turn, llm.respond) when OTEL_EXPORTER_OTLP_ENDPOINT is set;
+                 execution audit still in cases.*. Dev UI: compose profile `observability` (Phoenix).
 ```
 
 ## Rules for this code
@@ -43,6 +44,8 @@ FastAPI service for dispute intake: the orchestrator, the policy, the mock bank 
 
 ```bash
 make up                                       # full stack with compose (see infra/README.md)
+# Traces (optional): docker compose --profile observability up -d
+# then set OTEL_EXPORTER_OTLP_ENDPOINT=http://phoenix:6006 in .env (API container) or http://127.0.0.1:6006/v1/traces from the host.
 uv run --package minsky-api pytest backend/tests
 MINSKY_ENVIRONMENT=local uv run --package minsky-api uvicorn minsky_api.main:app --reload
 ```

@@ -6,12 +6,15 @@ Conversations are bound to that customer id; client history must match the serve
 
 from __future__ import annotations
 
+import logging
 from typing import Annotated
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Header, Request
 from fastapi.responses import JSONResponse
+from openai import OpenAIError
 
+from minsky_api.agent.degraded import hand_off_on_outage, is_model_failure
 from minsky_api.agent.memory import ConversationStore
 from minsky_api.agent.orchestrator import run_turn
 from minsky_api.agent.state import ConversationState
@@ -32,6 +35,7 @@ from minsky_api.store.db import session
 from minsky_api.tools.context import ToolContext
 from minsky_api.tools.errors import ToolDenied, ToolError
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 
 
@@ -121,12 +125,46 @@ async def _authenticated_turn(
         return _error(ErrorCode.CONVERSATION_FORBIDDEN, str(exc), 403)
     except (ToolDenied, ToolError) as exc:
         return _error(ErrorCode.TOOL_FAILURE, str(exc), 502)
-    except RuntimeError:
-        return _error(ErrorCode.SERVICE_UNAVAILABLE, "the assistant could not complete this turn", 503)
+    except Exception as exc:
+        if is_model_failure(exc):
+            # Pass the live state: the failed turn may already have committed side effects.
+            return await _degraded_turn(
+                state, user_text, tool_session, cases, conversations, exc, language=state.language
+            )
+        if isinstance(exc, (OpenAIError, RuntimeError)):
+            # Config/auth/unexpected faults: never leak the reason; do not invent a handoff.
+            return _error(ErrorCode.SERVICE_UNAVAILABLE, "the assistant is unavailable; please try again later", 503)
+        raise
 
+    conversations.put(state)
+    return _chat_response(state)
+
+
+def _chat_response(state: ConversationState) -> ChatResponse:
     history: list[UserMessage | AgentMessage] = []
     for role, text in state.messages:
         history.append(UserMessage(user=text) if role == "user" else AgentMessage(agent=text))
-    response = ChatResponse(conversation_id=state.conversation_id, messages=tuple(history))
+    return ChatResponse(conversation_id=state.conversation_id, messages=tuple(history))
+
+
+async def _degraded_turn(
+    live: ConversationState,
+    user_text: str,
+    tool_session: ToolSession,
+    cases: CasesBackend,
+    conversations: ConversationStore,
+    failure: Exception,
+    *,
+    language: str | None = None,
+) -> ChatResponse | JSONResponse:
+    """The model is unavailable: hand off with context and say so (docs/architecture.md, principle 5)."""
+    logger.warning("model unavailable (%s): handing the conversation to an agent", type(failure).__name__)
+    try:
+        async with session() as db:
+            ctx = ToolContext(session=tool_session, db=db, cases=cases)
+            state, _reply = await hand_off_on_outage(ctx, live, user_text, failure, language=language)
+    except Exception:  # whatever stops the handoff: never promise one that does not exist
+        logger.warning("handoff after model outage failed (%s)", type(failure).__name__, exc_info=True)
+        return _error(ErrorCode.SERVICE_UNAVAILABLE, "the assistant is unavailable; please try again later", 503)
     conversations.put(state)
-    return response
+    return _chat_response(state)

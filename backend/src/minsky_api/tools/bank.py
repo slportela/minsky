@@ -388,6 +388,7 @@ async def create_handoff(ctx: ToolContext, args: CreateHandoffArgs) -> CreateHan
     verified = ctx.cases.get_handoff(created.handoff_id)
     if verified is None:
         raise ToolError("create_handoff read-back failed")
+    # Fail loud: a handoff without a queue row is not a verified action (retry is idempotent).
     await enqueue_case(
         ctx,
         kind=CaseKind.HANDOFF,

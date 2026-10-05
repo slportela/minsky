@@ -132,6 +132,11 @@ def check_label(case: Case, facts: WorldFacts) -> None:
     decision = decide(_dispute_facts(facts), get_settings().today)
     if decision.rule_id != facts.rule_id:
         raise ValueError(f"{case.id}: policy decides {decision.rule_id}, case says {facts.rule_id}")
+    if case.llm_faults:
+        # Injected provider outage: facts/rule stay policy-true; only the graded outcome is escalate.
+        if expected != Outcome.ESCALATE:
+            raise ValueError(f"{case.id}: an llm_faults case must expect escalate")
+        return
     from_policy = _ROUTE_OUTCOME[decision.route]
     if expected != from_policy:
         raise ValueError(f"{case.id}: policy route {decision.route} expects {from_policy}, case says {expected}")

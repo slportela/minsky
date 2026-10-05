@@ -8,6 +8,7 @@ from fastapi import FastAPI
 from minsky_api.agent.memory import ConversationStore
 from minsky_api.api import chat_router, console_router
 from minsky_api.config import Settings, get_settings
+from minsky_api.observability import configure_tracing, shutdown_tracing
 from minsky_api.store.cases import CasesBackend
 from minsky_api.store.cases_memory import InMemoryCasesBackend
 from minsky_api.store.cases_sql import SqlCasesBackend
@@ -29,16 +30,20 @@ def _cases_backend(settings: Settings) -> CasesBackend:
 
 def create_app() -> FastAPI:
     settings = get_settings()
+    configure_tracing()  # no-op unless OTEL_EXPORTER_OTLP_ENDPOINT is set (ADR 0007)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         cases = _cases_backend(settings)
         app.state.cases = cases
         app.state.conversations = ConversationStore()
-        yield
-        if isinstance(cases, SqlCasesBackend):
-            cases.dispose()
-        await dispose_engine()
+        try:
+            yield
+        finally:
+            if isinstance(cases, SqlCasesBackend):
+                cases.dispose()
+            await dispose_engine()
+            shutdown_tracing()
 
     app = FastAPI(title="minsky dispute intake", version="0.1.0", lifespan=lifespan)
     app.include_router(chat_router)

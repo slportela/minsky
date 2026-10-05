@@ -22,7 +22,9 @@ from typing import Any, Literal
 from unittest.mock import patch
 from uuid import UUID, uuid4
 
+import httpx2
 from httpx import ASGITransport, AsyncClient
+from openai import APITimeoutError
 
 from evals.budget import SpendBudget
 from evals.evidence import ToolEvidence, TrialRecord
@@ -41,6 +43,7 @@ from minsky_api.main import create_app
 from minsky_api.tools.errors import ToolDenied, ToolError
 
 SCRIPTED_MODEL = "scripted-extract"
+_LLM_FAULT_REQUEST = httpx2.Request("POST", "https://llm.invalid/v1/responses")
 
 
 class HTTPContractFailure(RuntimeError):
@@ -136,6 +139,21 @@ def _details_from_turn(text: str, facts: WorldFacts) -> DisputeDetails:
     )
 
 
+class FaultingLLM:
+    """Raise a provider timeout on matching llm_faults before delegating."""
+
+    def __init__(self, inner: Any, faults: list[Any]) -> None:
+        self.inner = inner
+        self.faults = faults
+        self.calls = 0
+
+    async def respond(self, instructions: str, messages: list[dict[str, str]], **kwargs: Any) -> Any:
+        self.calls += 1
+        if any(item.on_call == self.calls for item in self.faults):
+            raise APITimeoutError(request=_LLM_FAULT_REQUEST)
+        return await self.inner.respond(instructions, messages, **kwargs)
+
+
 class RecordedLLM:
     def __init__(self, inner: Any, record: TrialRecord, budget: SpendBudget | None = None) -> None:
         self.inner = inner
@@ -190,7 +208,9 @@ def _patched(
         yield bank
 
     settings = get_settings().model_copy(update={"llm_max_retries": 0})
-    inner = LLM(settings=settings) if extractor == "real" else ScriptedLLM(facts)
+    inner: Any = LLM(settings=settings) if extractor == "real" else ScriptedLLM(facts)
+    if case.llm_faults:
+        inner = FaultingLLM(inner, case.llm_faults)
     if extractor == "real":
         current["llm"] = inner
     calls: dict[str, int] = {}

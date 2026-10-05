@@ -7,7 +7,7 @@ PROFILE    := $(shell grep '^BRONZE_AWS_PROFILE=' .env 2>/dev/null | cut -d= -f2
 LAKE_URI   := $(patsubst %/bronze,%,$(BRONZE_URI))
 AWS        := AWS_PROFILE=$(PROFILE) aws
 
-.PHONY: demo-reset demo-sessions help setup lock-check lint typecheck test llm-smoke regression-smoke eval-smoke eval-live-estimate frontend-check eval-check router ci model-prices up down logs demo-plan demo-apply pipeline bronze mirror silver gold publish docs
+.PHONY: demo-reset demo-sessions help setup lock-check lint typecheck test llm-smoke regression-smoke eval-smoke eval-live-estimate frontend-check eval-check router ci model-prices up down logs demo-plan demo-apply pipeline bronze mirror silver gold publish docs freshness-check
 
 EVAL_CAP_USD ?= 1
 
@@ -117,6 +117,9 @@ gold:  ## build + test the bank read models, export them to the lake and load th
 	mkdir -p data/lake/gold
 	cd pipeline/transform && uv run dbt build --profiles-dir . --select tag:gold
 	uv run python pipeline/load_gold.py
+
+freshness-check:  ## fail if ops.load_runs is older than MINSKY_FRESHNESS_MAX_AGE_HOURS (default 168)
+	uv run python pipeline/check_freshness.py
 
 publish:  ## upload silver and gold Parquet to the lake
 	$(AWS) s3 sync data/lake/silver $(LAKE_URI)/silver --delete --only-show-errors

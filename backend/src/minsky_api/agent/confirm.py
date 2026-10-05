@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, ValidationError
+from pydantic import BaseModel, ConfigDict
 
 from minsky_api.agent.prompts import render
-from minsky_api.llm.client import LLM
+from minsky_api.llm.client import LLM, ModelOutputError
 
 Decision = Literal["yes", "no", "unclear"]
 
@@ -35,8 +35,9 @@ async def classify_confirmation(llm: LLM, *, question: str, text: str) -> Confir
             reasoning_effort="low",
             max_output_tokens=_MAX_OUTPUT_TOKENS,
         )
-    except ValidationError:
-        # The reply was cut off mid-JSON, so there is no decision. Only this: an API error still propagates.
+    except ModelOutputError:
+        # Cut-off / filtered / invalid schema from LLM.respond. Ask again.
+        # A provider outage (timeout, 5xx, …) still propagates so the chat route can hand off.
         return Confirmation(decision="unclear")
     parsed = result.parsed
     if not isinstance(parsed, Confirmation):

@@ -18,6 +18,11 @@ from minsky_api.agent.language import default_language_detector
 from minsky_api.agent.prompts import render
 from minsky_api.llm.client import LLM
 
+
+class SpeechError(RuntimeError):
+    """compose_speech refused the model reply (act, grounding, or schema)."""
+
+
 # Completed actions only. Offers ("bloquee", "puedo bloquear", "derivo", "abrir") stay out of these
 # patterns; a participle after a future or conditional ("quedará bloqueada") is an offer, not a claim.
 _CARD = r"(?:tarjeta|tarjetas|cartão|cartao|cartões|cartoes)"
@@ -257,7 +262,7 @@ async def compose_speech(
     reports a block, an open, a refund, or a handoff the facts do not support.
     """
     if not allowed:
-        raise RuntimeError("compose_speech: no allowed act")
+        raise SpeechError("compose_speech: no allowed act")
     payload = json.dumps(
         {"language": language, "allowed": list(allowed), "facts": facts},
         ensure_ascii=False,
@@ -273,23 +278,24 @@ async def compose_speech(
     )
     parsed = result.parsed
     if not isinstance(parsed, Speech):
-        raise RuntimeError("compose_speech: model returned no parsed schema")
+        raise SpeechError("compose_speech: model returned no parsed schema")
     if parsed.act not in allowed:
-        raise RuntimeError(f"compose_speech: act {parsed.act} is not allowed")
+        raise SpeechError(f"compose_speech: act {parsed.act} is not allowed")
     detected = default_language_detector().recognize(parsed.text)
     if detected is not None and detected != language:
+        # Wrong language: orchestrator templates catch RuntimeError; do not escalate to outage handoff.
         raise RuntimeError(f"compose_speech: reply language is {detected}")
     dropped = _dropped_fact(parsed.act, parsed.text, facts)
     if dropped is not None:
-        raise RuntimeError(f"compose_speech: reply drops {dropped}")
+        raise SpeechError(f"compose_speech: reply drops {dropped}")
     if _RULE_ID.search(parsed.text):
-        raise RuntimeError("compose_speech: reply exposes an internal rule id")
+        raise SpeechError("compose_speech: reply exposes an internal rule id")
     invented = ungrounded_number(parsed.text, facts)
     if invented is not None:
-        raise RuntimeError(f"compose_speech: ungrounded number {invented}")
+        raise SpeechError(f"compose_speech: ungrounded number {invented}")
     unsupported = _unsupported_claim(parsed.text, facts)
     if unsupported is not None:
-        raise RuntimeError(f"compose_speech: unverified {unsupported}")
+        raise SpeechError(f"compose_speech: unverified {unsupported}")
     if parsed.claims_card_blocked and facts.get("card_blocked") is not True:
-        raise RuntimeError("compose_speech: unverified card block")
+        raise SpeechError("compose_speech: unverified card block")
     return parsed

@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 
 from minsky_api.agent.consent import explicit_no, explicit_yes
+from minsky_api.agent.degraded import is_model_failure
 from minsky_api.agent.extract import DisputeDetails, extract_dispute_details
 from minsky_api.agent.language import LanguageDetector, default_language_detector
 from minsky_api.agent.speak import Speech, compose_speech
@@ -26,6 +27,7 @@ from minsky_api.agent.wording import (
 from minsky_api.config import get_settings
 from minsky_api.identity.session import SessionState
 from minsky_api.llm.client import LLM, LLMNotConfiguredError, ModelMismatchError
+from minsky_api.observability import start_span
 from minsky_api.policy.disputes import Route
 from minsky_api.router.classifier import classify
 from minsky_api.tools.bank import (
@@ -555,38 +557,46 @@ async def run_turn(
     if not stripped:
         raise ValueError("text must not be blank")
 
-    state.turn_count += 1
-    state.messages.append(("user", stripped))
-    if state.language is None:
-        state.language = (detector or default_language_detector()).detect(stripped)
+    with start_span(
+        "chat.turn",
+        conversation_id=str(state.conversation_id),
+        phase=state.phase.value,
+    ):
+        state.turn_count += 1
+        state.messages.append(("user", stripped))
+        if state.language is None:
+            state.language = (detector or default_language_detector()).detect(stripped)
 
-    if state.phase == Phase.DONE:
-        try:
-            reply = _accept(state, await _speak(state, llm, ("inform",)))
-        except RuntimeError:
-            # A follow-up after the case is settled ("¿cuándo se resuelve?") gets no invented dates: code answers.
-            state.acts.append("inform")
-            reply = done_fallback(_lang(state))
+        if state.phase == Phase.DONE:
+            try:
+                reply = _accept(state, await _speak(state, llm, ("inform",)))
+            except Exception as exc:
+                # Settled case: template on speech/schema faults and provider outages. Never open a
+                # second assistant_unavailable handoff for a conversation that is already closed.
+                if not (isinstance(exc, RuntimeError) or is_model_failure(exc)):
+                    raise
+                state.acts.append("inform")
+                reply = done_fallback(_lang(state))
+            state.messages.append(("agent", reply))
+            return state, reply
+
+        if state.turn_count > get_settings().max_turns:
+            reply = await _handoff(ctx, state, llm, reason="max_turns")
+            state.messages.append(("agent", reply))
+            return state, reply
+
+        if state.phase == Phase.UNDERSTAND:
+            reply = await _phase_understand(ctx, state, stripped, llm)
+        elif state.phase == Phase.CLARIFY:
+            reply = await _phase_clarify(ctx, state, stripped, llm)
+        elif state.phase == Phase.CONFIRM_TXN:
+            reply = await _phase_confirm_txn(ctx, state, stripped, llm)
+        elif state.phase == Phase.CONFIRM_ACT:
+            reply = await _phase_confirm_act(ctx, state, stripped, llm)
+        elif state.phase == Phase.CARD_OFFER:
+            reply = await _phase_card_offer(ctx, state, stripped, llm)
+        else:
+            raise RuntimeError(f"unknown phase: {state.phase}")
+
         state.messages.append(("agent", reply))
         return state, reply
-
-    if state.turn_count > get_settings().max_turns:
-        reply = await _handoff(ctx, state, llm, reason="max_turns")
-        state.messages.append(("agent", reply))
-        return state, reply
-
-    if state.phase == Phase.UNDERSTAND:
-        reply = await _phase_understand(ctx, state, stripped, llm)
-    elif state.phase == Phase.CLARIFY:
-        reply = await _phase_clarify(ctx, state, stripped, llm)
-    elif state.phase == Phase.CONFIRM_TXN:
-        reply = await _phase_confirm_txn(ctx, state, stripped, llm)
-    elif state.phase == Phase.CONFIRM_ACT:
-        reply = await _phase_confirm_act(ctx, state, stripped, llm)
-    elif state.phase == Phase.CARD_OFFER:
-        reply = await _phase_card_offer(ctx, state, stripped, llm)
-    else:
-        raise RuntimeError(f"unknown phase: {state.phase}")
-
-    state.messages.append(("agent", reply))
-    return state, reply
