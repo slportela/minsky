@@ -309,9 +309,32 @@ def terminal_reply(language: str, terminal: Terminal | None) -> str:
                 if pt
                 else f"El reclamo ya abierto es {terminal.dispute_id}."
             )
+    elif terminal.outcome == "no_case":
+        parts.append(
+            "Não abri nenhum caso nem passei você para ninguém." if pt else "No abrí ningún caso ni te pasé con nadie."
+        )
     else:
         parts.append("Não fiz nenhuma alteração." if pt else "No hice ningún cambio.")
     return " ".join([*parts, closing])
+
+
+def handoff_offer_question(language: str) -> str:
+    """Offered when no charge could be identified. A handoff only happens if the customer says yes to this."""
+    if _lang(language) == "pt":
+        return (
+            "Só posso ajudar se você me indicar uma cobrança concreta: o valor, o estabelecimento ou a data. "
+            "Quer que eu passe você para um atendente humano? Responda sim ou não."
+        )
+    return (
+        "Solo puedo ayudarte si me indicas un cargo concreto: el monto, el comercio o la fecha. "
+        "¿Quieres que te pase con un asesor humano? Responde sí o no."
+    )
+
+
+def handoff_offer_declined(language: str) -> str:
+    if _lang(language) == "pt":
+        return "Entendido, não vou passar você para ninguém. Diga o valor, o estabelecimento ou a data da cobrança."
+    return "Entendido, no te paso con nadie. Dime el monto, el comercio o la fecha del cargo."
 
 
 def done_fallback(language: str) -> str:

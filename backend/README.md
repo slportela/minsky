@@ -40,7 +40,8 @@ FastAPI service for dispute intake: the orchestrator, the policy, the mock bank 
   open/block/handoff; never says an action is done before the tool result has been read back.
   After a dispute, a handoff or a declined action the conversation is terminal: later messages get a code-written
   status with the reference and the notice to start a new conversation (no model, no tools).
-  Budgets: `MINSKY_MAX_TURNS`, `MINSKY_MAX_CLARIFY_ATTEMPTS`, `MINSKY_MAX_UNCLEAR_REPLIES`.
+  Budgets: `MINSKY_MAX_TURNS`, `MINSKY_MAX_CLARIFY_ATTEMPTS`, `MINSKY_MAX_UNCLEAR_REPLIES`, `MINSKY_MAX_HANDOFF_OFFERS`.
+  No handoff before the customer confirms the charge or accepts an offered human agent (`_require_confirmed_case`).
 
 ## Run
 

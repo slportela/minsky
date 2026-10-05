@@ -46,7 +46,7 @@ Every dispute the system opens and every handoff it creates becomes a back-offic
 | Possible fraud (D06), or the card was blocked | Critical | fraud | 4 hours |
 | Amount above USD 500 | High | disputes | 2 days |
 | Handoff for a repeat complainer (D08) or another policy rule | Medium | disputes | 5 days |
-| Handoff without a rule (out of scope, clarification or turn limit) | Medium | general | 5 days |
+| Handoff without a rule (out of scope, clarification, unanswered question or turn limit; only after the customer confirmed the charge or accepted an offered agent) | Medium | general | 5 days |
 | Dispute opened automatically (D09) | Low | disputes | 10 days |
 
 The console orders open cases by priority, then due time. Each case also shows the bank's historical median resolution time for that priority (`bank.resolution_benchmarks`), so the agent and the customer get a realistic expectation. Changing a target needs an eval delta, like the policy thresholds.

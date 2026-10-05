@@ -14,6 +14,8 @@ from minsky_api.agent.wording import (
     confirm_question,
     confirm_txn_question,
     fallback_sentence,
+    handoff_offer_declined,
+    handoff_offer_question,
     human_amount,
     human_date,
     inform_fallback,
@@ -161,6 +163,12 @@ async def _clarify(state: ConversationState, llm: LLM, candidates: str | None = 
     return with_candidates(reply, candidates) if candidates else reply
 
 
+def _no_charge_found(state: ConversationState) -> str:
+    """Nothing matched. Code asks for what is needed; the model used to say "which of these?" with no list."""
+    state.acts.append("clarify")
+    return clarify_fallback(_lang(state), None)
+
+
 def _ask(state: ConversationState, phase: Phase, text: str) -> str:
     """Remember the question before the next customer message is classified."""
     state.phase = phase
@@ -208,6 +216,28 @@ def _finish(
     state.terminal = Terminal(outcome, reference, card_blocked, dispute_id)
 
 
+def _require_confirmed_case(state: ConversationState) -> None:
+    """No case reaches a person before the customer confirmed which charge it is about, or asked for one.
+
+    The customer confirms the transaction (`txn_confirmed`) or accepts the offer of a human agent
+    (`handoff_accepted`). Anything else is a bug in the state machine, so it fails loudly instead of sending a
+    case nobody agreed to.
+    """
+    if not (state.txn_confirmed or state.handoff_accepted):
+        raise RuntimeError("handoff before the customer confirmed the transaction or accepted a human agent")
+
+
+def _offer_handoff(state: ConversationState, reason: str) -> str:
+    """We cannot see which charge this is. Offer a person; the customer decides, not the assistant."""
+    state.handoff_offers += 1
+    if state.handoff_offers > get_settings().max_handoff_offers:
+        _finish(state, "no_case")
+        return terminal_reply(_lang(state), state.terminal)
+    state.offer_reason = reason
+    state.candidate_txn_ids = []
+    return _ask(state, Phase.OFFER_HANDOFF, handoff_offer_question(_lang(state)))
+
+
 async def _handoff(
     ctx: ToolContext,
     state: ConversationState,
@@ -218,6 +248,7 @@ async def _handoff(
     actions: tuple[str, ...] = (),
     facts: dict[str, object] | None = None,
 ) -> str:
+    _require_confirmed_case(state)
     result = await create_handoff(
         ctx,
         CreateHandoffArgs(
@@ -298,8 +329,8 @@ async def _after_candidates(
     if len(txns) == 0:
         state.clarify_count += 1
         if state.clarify_count > get_settings().max_clarify_attempts:
-            return await _handoff(ctx, state, llm, reason="clarify_exhausted")
-        reply = await _clarify(state, llm)
+            return _offer_handoff(state, "clarify_exhausted")
+        reply = _no_charge_found(state)
         state.phase = Phase.CLARIFY
         state.candidate_txn_ids = []
         state.pending_question = None
@@ -307,7 +338,7 @@ async def _after_candidates(
     if len(txns) > 1:
         state.clarify_count += 1
         if state.clarify_count > get_settings().max_clarify_attempts:
-            return await _handoff(ctx, state, llm, reason="clarify_exhausted")
+            return _offer_handoff(state, "clarify_exhausted")
         reply = await _clarify(state, llm, _candidate_list(txns, _lang(state)))
         state.phase = Phase.CLARIFY
         state.candidate_txn_ids = [t.transaction_id for t in txns]
@@ -347,6 +378,7 @@ async def _apply_policy(ctx: ToolContext, state: ConversationState, llm: LLM) ->
     if route == Route.ESCALATE_AGENT.value:
         return await _handoff(ctx, state, llm, reason="policy_escalate_agent", rule_id=decision.rule_id)
     if route == Route.REFUSE.value:
+        _require_confirmed_case(state)
         result = await create_handoff(
             ctx,
             CreateHandoffArgs(
@@ -405,7 +437,7 @@ async def _phase_understand(ctx: ToolContext, state: ConversationState, text: st
     details = await extract_dispute_details(llm, text)
     state.customer_says_not_me = details.customer_says_not_me
     if details.out_of_scope:
-        return await _handoff(ctx, state, llm, reason="out_of_scope")
+        return _offer_handoff(state, "out_of_scope")
     txns = await _search(ctx, _merge_details(state, details))
     return await _after_candidates(ctx, state, txns, llm)
 
@@ -425,7 +457,7 @@ async def _phase_clarify(ctx: ToolContext, state: ConversationState, text: str, 
     details = await extract_dispute_details(llm, text)
     state.customer_says_not_me = state.customer_says_not_me or details.customer_says_not_me
     if details.out_of_scope:
-        return await _handoff(ctx, state, llm, reason="out_of_scope")
+        return _offer_handoff(state, "out_of_scope")
     if details.transaction_id:
         txn = await _get_owned_txn(ctx, details.transaction_id)
         return await _after_candidates(ctx, state, [txn] if txn is not None else [], llm)
@@ -463,14 +495,22 @@ async def _consent(ctx: ToolContext, state: ConversationState, text: str, llm: L
 
 
 async def _unclear_reply(ctx: ToolContext, state: ConversationState, llm: LLM) -> str:
-    """The reply was not a plain yes or no. Ask again, and after too many in a row hand the case to a person.
+    """The reply was not a plain yes or no. Ask again; after too many in a row, stop asking.
 
-    A customer who cannot or will not answer yes or no is not helped by a fourth reminder. The conversation
-    goes to the queue with the question that was left unanswered and what the customer said instead, so the
-    agent does not start from zero. Nothing is authorized by this: a handoff only stops the assistant.
+    What happens then depends on what the customer has confirmed. Before the transaction is confirmed (or while a
+    human agent is being offered) nothing goes to a person without the customer's yes: the conversation offers an
+    agent, or ends without a case. After the transaction is confirmed, the case is already about a charge the
+    customer agreed on, so it goes to the queue with the question left unanswered and what the customer said
+    instead, and the agent does not start from zero. Nothing is authorized by this: a handoff only stops the
+    assistant.
     """
     state.unclear_count += 1
     if state.unclear_count >= get_settings().max_unclear_replies:
+        if state.phase == Phase.OFFER_HANDOFF:
+            _finish(state, "no_case")
+            return terminal_reply(_lang(state), state.terminal)
+        if not state.txn_confirmed:
+            return _offer_handoff(state, "unclear_confirmation")
         replies = [text[:200] for role, text in state.messages if role == "user"][-state.unclear_count :]
         # Only a fraud case keeps its rule: it decides the queue and priority, and its reason reads right in a
         # handoff. A D09 reason ("el cargo cumple las condiciones para abrir el reclamo") would not.
@@ -484,6 +524,33 @@ async def _unclear_reply(ctx: ToolContext, state: ConversationState, llm: LLM) -
             facts={"unanswered_question": state.pending_question, "last_customer_replies": replies},
         )
     return await _ask_again(state, llm)
+
+
+async def _phase_offer_handoff(ctx: ToolContext, state: ConversationState, text: str, llm: LLM) -> str:
+    """The customer answers "do you want a human agent?". Only a plain yes sends the conversation to one."""
+    decision = await _consent(ctx, state, text, llm)
+    if decision == "yes":
+        state.handoff_accepted = True
+        reason = state.offer_reason or "clarify_exhausted"
+        facts: dict[str, object] = {"customer_accepted_offer": True}
+        if reason == "unclear_confirmation":
+            facts["unanswered_question"] = None
+        return await _handoff(ctx, state, llm, reason=reason, facts=facts)
+    if decision == "no":
+        if state.handoff_offers >= get_settings().max_handoff_offers:
+            _finish(state, "no_case")
+            return terminal_reply(_lang(state), state.terminal)
+        # Back to asking for the charge, with a fresh set of tries; the offer may come once more.
+        state.phase = Phase.CLARIFY
+        state.pending_question = None
+        state.clarify_count = 0
+        state.selected_txn_id = None
+        state.selected_product_id = None
+        state.candidate_txn_ids = []
+        state.search_details = DisputeDetails()
+        state.acts.append("clarify")
+        return handoff_offer_declined(_lang(state))
+    return await _unclear_reply(ctx, state, llm)
 
 
 async def _ask_again(state: ConversationState, llm: LLM) -> str:
@@ -500,6 +567,7 @@ async def _ask_again(state: ConversationState, llm: LLM) -> str:
 async def _phase_confirm_txn(ctx: ToolContext, state: ConversationState, text: str, llm: LLM) -> str:
     decision = await _consent(ctx, state, text, llm)
     if decision == "yes":
+        state.txn_confirmed = True
         return await _apply_policy(ctx, state, llm)
     if decision == "no":
         speech = await _speak_safe(state, llm, ("clarify", "abort"))
@@ -559,6 +627,7 @@ async def _phase_card_offer(ctx: ToolContext, state: ConversationState, text: st
                 blocked_ok = True
             except ToolDenied:
                 blocked_ok = False
+        _require_confirmed_case(state)
         result = await create_handoff(
             ctx,
             CreateHandoffArgs(
@@ -618,7 +687,11 @@ async def run_turn(
             return state, reply
 
         if state.turn_count > get_settings().max_turns:
-            reply = await _handoff(ctx, state, llm, reason="max_turns")
+            if state.txn_confirmed or state.handoff_accepted:
+                reply = await _handoff(ctx, state, llm, reason="max_turns")
+            else:  # no confirmed charge and no yes to an agent: end here, without a case
+                _finish(state, "no_case")
+                reply = terminal_reply(_lang(state), state.terminal)
             state.messages.append(("agent", reply))
             return state, reply
 
@@ -632,6 +705,8 @@ async def run_turn(
             reply = await _phase_confirm_act(ctx, state, stripped, llm)
         elif state.phase == Phase.CARD_OFFER:
             reply = await _phase_card_offer(ctx, state, stripped, llm)
+        elif state.phase == Phase.OFFER_HANDOFF:
+            reply = await _phase_offer_handoff(ctx, state, stripped, llm)
         else:
             raise RuntimeError(f"unknown phase: {state.phase}")
 

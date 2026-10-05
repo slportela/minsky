@@ -14,7 +14,7 @@ from minsky_api.agent.extract import DisputeDetails
 from minsky_api.agent.orchestrator import _candidate_list, run_turn
 from minsky_api.agent.speak import Speech
 from minsky_api.agent.state import ConversationState, Phase
-from minsky_api.agent.wording import clarify_fallback, safe_sentence
+from minsky_api.agent.wording import clarify_fallback, handoff_offer_declined, handoff_offer_question, safe_sentence
 from minsky_api.config import Settings, get_settings
 from minsky_api.identity import SessionState, ToolSession
 from minsky_api.llm.client import LLMNotConfiguredError, LLMResult
@@ -336,8 +336,8 @@ def test_clarify_many_then_pick():
     assert "Cafe Sur" in reply
 
 
-def test_max_turns_handoff(monkeypatch):
-    get_settings.cache_clear()
+def test_max_turns_before_a_confirmed_charge_ends_without_a_case(monkeypatch):
+    """No case goes to a person unless the customer confirmed the charge or asked for an agent."""
     monkeypatch.setenv("MINSKY_MAX_TURNS", "2")
     get_settings.cache_clear()
     try:
@@ -346,6 +346,26 @@ def test_max_turns_handoff(monkeypatch):
         llm = FakeLLM(_details())
         state, _ = asyncio.run(run_turn(state, "Cafe 25", ctx, llm))  # type: ignore[arg-type]
         state, _ = asyncio.run(run_turn(state, "tal vez", ctx, llm))  # type: ignore[arg-type]
+        state, reply = asyncio.run(run_turn(state, "tal vez", ctx, llm))  # type: ignore[arg-type]
+        assert state.phase == Phase.DONE and state.terminal is not None and state.terminal.outcome == "no_case"
+        assert not any(a.tool == "create_handoff" for a in ctx.cases.list_audit())
+        assert not ctx.cases.list_cases()
+        assert reply.startswith("No abrí ningún caso ni te pasé con nadie.")
+    finally:
+        monkeypatch.delenv("MINSKY_MAX_TURNS", raising=False)
+        get_settings.cache_clear()
+
+
+def test_max_turns_after_the_customer_confirmed_the_charge_still_hands_off(monkeypatch):
+    monkeypatch.setenv("MINSKY_MAX_TURNS", "2")
+    get_settings.cache_clear()
+    try:
+        ctx = _ctx()
+        state = _state()
+        llm = FakeLLM(_details())
+        state, _ = asyncio.run(run_turn(state, "Cafe 25", ctx, llm))  # type: ignore[arg-type]
+        state, _ = asyncio.run(run_turn(state, "sí", ctx, llm))  # type: ignore[arg-type]
+        assert state.txn_confirmed
         state, reply = asyncio.run(run_turn(state, "tal vez", ctx, llm))  # type: ignore[arg-type]
         assert state.phase == Phase.DONE
         assert any(a.tool == "create_handoff" and a.outcome == "ok" for a in ctx.cases.list_audit())
@@ -518,8 +538,7 @@ def test_customer_mismatch_denied():
         asyncio.run(run_turn(state, "Cafe 25", ctx, llm))  # type: ignore[arg-type]
 
 
-def test_clarify_exhausted_handoff(monkeypatch):
-    get_settings.cache_clear()
+def test_clarify_exhausted_offers_a_person_and_does_not_hand_off(monkeypatch):
     monkeypatch.setenv("MINSKY_MAX_CLARIFY_ATTEMPTS", "1")
     get_settings.cache_clear()
     try:
@@ -529,9 +548,13 @@ def test_clarify_exhausted_handoff(monkeypatch):
         state, _ = asyncio.run(run_turn(state, "Nope", ctx, llm))  # type: ignore[arg-type]
         assert state.phase == Phase.CLARIFY
         state, reply = asyncio.run(run_turn(state, "sigue sin aparecer", ctx, llm))  # type: ignore[arg-type]
-        assert state.phase == Phase.DONE
-        assert any(a.tool == "create_handoff" and a.outcome == "ok" for a in ctx.cases.list_audit())
-        assert "HO-" in reply
+        assert state.phase == Phase.OFFER_HANDOFF and state.offer_reason == "clarify_exhausted"
+        assert reply == handoff_offer_question("es")
+        assert not any(a.tool == "create_handoff" for a in ctx.cases.list_audit())  # nothing sent: the customer decides
+        state, reply = asyncio.run(run_turn(state, "sí", ctx, llm))  # type: ignore[arg-type]
+        assert state.phase == Phase.DONE and "HO-" in reply
+        (case,) = ctx.cases.list_cases()
+        assert case.reason == "clarify_exhausted" and case.facts["customer_said"]["customer_accepted_offer"] is True
     finally:
         monkeypatch.delenv("MINSKY_MAX_CLARIFY_ATTEMPTS", raising=False)
         get_settings.cache_clear()
@@ -845,9 +868,14 @@ def test_after_a_handoff_the_status_is_the_handoff_and_a_card_block_is_reported_
 def test_a_handoff_ends_the_conversation_the_same_way_whatever_caused_it():
     ctx = _ctx()
     state = _state()
-    llm = FakeLLM(_details(), decisions=["unclear", "unclear", "unclear"])
-    state, _ = asyncio.run(run_turn(state, "Cafe 25", ctx, llm))  # type: ignore[arg-type]
-    for text in ("lo reconozco", "ese mismo", "claro que sí"):
+    llm = FakeLLM(_details())
+    for text in (
+        "Cafe 25",
+        "sí",
+        "mmm",
+        "no sé",
+        "quizás",
+    ):  # the charge is confirmed; the action question gets no answer
         state, reply = asyncio.run(run_turn(state, text, ctx, llm))  # type: ignore[arg-type]
     assert state.terminal is not None and state.terminal.outcome == "handoff"
     ref = state.terminal.reference
@@ -929,12 +957,12 @@ def test_clarify_sends_a_code_written_question_when_both_attempts_are_refused():
     assert state.acts[-1] == "clarify"
 
 
-def test_clarify_with_no_match_also_falls_back_to_a_code_written_question():
-    refused = Speech(act="clarify", text="No lo encuentro. Te cobraremos 900 USD de comisión.")
-    llm = _NthSpeech(_details(amount=None), n=1, speech=refused, repeat=2)
+def test_no_match_is_a_code_written_question_that_asks_for_the_charge_not_for_those_transactions():
+    """Found by hand: "un cargo de ayer" found nothing and the model asked "¿cuál de esas transacciones?"."""
+    llm = FakeLLM(_details(amount=None))
     state, reply = asyncio.run(run_turn(_state(), _OPENER, _ctx(exec_rows=[]), llm))  # type: ignore[arg-type]
     assert reply == clarify_fallback("es", None)
-    assert state.phase == Phase.CLARIFY
+    assert state.phase == Phase.CLARIFY and state.acts[-1] == "clarify"
     assert state.candidate_txn_ids == []
 
 
@@ -1264,7 +1292,8 @@ def _unclear_turns(llm: FakeLLM, ctx: ToolContext, *texts: str) -> tuple[Convers
     return state, reply
 
 
-def test_the_third_unclear_reply_in_a_row_hands_the_case_to_a_person_and_opens_nothing():
+def test_the_third_unclear_reply_to_the_transaction_question_offers_a_person_and_sends_nothing():
+    """The charge is not confirmed yet, so nothing goes to a person until the customer says yes to an agent."""
     ctx = _ctx()
     llm = FakeLLM(_details(), decisions=["unclear", "unclear", "unclear"])
     state = _state()
@@ -1276,6 +1305,25 @@ def test_the_third_unclear_reply_in_a_row_hands_the_case_to_a_person_and_opens_n
         assert state.phase == Phase.CONFIRM_TXN and state.unclear_count == count
         assert reply.endswith("En esta parte del proceso solo puedes responder «sí» o «no».")
     state, reply = asyncio.run(run_turn(state, "claro que sí", ctx, llm))  # type: ignore[arg-type]
+    assert state.phase == Phase.OFFER_HANDOFF and state.offer_reason == "unclear_confirmation"
+    assert reply == handoff_offer_question("es")
+    assert not ctx.cases.list_cases()
+    assert not any(a.tool in ("create_handoff", "open_dispute", "block_card") for a in ctx.cases.list_audit())
+    state, reply = asyncio.run(run_turn(state, "sí", ctx, FakeLLM(_details())))  # type: ignore[arg-type]
+    assert state.phase == Phase.DONE and "HO-" in reply
+    (case,) = ctx.cases.list_cases()
+    assert case.kind == "handoff" and case.reason == "unclear_confirmation"
+    assert case.facts["customer_said"]["customer_accepted_offer"] is True
+
+
+def test_the_third_unclear_reply_after_the_charge_is_confirmed_hands_the_case_to_a_person_and_opens_nothing():
+    ctx = _ctx()
+    llm = FakeLLM(_details(), decisions=["yes", "unclear", "unclear", "unclear"])
+    state, _ = _unclear_turns(llm, ctx, "Cafe 25", "sí")
+    assert state.phase == Phase.CONFIRM_ACT and state.txn_confirmed
+    pending = state.pending_question
+    for words in ("lo reconozco", "ese mismo", "claro que sí"):
+        state, reply = asyncio.run(run_turn(state, words, ctx, llm))  # type: ignore[arg-type]
     assert state.phase == Phase.DONE
     assert "HO-" in reply
     (case,) = ctx.cases.list_cases()
@@ -1306,8 +1354,8 @@ def test_the_limit_is_a_setting(monkeypatch: pytest.MonkeyPatch):
     get_settings.cache_clear()
     try:
         ctx = _ctx()
-        llm = FakeLLM(_details(), decisions=["unclear", "unclear"])
-        state, reply = _unclear_turns(llm, ctx, "Cafe 25", "lo reconozco", "ese mismo")
+        llm = FakeLLM(_details(), decisions=["yes", "unclear", "unclear"])
+        state, reply = _unclear_turns(llm, ctx, "Cafe 25", "sí", "lo reconozco", "ese mismo")
         assert state.phase == Phase.DONE and "HO-" in reply
     finally:
         monkeypatch.delenv("MINSKY_MAX_UNCLEAR_REPLIES", raising=False)
@@ -1331,7 +1379,110 @@ def test_a_fraud_customer_who_cannot_answer_the_card_offer_keeps_the_fraud_prior
 
 def test_a_dispute_handoff_carries_no_rule_so_it_does_not_repeat_the_open_reason():
     ctx = _ctx()
-    llm = FakeLLM(_details(), decisions=["unclear", "unclear", "unclear"])
-    _unclear_turns(llm, ctx, "Cafe 25", "lo reconozco", "ese mismo", "claro que sí")
+    llm = FakeLLM(_details(), decisions=["yes", "unclear", "unclear", "unclear"])
+    _unclear_turns(llm, ctx, "Cafe 25", "sí", "lo reconozco", "ese mismo", "claro que sí")
     (case,) = ctx.cases.list_cases()
     assert case.rule_id is None and case.queue == "general"
+
+
+# ---- no case goes to a person before the customer confirms the charge or asks for an agent ----------------------
+
+
+def _offered(ctx: ToolContext | None = None) -> tuple[ToolContext, ConversationState]:
+    """A conversation whose first message is not about any charge ("hola"): the agent is offered, not sent."""
+    ctx = ctx or _ctx()
+    llm = FakeLLM(_details(out_of_scope=True))
+    state, reply = asyncio.run(run_turn(_state(), "hola", ctx, llm))  # type: ignore[arg-type]
+    assert state.phase == Phase.OFFER_HANDOFF and reply == handoff_offer_question("es")
+    return ctx, state
+
+
+def test_a_greeting_gets_an_offer_of_a_person_and_no_case():
+    ctx, state = _offered()
+    assert state.offer_reason == "out_of_scope" and state.handoff_offers == 1
+    assert state.pending_question == handoff_offer_question("es")
+    assert not ctx.cases.list_cases() and not any(a.tool == "create_handoff" for a in ctx.cases.list_audit())
+    assert "agente humano" not in handoff_offer_question("es") and "asesor humano" in handoff_offer_question("es")
+
+
+def test_yes_to_the_offer_hands_off_and_the_case_says_the_customer_asked_for_it():
+    ctx, state = _offered()
+    state, reply = asyncio.run(run_turn(state, "sí", ctx, FakeLLM(_details())))  # type: ignore[arg-type]
+    assert state.phase == Phase.DONE and state.handoff_accepted and "HO-" in reply
+    (case,) = ctx.cases.list_cases()
+    assert case.reason == "out_of_scope" and case.facts["customer_said"]["customer_accepted_offer"] is True
+    assert case.facts["verified"] == {}  # no charge was ever confirmed, and the case does not pretend one was
+
+
+def test_no_to_the_offer_goes_back_to_asking_for_the_charge_with_fresh_tries():
+    ctx, state = _offered()
+    state, reply = asyncio.run(run_turn(state, "no", ctx, FakeLLM(_details())))  # type: ignore[arg-type]
+    assert reply == handoff_offer_declined("es")
+    assert state.phase == Phase.CLARIFY and state.clarify_count == 0 and state.pending_question is None
+    assert not ctx.cases.list_cases()
+    state, reply = asyncio.run(run_turn(state, "Cafe 25", ctx, FakeLLM(_details())))  # type: ignore[arg-type]
+    assert state.phase == Phase.CONFIRM_TXN  # and the conversation goes on as any other
+    state, _ = asyncio.run(run_turn(state, "sí", ctx, FakeLLM(_details())))  # type: ignore[arg-type]
+    assert state.phase == Phase.CONFIRM_ACT and state.txn_confirmed
+
+
+def test_a_second_no_ends_the_conversation_without_a_case():
+    ctx, state = _offered()
+    state, _ = asyncio.run(run_turn(state, "no", ctx, FakeLLM(_details())))  # type: ignore[arg-type]
+    state, reply = asyncio.run(run_turn(state, "hola otra vez", ctx, FakeLLM(_details(out_of_scope=True))))  # type: ignore[arg-type]
+    assert state.phase == Phase.OFFER_HANDOFF and state.handoff_offers == 2
+    state, reply = asyncio.run(run_turn(state, "no", ctx, FakeLLM(_details())))  # type: ignore[arg-type]
+    assert state.phase == Phase.DONE and state.terminal is not None and state.terminal.outcome == "no_case"
+    assert reply == f"No abrí ningún caso ni te pasé con nadie. {_NEW_CONVERSATION_ES}"
+    assert not ctx.cases.list_cases()
+    state, reply = asyncio.run(run_turn(state, "hola", ctx, _NoModelAfterTheCase(_details())))  # type: ignore[arg-type]
+    assert reply.endswith(_NEW_CONVERSATION_ES)
+
+
+def test_a_third_offer_is_never_made_and_the_number_is_a_setting(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("MINSKY_MAX_HANDOFF_OFFERS", "1")
+    get_settings.cache_clear()
+    try:
+        ctx, state = _offered()
+        state, reply = asyncio.run(run_turn(state, "no", ctx, FakeLLM(_details())))  # type: ignore[arg-type]
+        assert state.terminal is not None and state.terminal.outcome == "no_case"
+        assert not ctx.cases.list_cases()
+    finally:
+        monkeypatch.delenv("MINSKY_MAX_HANDOFF_OFFERS", raising=False)
+        get_settings.cache_clear()
+
+
+def test_replies_that_are_not_yes_or_no_to_the_offer_end_without_a_case():
+    ctx, state = _offered()
+    llm = FakeLLM(_details())
+    for words in ("mmm", "no sé"):
+        state, _ = asyncio.run(run_turn(state, words, ctx, llm))  # type: ignore[arg-type]
+        assert state.phase == Phase.OFFER_HANDOFF
+    state, reply = asyncio.run(run_turn(state, "quizás", ctx, llm))  # type: ignore[arg-type]
+    assert state.terminal is not None and state.terminal.outcome == "no_case"
+    assert not ctx.cases.list_cases() and not any(a.tool == "create_handoff" for a in ctx.cases.list_audit())
+
+
+def test_a_handoff_cannot_be_created_before_the_charge_is_confirmed_or_an_agent_accepted():
+    """The rule is in code: a state machine bug fails loudly instead of sending a case nobody agreed to."""
+    from minsky_api.agent.orchestrator import _handoff
+
+    ctx = _ctx()
+    state = _state()
+    with pytest.raises(RuntimeError, match="before the customer confirmed"):
+        asyncio.run(_handoff(ctx, state, FakeLLM(_details()), reason="clarify_exhausted"))  # type: ignore[arg-type]
+    assert not ctx.cases.list_cases()
+    state.handoff_accepted = True  # the customer asked for an agent: now it is allowed
+    state.language = "es"
+    asyncio.run(_handoff(ctx, state, FakeLLM(_details()), reason="clarify_exhausted"))  # type: ignore[arg-type]
+    assert len(ctx.cases.list_cases()) == 1
+
+
+def test_a_policy_handoff_needs_the_confirmed_charge_and_has_it():
+    ctx = _ctx(_txn(is_fraud=True))
+    llm = FakeLLM(_details(customer_says_not_me=True))
+    state = _state()
+    state, _ = asyncio.run(run_turn(state, "No fui yo en Cafe", ctx, llm))  # type: ignore[arg-type]
+    assert not state.txn_confirmed and not ctx.cases.list_cases()  # asked which charge; nothing sent yet
+    state, _ = asyncio.run(run_turn(state, "sí", ctx, llm))  # type: ignore[arg-type]
+    assert state.txn_confirmed and state.phase == Phase.CARD_OFFER
