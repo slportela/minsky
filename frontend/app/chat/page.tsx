@@ -3,9 +3,11 @@
 // Customer surface: trusted test-session gate, then conversation with the dispute assistant.
 // Shows only what the backend returns; it never builds facts or decisions on its own.
 
-import { FormEvent, useRef, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 
-import { ApiError, ChatMessage, ChatResponse, postChatTurn } from "../../lib/api";
+import { ApiError, ChatMessage, ChatMode, ChatOptions, ChatResponse, getChatOptions, postChatTurn } from "../../lib/api";
+
+const MODE_LABEL: Record<ChatMode, string> = { workflow: "Flujo estándar", agentic: "Agente" };
 
 function messageText(message: ChatMessage): string {
   return "user" in message ? message.user : message.agent;
@@ -18,6 +20,9 @@ function messageRole(message: ChatMessage): "user" | "agent" {
 function assertChatResponse(value: ChatResponse): ChatResponse {
   if (typeof value.conversation_id !== "string" || !value.conversation_id) {
     throw new Error("Respuesta inválida: falta conversation_id");
+  }
+  if (value.mode !== "workflow" && value.mode !== "agentic") {
+    throw new Error("Respuesta inválida: falta mode");
   }
   if (!Array.isArray(value.messages)) {
     throw new Error("Respuesta inválida: messages no es una lista");
@@ -44,6 +49,28 @@ export default function ChatPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inFlight = useRef(false);
+  // The server says whether the flow can be chosen. Without that answer, or if it says no, there is no selector
+  // and the conversation runs the server's own flow.
+  const [options, setOptions] = useState<ChatOptions | null>(null);
+  const [chosenMode, setChosenMode] = useState<ChatMode | undefined>();
+  const [conversationMode, setConversationMode] = useState<ChatMode | undefined>();
+
+  useEffect(() => {
+    let cancelled = false;
+    getChatOptions()
+      .then((value) => {
+        if (!cancelled) {
+          setOptions(value);
+          setChosenMode(value.mode);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setOptions(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   function continueWithCredential(event: FormEvent) {
     event.preventDefault();
@@ -68,9 +95,19 @@ export default function ChatPage() {
       return;
     }
     setConversationId(undefined);
+    setConversationMode(undefined);
     setMessages([]);
     setDraft("");
     setError(null);
+  }
+
+  // The flow is fixed when a conversation starts, so choosing another one starts a new conversation.
+  function chooseMode(mode: ChatMode) {
+    if (inFlight.current || mode === chosenMode) {
+      return;
+    }
+    startNewConversation();
+    setChosenMode(mode);
   }
 
   async function sendText(text: string, opts?: { clearDraft?: boolean }) {
@@ -87,9 +124,11 @@ export default function ChatPage() {
           credential: credential.trim(),
           conversationId,
           messages: [...messages, { user: trimmed }],
+          mode: options?.mode_switch ? chosenMode : undefined,
         }),
       );
       setConversationId(response.conversation_id);
+      setConversationMode(response.mode);
       setMessages(response.messages);
       if (opts?.clearDraft) {
         setDraft("");
@@ -152,6 +191,27 @@ export default function ChatPage() {
           Cambiar sesión
         </button>
       </p>
+
+      {options?.mode_switch ? (
+        <p>
+          <label>
+            Flujo{" "}
+            <select
+              value={chosenMode ?? options.mode}
+              disabled={busy}
+              onChange={(e) => chooseMode(e.target.value as ChatMode)}
+              aria-describedby="mode-note"
+            >
+              <option value="workflow">{MODE_LABEL.workflow}</option>
+              <option value="agentic">{MODE_LABEL.agentic}</option>
+            </select>
+          </label>{" "}
+          <small id="mode-note">
+            Cambiarlo empieza una conversación nueva.
+            {conversationMode ? <> En curso: {MODE_LABEL[conversationMode]}.</> : null}
+          </small>
+        </p>
+      ) : null}
 
       <section aria-live="polite" style={{ display: "grid", gap: "0.75rem", marginBottom: "1.5rem" }}>
         {messages.length === 0 ? <p>Escribe el cargo que quieres disputar.</p> : null}

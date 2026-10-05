@@ -5,14 +5,23 @@ export type UserMessage = { user: string };
 export type AgentMessage = { agent: string };
 export type ChatMessage = UserMessage | AgentMessage;
 
+// The flow a conversation runs: "workflow" (extract, then search) or "agentic" (a tool-using agent searches).
+export type ChatMode = "workflow" | "agentic";
+
+// What the server allows. The chat offers the choice only when `mode_switch` is true; `mode` is the server default.
+export type ChatOptions = { mode_switch: boolean; mode: ChatMode };
+
 export type ChatRequest = {
   conversation_id?: string;
   messages: ChatMessage[];
+  // Only read on the first turn of a conversation, and only when the server allows the switch.
+  mode?: ChatMode;
 };
 
 export type ChatResponse = {
   conversation_id: string;
   messages: ChatMessage[];
+  mode: ChatMode; // the flow this conversation runs, fixed when it started
 };
 
 export type ErrorResponse = {
@@ -63,14 +72,21 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+export async function getChatOptions(): Promise<ChatOptions> {
+  return api<ChatOptions>("/chat/options");
+}
+
 export async function postChatTurn(args: {
   credential: string;
   conversationId?: string;
   messages: ChatMessage[];
+  mode?: ChatMode;
 }): Promise<ChatResponse> {
   const body: ChatRequest = {
     messages: args.messages,
     ...(args.conversationId ? { conversation_id: args.conversationId } : {}),
+    // The flow is chosen when a conversation starts: a later turn never carries it.
+    ...(!args.conversationId && args.mode ? { mode: args.mode } : {}),
   };
   return api<ChatResponse>("/chat/turn", {
     method: "POST",

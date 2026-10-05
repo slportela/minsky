@@ -8,6 +8,16 @@ Today the model only turns one message into filters (`agent.extract.j2`) and the
 
 An agent that can look at the customer's own transactions, query them as it likes, and talk to the customer to narrow down gets that flexibility from the model, while the dangerous part (is it allowed, did the customer say yes, what happened) stays in code.
 
+## Choosing the flow
+
+| Where | How |
+|---|---|
+| **Server default** | `MINSKY_AGENT_MODE=workflow` (default) or `agentic`. Read once per process (`get_settings` is cached): recreate the API container to change it. `compose.yaml` passes it through. |
+| **From the chat UI** | Off by default. `MINSKY_ALLOW_MODE_SWITCH=true` makes `GET /api/chat/options` answer `mode_switch: true`, and the chat page shows a "Flujo" selector. The choice travels as `mode` on the **first** turn of a conversation; later turns never carry it. |
+| **Evals** | `--agent-mode` (`EVAL_AGENT_MODE` in the Makefile). |
+
+A conversation keeps the flow it started with. Changing the selector starts a new conversation. With the switch off the backend ignores a `mode` sent by hand, so a customer cannot choose between an evaluated flow and an experimental one. The flow is not a permission: both apply the same policy and the same tools, and the customer always comes from the credential. The response carries `mode`, and the page shows the one in progress. There is no per-customer or percentage routing.
+
 ## 2. Flow
 
 ```

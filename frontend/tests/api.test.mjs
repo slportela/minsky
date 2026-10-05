@@ -42,3 +42,28 @@ test("expired-session error preserves backend code and status", async () => {
     return true;
   });
 });
+
+test("the flow travels only on the first turn of a conversation", async () => {
+  const requests = [];
+  const api = client(async (url, init) => {
+    requests.push({ url, body: JSON.parse(init.body) });
+    return { ok: true, json: async () => ({ conversation_id: "c", messages: [{ agent: "ok" }], mode: "agentic" }) };
+  });
+  await api.postChatTurn({ credential: "t", messages: [{ user: "hola" }], mode: "agentic" });
+  await api.postChatTurn({ credential: "t", conversationId: "c", messages: [{ user: "hola" }], mode: "agentic" });
+  await api.postChatTurn({ credential: "t", messages: [{ user: "hola" }] });
+  assert.equal(requests[0].body.mode, "agentic");
+  assert.equal("mode" in requests[1].body, false); // a running conversation keeps the flow it started with
+  assert.equal("mode" in requests[2].body, false); // nothing chosen: the server decides
+  assert.equal(requests[1].body.conversation_id, "c");
+});
+
+test("the chat options are read from the server, not from the bundle", async () => {
+  let request;
+  const api = client(async (url, init) => {
+    request = { url, init };
+    return { ok: true, json: async () => ({ mode_switch: true, mode: "workflow" }) };
+  });
+  assert.deepEqual(await api.getChatOptions(), { mode_switch: true, mode: "workflow" });
+  assert.equal(request.url, "/api/chat/options");
+});

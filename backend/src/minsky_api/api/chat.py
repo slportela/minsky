@@ -21,6 +21,7 @@ from minsky_api.agent.orchestrator import run_turn
 from minsky_api.agent.state import ConversationState
 from minsky_api.api.contracts import (
     AgentMessage,
+    ChatOptions,
     ChatRequest,
     ChatResponse,
     ErrorCode,
@@ -67,6 +68,21 @@ def _check_history(state: ConversationState, body: ChatRequest) -> ErrorCode | N
     return None
 
 
+def _mode_for_new_conversation(body: ChatRequest) -> str:
+    """The flow of a new conversation: the client's choice if the server allows it, else the server's own setting."""
+    settings = get_settings()
+    if body.mode is not None and settings.allow_mode_switch:
+        return body.mode
+    return settings.agent_mode
+
+
+@router.get("/options")
+async def chat_options() -> ChatOptions:
+    """Whether the chat may offer a choice of flow. Nothing secret: it says what the server allows, not who may."""
+    settings = get_settings()
+    return ChatOptions(mode_switch=settings.allow_mode_switch, mode=settings.agent_mode)
+
+
 @router.post("/turn", response_model=None)
 async def chat_turn(
     body: ChatRequest,
@@ -96,7 +112,7 @@ async def _authenticated_turn(
 
     if body.conversation_id is None:
         state = ConversationState(
-            conversation_id=conversation_id, customer_id=customer_id, mode=get_settings().agent_mode
+            conversation_id=conversation_id, customer_id=customer_id, mode=_mode_for_new_conversation(body)
         )
         if len(body.messages) != 1 or not isinstance(body.messages[0], UserMessage):
             return _error(ErrorCode.INVALID_PAYLOAD, "first turn must be a single user message", 400)
@@ -149,7 +165,11 @@ def _chat_response(state: ConversationState) -> ChatResponse:
     history: list[UserMessage | AgentMessage] = []
     for role, text in state.messages:
         history.append(UserMessage(user=text) if role == "user" else AgentMessage(agent=text))
-    return ChatResponse(conversation_id=state.conversation_id, messages=tuple(history))
+    return ChatResponse(
+        conversation_id=state.conversation_id,
+        messages=tuple(history),
+        mode="agentic" if state.mode == "agentic" else "workflow",
+    )
 
 
 async def _degraded_turn(

@@ -132,10 +132,12 @@ def test_response_round_trips_to_the_request_shape():
     response = ChatResponse(
         conversation_id=UUID(CONVERSATION_ID),
         messages=(UserMessage(user="hola"), AgentMessage(agent="¿En qué te ayudo?")),
+        mode="workflow",
     )
     assert response.model_dump(mode="json") == {
         "conversation_id": CONVERSATION_ID,
         "messages": [{"user": "hola"}, {"agent": "¿En qué te ayudo?"}],
+        "mode": "workflow",
     }
 
 
@@ -160,3 +162,10 @@ def test_error_response_uses_known_codes_only():
     assert error.model_dump(mode="json")["code"] == "session_expired"
     with pytest.raises(ValidationError):
         ErrorResponse.model_validate({"code": "teapot", "message": "x", "request_id": "req-1"})
+
+
+def test_a_request_may_name_the_flow_of_a_new_conversation_and_only_two_flows_exist():
+    assert ChatRequest.model_validate({"messages": [{"user": "hola"}], "mode": "agentic"}).mode == "agentic"
+    assert ChatRequest.model_validate({"messages": [{"user": "hola"}]}).mode is None
+    with pytest.raises(ValidationError):
+        ChatRequest.model_validate({"messages": [{"user": "hola"}], "mode": "something-else"})
