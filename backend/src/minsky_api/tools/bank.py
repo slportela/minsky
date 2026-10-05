@@ -14,7 +14,10 @@ Contracts and limits (B4):
   without ever seeing the fraud flag.
 - Writes return only after read-back of the stored row; open_dispute says whether it created the
   dispute or it already existed.
-- get_transactions limit is 1..100 (default 20), with optional customer-scoped filters.
+- get_transactions limit is 1..100 (default 20), with optional customer-scoped exact filters.
+- find_transactions is the customer's loose description (near amount, a day off, a misspelled merchant)
+  graded in code against that customer's own transactions: it returns one tier (exact, near, closest or none)
+  and how each charge differs. A near or closest charge is a proposal, never a selection.
 """
 
 from __future__ import annotations
@@ -27,6 +30,7 @@ from typing import Any, NoReturn, Protocol
 from minsky_api.config import get_settings
 from minsky_api.identity.errors import PermissionDenied
 from minsky_api.identity.session import require_customer
+from minsky_api.matching import SearchRequest, find_matches
 from minsky_api.policy.disputes import Decision, DisputeFacts, Route, TxnStatus, decide
 from minsky_api.policy.triage import CaseKind
 from minsky_api.store.complaint_stats import ComplaintStatsStore
@@ -46,6 +50,9 @@ from minsky_api.tools.schemas import (
     DisputeView,
     EvaluateDisputeArgs,
     EvaluateDisputeResult,
+    FindTransactionsArgs,
+    FindTransactionsResult,
+    FitView,
     GetDisputeArgs,
     GetDisputeResult,
     GetTransactionArgs,
@@ -53,6 +60,7 @@ from minsky_api.tools.schemas import (
     GetTransactionsArgs,
     GetTransactionsResult,
     HandoffView,
+    MatchedTransactionView,
     OpenDisputeArgs,
     OpenDisputeResult,
     TransactionView,
@@ -159,6 +167,36 @@ async def get_transactions(ctx: ToolContext, args: GetTransactionsArgs | None = 
     )
     result = GetTransactionsResult(transactions=tuple(TransactionView.model_validate(row) for row in rows))
     _audit(ctx, tool="get_transactions", args=audit_args, outcome="ok", customer_id=customer_id)
+    return result
+
+
+async def find_transactions(ctx: ToolContext, args: FindTransactionsArgs) -> FindTransactionsResult:
+    """The customer's own charges closest to what they described (matching.find_matches), with how each differs."""
+    audit_args = args.model_dump(mode="json", exclude_none=True)
+    customer_id = _require_customer(ctx, tool="find_transactions", args=audit_args)
+    rows = await _store(
+        ctx,
+        tool="find_transactions",
+        args=audit_args,
+        customer_id=customer_id,
+        call=lambda: TransactionStore(ctx.db).search_pool(customer_id),
+    )
+    found = find_matches(rows, SearchRequest(**args.model_dump()))
+    result = FindTransactionsResult(
+        tier=found.tier.value,
+        request=args,
+        matches=tuple(
+            MatchedTransactionView(
+                transaction=TransactionView.model_validate(match.transaction),
+                fits=tuple(FitView(criterion=fit.criterion, fit=fit.fit.value, found=fit.found) for fit in match.fits),
+            )
+            for match in found.matches
+        ),
+    )
+    # The tier is on the audit row: it says whether a near or closest charge was proposed.
+    _audit(
+        ctx, tool="find_transactions", args=audit_args, outcome="ok", reason=found.tier.value, customer_id=customer_id
+    )
     return result
 
 
@@ -410,6 +448,7 @@ __all__ = [
     "block_card",
     "create_handoff",
     "evaluate_dispute",
+    "find_transactions",
     "get_dispute",
     "get_transaction",
     "get_transactions",

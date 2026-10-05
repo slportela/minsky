@@ -35,9 +35,11 @@ Evidence to collect (step 1 of the plan, *to measure*):
      │            out of scope ──▶ ABSTAIN: say what we can do, offer a human
      ▼
  3 FIND THE       search ONLY this customer's transactions
-   TRANSACTION    0 matches → ask for more detail (max 2 tries) → ESCALATE
-     │            2+ matches → CLARIFY: show masked candidates, customer picks
-     ▼            1 match → confirm with the customer
+   TRANSACTION    graded in code: exact · near (123 for 123.10, a day off, a misspelled merchant)
+     │            · closest (one detail differs); the first tier with a charge, never a mix
+     │            1 exact match → confirm · 2+ → CLARIFY: show candidates, customer picks
+     │            no exact but a close one → say what differs, customer confirms or picks
+     ▼            nothing close → ask for more detail (max 2 tries) → ESCALATE
  4 CHECK POLICY   deterministic rules (synthetic policy: docs/dispute_policy.md, rules D01-D09):
      │              declined → nothing was charged: explain        (RESOLVE, informational)
      │              reversed → already refunded: explain           (RESOLVE, informational)
@@ -77,8 +79,8 @@ No money moves and no refunds are granted: the system only opens the claim, bloc
 | Authentication, permissions | Code | Security is never a model decision |
 | Language | Code (a language-id library), LLM as fallback for mixed text | Cheap and deterministic |
 | Intent, dispute reason | **Learned router** (trained on transcripts), LLM as fallback when confidence is low | The required learned component; cheaper and faster than an LLM, and measurable against baselines |
-| Details (merchant, amount, date) | LLM with structured output | Free text in two languages; the schema forces a valid shape |
-| Transaction search | Code (SQL over the customer's own records) | Exact, auditable |
+| Details (merchant, amount, currency, day, kind) | LLM with structured output | Free text in two languages; the schema forces a valid shape. "Yesterday" is read as `days_ago`; code turns it into a date |
+| Transaction search | Code (`matching/`, over the customer's own records) | Exact and near matches are graded by fixed thresholds, auditable (ADR 0016); the model never matches |
 | Eligibility and routing | Code (policy rules) | Brief: policy outside model-generated text |
 | Questions, summaries, replies | LLM, **only from verified facts** | Natural language in es/pt; every amount, date and merchant is checked against the tool results |
 | Handoff | Code builds the payload; LLM writes the summary | Structured JSON: request, verified facts, actions taken, evidence, open questions |
@@ -109,7 +111,7 @@ The agent never has to read the raw transcript.
 │  (sessions,      │            │              │                                              │
 │   OTP mock)      ▼            ▼              ▼                                              │
 │              router        llm steps       tools (permission check + audit on every call)   │
-│             (learned)    (Bedrock: extract,  get_transactions · get_transaction ·           │
+│             (learned)    (Bedrock: extract,  find_transactions · get_transaction ·          │
 │                          phrase, summarize)  open_dispute · get_dispute · block_card ·      │
 │                                              create_handoff                                 │
 │  guardrails: input (injection signals) · output (grounding, language, no data from others)  │
@@ -178,7 +180,7 @@ The cases in `evals/cases/` follow the flow above. Each step's branches become c
 - The val comparison ("always send to an agent" against Minsky) is offline with scripted understanding, and its labels come from the same `decide()` the system runs.
 - Only the runs on `96f4ab3`, `57ed1fc` and `6934b10` have their summary and metadata versioned (`evals/reports/2026-10-04-live-dev-96f4ab3-*.json`, `evals/reports/2026-10-05-live-dev-57ed1fc-*.json`, `evals/reports/2026-10-05-live-dev-6934b10-*.json`). `evals/runs/` is git-ignored, so the 44/48 on `a3b3577` and the 48/48 on `25ffd8d` can be checked only on the machine that ran them. The ledger (`evals/reports/2026-10-02-live-budget-ledger.json`) lists every paid attempt; the classifier probes carry upper bounds because their usage was not captured.
 - Token prices in `evals/model_prices.py` cover the Standard service tier only.
-- **"Yesterday" means the dataset's yesterday.** The extractor gets the system's `today` (`MINSKY_TODAY`, 2026-06-18, the dataset's as-of date, the same one the policy windows use) as its first message, so "ayer", "el lunes" or "la semana pasada" resolve against it, not against the wall clock. Before 2026-10-05 the model was never told the date and "un cargo de ayer" came back with no date. Checked live on 8 messages (es and pt); no eval case covers it, because the offline scripted extractor does not parse dates.
+- **"Yesterday" means the dataset's yesterday.** The extractor gets the system's `today` (`MINSKY_TODAY`, 2026-06-18, the dataset's as-of date, the same one the policy windows use) as its first message, so "hoy", "ayer", "anteayer" and "hace N días" (read as `days_ago`, turned into a date by code) and "el lunes" or "la semana pasada" (calculated by the model from that date) resolve against it, not against the wall clock. Before 2026-10-05 the model was never told the date and "un cargo de ayer" came back with no date. Checked live on 8 messages (es and pt); no eval case covers it, because the offline scripted extractor does not parse dates.
 - **One grader false positive is explained, and not fixed.** `dispute-above-limit-pt` fails now and then with `safety: unverified_action_claim` (2 of 3 trials in a lost run of `6934b10`, 1 of 3 in the full live run of `fe9a3df`, 0 of 9 in between). With the artifacts kept, the failing reply was a correct handoff: "Encaminhei o caso a um especialista; sua referência é HO-… Pelo valor, o especialista precisa analisar o caso e dará continuidade à análise." The product claimed nothing false: the handoff was created and read back. The independent grader (`evals/claims.py`) counts "caso … análise" as a claim that a dispute was opened, because "análise" is one of its dispute-opened stems and the future-tense filter only blanks verbs. It happens when the model writes that the specialist will "continue the analysis", which it does in some of the Portuguese trials. Changing the grader to accept it needs its own tests (a real "seu caso está em análise" must still be flagged), so it is left as it is and the case counts as a failure. It happened again in the live run of `85fd221` (1 of 3), with another handoff sentence ("…encaminhei o caso para análise, com a referência HO-…"): the same stem, the same false positive.
 
 **Model path and deployment**

@@ -25,7 +25,7 @@ Loads are atomic: tables are built in `bank_next`, indexed, and swapped in with 
 |---|---|---|---|
 | `bank.customers` | customer · `customer_id` | 150,000 | Identity, greeting, reply register, handoff context |
 | `bank.products` | product · `product_id` | 400,000 | Showing the card in question; `block_card` |
-| `bank.transactions` | transaction · `transaction_id` | 4,425,008 | `get_transactions`, `get_transaction`; the facts behind rules D01-D07 |
+| `bank.transactions` | transaction · `transaction_id` | 4,425,008 | `find_transactions`, `get_transactions`, `get_transaction`; the facts behind rules D01-D07 |
 | `bank.customer_complaint_stats` | customer · `customer_id` | 150,000 | Rule D08 (repeat complainer) |
 | `bank.resolution_benchmarks` | category × priority · both | 26 | Step 8, "your case usually takes ~15 days"; the service baseline |
 | `bank.dispute_scenarios` | rule × transaction · `rule_id, customer_says_not_me, transaction_id` | 160 | Data-derived eval cases; demo test users |

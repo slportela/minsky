@@ -124,6 +124,26 @@ _NOT_ME_PHRASES = (
 )
 
 
+_APPROXIMATE = ("aproximadamente", "más o menos", "mas o menos", "cerca de", "alrededor de")
+_DAYS_AGO = (("anteayer", 2), ("ayer", 1), ("hoy", 0))
+_CURRENCIES = (("dólares", "USD"), ("dolares", "USD"), ("usd", "USD"), ("cop", "COP"), ("ars", "ARS"))
+_KINDS = (
+    ("retiro", "Withdrawal"),
+    ("transferencia", "Transfer"),
+    ("depósito", "Deposit"),
+    ("pago", "Payment"),
+    ("compra", "Purchase"),
+)
+_CATEGORIES = (("comida", "Food"), ("salud", "Health"), ("transporte", "Transport"), ("servicios", "Services"))
+# A merchant the customer typed, as a model would extract it: the capitalized words after "en".
+_TYPED_MERCHANT = re.compile(r"\ben ([A-ZÁÉÍÓÚÑ][\wáéíóúñ]*(?: [A-ZÁÉÍÓÚÑ][\wáéíóúñ]*)*)")
+
+
+def _first_of(table: tuple[tuple[str, Any], ...], text: str) -> Any:
+    folded = text.casefold()
+    return next((value for word, value in table if re.search(rf"\b{word}\b", folded)), None)
+
+
 def _details_from_turn(text: str, facts: WorldFacts) -> DisputeDetails:
     transaction_id = None
     if facts.other_transaction_id and facts.other_transaction_id in text:
@@ -131,11 +151,21 @@ def _details_from_turn(text: str, facts: WorldFacts) -> DisputeDetails:
     elif facts.transaction_id and facts.transaction_id in text:
         transaction_id = facts.transaction_id
     merchant = facts.merchant if facts.merchant and facts.merchant.casefold() in text.casefold() else None
+    if merchant is None and (typed := _TYPED_MERCHANT.search(text)):
+        merchant = typed[1]
     match = re.search(r"(?<![\w-])(\d+(?:[.,]\d{1,2})?)(?![\w-])", text)
     amount = Decimal(match[1].replace(",", ".")) if match else None
     says_not_me = any(phrase in text.casefold() for phrase in _NOT_ME_PHRASES)
     return DisputeDetails(
-        merchant=merchant, amount=amount, customer_says_not_me=says_not_me, transaction_id=transaction_id
+        merchant=merchant,
+        amount=amount,
+        currency=_first_of(_CURRENCIES, text),
+        approximate=True if any(phrase in text.casefold() for phrase in _APPROXIMATE) else None,
+        days_ago=_first_of(_DAYS_AGO, text),
+        transaction_type=_first_of(_KINDS, text),
+        category=_first_of(_CATEGORIES, text),
+        customer_says_not_me=says_not_me,
+        transaction_id=transaction_id,
     )
 
 
@@ -269,7 +299,7 @@ def _patched(
         stack.enter_context(patch.object(chat_api, "run_turn", traced_run_turn))
         for tool in (
             "get_transaction",
-            "get_transactions",
+            "find_transactions",
             "evaluate_dispute",
             "open_dispute",
             "get_dispute",
