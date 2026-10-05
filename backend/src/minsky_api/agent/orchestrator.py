@@ -455,6 +455,11 @@ async def _phase_clarify(ctx: ToolContext, state: ConversationState, text: str, 
             state.selected_type = txn.transaction_type
             return _confirm_txn(state, txn)
     details = await extract_dispute_details(llm, text)
+    return await _search_with(ctx, state, details, llm)
+
+
+async def _search_with(ctx: ToolContext, state: ConversationState, details: DisputeDetails, llm: LLM) -> str:
+    """Look for the charge the customer described, and ask what is still missing or which one it is."""
     state.customer_says_not_me = state.customer_says_not_me or details.customer_says_not_me
     if details.out_of_scope:
         return _offer_handoff(state, "out_of_scope")
@@ -550,6 +555,16 @@ async def _phase_offer_handoff(ctx: ToolContext, state: ConversationState, text:
         state.search_details = DisputeDetails()
         state.acts.append("clarify")
         return handoff_offer_declined(_lang(state))
+    # Neither yes nor no. The offer asked for a concrete charge, so a reply that gives one is the customer
+    # declining the agent and doing what was asked: no handoff, and the search goes on with what they said.
+    details = await extract_dispute_details(llm, text)
+    if not details.out_of_scope and _has_search_filters(details):
+        state.phase = Phase.CLARIFY
+        state.pending_question = None
+        state.clarify_count = 0
+        state.unclear_count = 0
+        state.search_details = DisputeDetails()
+        return await _search_with(ctx, state, details, llm)
     return await _unclear_reply(ctx, state, llm)
 
 

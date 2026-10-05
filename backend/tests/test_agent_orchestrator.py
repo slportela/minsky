@@ -1460,7 +1460,7 @@ def test_a_third_offer_is_never_made_and_the_number_is_a_setting(monkeypatch: py
 
 def test_replies_that_are_not_yes_or_no_to_the_offer_end_without_a_case():
     ctx, state = _offered()
-    llm = FakeLLM(_details())
+    llm = FakeLLM(DisputeDetails())  # nothing about a charge in these replies
     for words in ("mmm", "no sé"):
         state, _ = asyncio.run(run_turn(state, words, ctx, llm))  # type: ignore[arg-type]
         assert state.phase == Phase.OFFER_HANDOFF
@@ -1492,3 +1492,32 @@ def test_a_policy_handoff_needs_the_confirmed_charge_and_has_it():
     assert not state.txn_confirmed and not ctx.cases.list_cases()  # asked which charge; nothing sent yet
     state, _ = asyncio.run(run_turn(state, "sí", ctx, llm))  # type: ignore[arg-type]
     assert state.txn_confirmed and state.phase == Phase.CARD_OFFER
+
+
+def test_answering_the_offer_with_the_charge_declines_the_agent_and_goes_on():
+    """Found by hand on the deployed demo: offered an agent, the customer answered with the charge (what the offer
+    asked for) and was told that only sí or no works."""
+    ctx, state = _offered()
+    llm = FakeLLM(_details(merchant="Cafe", amount=Decimal("25.00")))
+    state, reply = asyncio.run(run_turn(state, "Quiero reclamar un cargo de 25.00 USD en Cafe", ctx, llm))  # type: ignore[arg-type]
+    assert state.phase == Phase.CONFIRM_TXN and "Cafe" in reply
+    assert not state.handoff_accepted and not ctx.cases.list_cases()
+    assert not any(a.tool == "create_handoff" for a in ctx.cases.list_audit())
+    assert state.handoff_offers == 1 and state.unclear_count == 0
+    state, _ = asyncio.run(run_turn(state, "sí", ctx, llm))  # type: ignore[arg-type]
+    assert state.phase == Phase.CONFIRM_ACT and state.txn_confirmed
+
+
+def test_a_charge_that_is_not_found_after_the_offer_asks_for_it_again_and_does_not_hand_off():
+    ctx, state = _offered(_ctx(exec_rows=[]))
+    llm = FakeLLM(_details(merchant="Nope", amount=Decimal("9.99")))
+    state, reply = asyncio.run(run_turn(state, "un cargo de 9.99 en Nope", ctx, llm))  # type: ignore[arg-type]
+    assert state.phase == Phase.CLARIFY and reply == clarify_fallback("es", None)
+    assert not ctx.cases.list_cases()
+
+
+def test_an_unclear_reply_with_no_charge_in_it_is_still_asked_again_after_the_offer():
+    ctx, state = _offered()
+    state, reply = asyncio.run(run_turn(state, "mmm no sé", ctx, FakeLLM(DisputeDetails())))  # type: ignore[arg-type]
+    assert state.phase == Phase.OFFER_HANDOFF and state.unclear_count == 1
+    assert reply.endswith("En esta parte del proceso solo puedes responder «sí» o «no».")
