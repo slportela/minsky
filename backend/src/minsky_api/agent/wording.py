@@ -6,6 +6,7 @@ written here. Rule ids stay internal (audit, traces, console); customers hear th
 
 from __future__ import annotations
 
+import re
 from datetime import date
 from decimal import Decimal
 
@@ -146,6 +147,31 @@ def with_yes_no_hint(text: str, language: str) -> str:
     return f"{text.rstrip()} {hint}"
 
 
+_ONLY_YES_NO = {
+    "es": "En esta parte del proceso solo puedes responder «sí» o «no».",
+    "pt": "Nesta parte do processo você só pode responder «sim» ou «não».",
+}
+# A closing "Responde sí o no." the model (or the original question) already carries: the notice says it better.
+_CLOSING_YES_NO = re.compile(
+    r"\s*(?:responde|responda)\s+(?:sí|si|sim)\s+(?:o|ou)\s+(?:no|não|nao)\s*[.!]?\s*$", re.IGNORECASE
+)
+
+
+def with_only_yes_no(text: str, language: str) -> str:
+    """The reply asked the customer again: code always says that only a yes or a no works at this step.
+
+    The model rephrases the pending question; it is not trusted to say how to answer, which is exactly what
+    went missing when a customer answered "lo reconozco" and was asked for more details instead. A closing
+    "Responde sí o no" is replaced by the notice, and a text that already ends with the notice is left alone.
+    """
+    notice = _ONLY_YES_NO[_lang(language)]
+    body = text.rstrip()
+    if body.endswith(notice):
+        return body
+    body = _CLOSING_YES_NO.sub("", body).rstrip()
+    return f"{body} {notice}" if body else notice
+
+
 def with_candidates(text: str, candidates: str) -> str:
     """The model asks which transaction; code lists the options, so the customer always sees them exactly.
 
@@ -182,7 +208,9 @@ def safe_sentence(act: str, language: str, facts: dict[str, object]) -> str:
     if act == "clarify":
         return clarify_fallback(language, candidates if isinstance(candidates, str) else None)
     if act == "ask_again":
-        return "Não ficou claro. Pode responder sim ou não?" if pt else "No me quedó claro. ¿Puedes responder sí o no?"
+        pending = facts.get("pending_question")
+        lead = "Não ficou claro." if pt else "No me quedó claro."
+        return f"{lead} {pending}" if isinstance(pending, str) and pending else lead
     if act == "abort":
         return (
             "Entendido, não vou fazer nada com este caso. Se precisar de algo mais, escreva aqui."

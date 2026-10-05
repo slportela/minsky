@@ -1077,7 +1077,10 @@ def test_a_refused_ask_again_is_a_code_written_one():
     llm = _NthSpeech(_details(), n=2, speech=_refused("ask_again"), repeat=2)
     state, reply = _turns(llm, _ctx(), "Cafe 25", "tal vez")
     assert state.phase == Phase.CONFIRM_TXN
-    assert reply == safe_sentence("ask_again", "es", {})
+    # The code-written sentence repeats the question that was asked and always says how to answer.
+    assert reply.startswith("No me quedó claro.")
+    assert state.pending_question and state.pending_question.rstrip(". ").split("Responde")[0].strip() in reply
+    assert reply.endswith("En esta parte del proceso solo puedes responder «sí» o «no».")
 
 
 def test_a_refused_open_confirmation_keeps_the_code_written_question():
@@ -1130,3 +1133,76 @@ def test_the_transaction_question_ends_with_a_code_owned_yes_or_no_hint_exactly_
     assert state.phase == Phase.CONFIRM_TXN
     assert reply.endswith("Responde sí o no.") and reply.count("sí o no") == 1
     assert state.pending_question == reply  # the classifier sees the question the customer saw
+
+
+# ---- asking again: the model rephrases, code says that only yes or no works here ------------------------------
+
+_ONLY_ES = "En esta parte del proceso solo puedes responder «sí» o «no»."
+_ONLY_PT = "Nesta parte do processo você só pode responder «sim» ou «não»."
+
+
+def test_a_natural_reply_to_the_transaction_question_is_told_how_to_answer_and_the_conversation_can_go_on():
+    """The loop found by hand on the deployed demo: "lo reconozco", "el de antes" and a retyped claim each got a
+    request for more details, and nothing ever told the customer that only sí or no moves this step on."""
+    ctx = _ctx()
+    state = _state()
+    llm = FakeLLM(_details(), decisions=["unclear", "unclear", "unclear", "unclear", "yes"])
+    state, _ = asyncio.run(run_turn(state, "Cafe 25", ctx, llm))  # type: ignore[arg-type]
+    assert state.phase == Phase.CONFIRM_TXN
+    pending = state.pending_question
+    assert pending
+    for natural in ("lo reconozco", "el de antes", "un cargo de 25.00 USD en Cafe del 2026-06-10", "Cafe 25"):
+        state, reply = asyncio.run(run_turn(state, natural, ctx, llm))  # type: ignore[arg-type]
+        assert reply.endswith(_ONLY_ES), reply
+        assert state.phase == Phase.CONFIRM_TXN
+        assert state.acts[-1] == "ask_again"
+        assert state.pending_question == pending  # every further reply is asked the same thing again
+        assert not any(a.tool == "open_dispute" for a in ctx.cases.list_audit())
+    state, _ = asyncio.run(run_turn(state, "sí", ctx, llm))  # type: ignore[arg-type]
+    assert state.phase == Phase.CONFIRM_ACT  # a plain yes still moves on
+
+
+def test_the_notice_is_there_even_if_the_model_asks_for_more_details():
+    """The model is not trusted to say how to answer: this is the reply that went out in the loop."""
+    ctx = _ctx()
+    state = _state()
+    wrong = Speech(act="ask_again", text="¿Puedes contarme un poco más sobre el cargo que no reconoces?")
+    llm = _NthSpeech(_details(), n=2, speech=wrong, repeat=1, decisions=["unclear"])
+    state, _ = asyncio.run(run_turn(state, "Cafe 25", ctx, llm))  # type: ignore[arg-type]
+    state, reply = asyncio.run(run_turn(state, "lo reconozco", ctx, llm))  # type: ignore[arg-type]
+    assert reply == f"{wrong.text} {_ONLY_ES}"
+
+
+def test_a_model_closing_instruction_is_replaced_by_the_notice():
+    ctx = _ctx()
+    state = _state()
+    rephrased = Speech(act="ask_again", text="¿Es ese el cargo al que te refieres? Responde sí o no.")
+    llm = _NthSpeech(_details(), n=2, speech=rephrased, repeat=1, decisions=["unclear"])
+    state, _ = asyncio.run(run_turn(state, "Cafe 25", ctx, llm))  # type: ignore[arg-type]
+    state, reply = asyncio.run(run_turn(state, "ese mismo", ctx, llm))  # type: ignore[arg-type]
+    assert reply == f"¿Es ese el cargo al que te refieres? {_ONLY_ES}"
+
+
+def test_a_refused_rephrasing_falls_back_to_the_pending_question_with_the_notice():
+    ctx = _ctx()
+    state = _state()
+    refused = Speech(act="ask_again", text="¿Seguro? Se te cobrarán 900 USD de comisión si no respondes.")
+    llm = _NthSpeech(_details(), n=2, speech=refused, repeat=2, decisions=["unclear"])
+    state, _ = asyncio.run(run_turn(state, "Cafe 25", ctx, llm))  # type: ignore[arg-type]
+    pending = state.pending_question
+    assert pending
+    state, reply = asyncio.run(run_turn(state, "lo reconozco", ctx, llm))  # type: ignore[arg-type]
+    assert "900" not in reply
+    assert reply.startswith("No me quedó claro.")
+    assert reply.endswith(_ONLY_ES)
+    assert "Cafe" in reply  # the question that was asked is repeated, not replaced
+
+
+def test_the_notice_follows_the_language_of_the_conversation():
+    ctx = _ctx()
+    state = _state()
+    llm = FakeLLM(_details(), decisions=["unclear"])
+    state, _ = asyncio.run(run_turn(state, "Quero disputar uma cobrança de 25 dólares no Cafe", ctx, llm))  # type: ignore[arg-type]
+    assert state.language == "pt"
+    state, reply = asyncio.run(run_turn(state, "reconheço", ctx, llm))  # type: ignore[arg-type]
+    assert reply.endswith(_ONLY_PT), reply

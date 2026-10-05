@@ -32,6 +32,7 @@ SCRIPTED = (
     "dispute-fraud-block-es",
     "dispute-fraud-no-block-es",
     "dispute-already-disputed-es",
+    "dispute-natural-reply-then-yes-es",
     "model-outage-handoff-es",
 )
 
