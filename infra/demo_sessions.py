@@ -38,19 +38,27 @@ STAFF = ("ana.fraude", "luis.disputas")
 def _pick(con: duckdb.DuckDBPyConnection, rule: str, not_me: bool) -> tuple | None:
     # Prefer charges a customer can describe: on a card (so the fraud path shows the block offer), with a
     # merchant name, recent.
+    # Parquet paths are bound as parameters (not spliced into the SQL text) so a checkout path containing
+    # a quote character can't break the query.
     return con.execute(
-        f"""
+        """
         select s.customer_id, s.transaction_id, t.merchant_name, t.amount, t.currency, t.transaction_type,
                t.transaction_date
-        from '{GOLD}/dispute_scenarios.parquet' s
-        join '{GOLD}/transactions.parquet' t using (transaction_id)
-        join '{GOLD}/products.parquet' p on p.product_id = t.product_id
+        from read_parquet(?) s
+        join read_parquet(?) t using (transaction_id)
+        join read_parquet(?) p on p.product_id = t.product_id
         where s.rule_id = ? and s.customer_says_not_me = ?
         order by p.is_card is not true, t.merchant_name is null,
                  t.transaction_type not in ('Purchase', 'Withdrawal'), t.transaction_date desc, s.transaction_id
         limit 1
         """,
-        [rule, not_me],
+        [
+            str(GOLD / "dispute_scenarios.parquet"),
+            str(GOLD / "transactions.parquet"),
+            str(GOLD / "products.parquet"),
+            rule,
+            not_me,
+        ],
     ).fetchone()
 
 

@@ -4,6 +4,12 @@
 #   cp .env.evaluator.example .env   # set MINSKY_LLM_API_KEY
 #   docker compose -f compose.yaml -f compose.evaluator.yaml up --build
 #
+# A distinct project name keeps this stack (and its postgres volume) separate from a `make up`
+# dev stack on the same machine: without it both runs share compose.yaml's `minsky_pgdata` volume,
+# so on a machine with a pre-existing dev volume the init script below never runs and bank.* stays
+# empty. `down -v` (below) only resets this project's own volume, not the dev one.
+name: minsky-evaluator
+
 services:
   postgres:
     volumes:

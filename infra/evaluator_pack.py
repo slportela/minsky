@@ -23,6 +23,12 @@ from pathlib import Path
 
 import duckdb
 
+# infra/ has no __init__.py: this is a plain sibling import, which works because `python
+# infra/evaluator_pack.py` puts this file's directory first on sys.path. Reused instead of
+# duplicated so the two scripts can't silently drift (SCENARIOS, STAFF, the scenario picker, the
+# es/pt opening messages).
+from demo_sessions import SCENARIOS, STAFF, _opening, _pick
+
 ROOT = Path(__file__).resolve().parents[1]
 GOLD = ROOT / "data" / "lake" / "gold"
 OUT_DIR = ROOT / "data" / "evaluator"
@@ -30,18 +36,10 @@ SLICE_PATH = OUT_DIR / "bank_slice.sql.gz"
 ENV_PATH = ROOT / ".env.evaluator.example"
 EXPIRES = "2026-10-17T00:00:00+00:00"
 AS_OF = date(2026, 6, 18)
-
-# Keep in sync with infra/demo_sessions.py
-SCENARIOS = (
-    ("D09-eligible", False, "case opened automatically"),
-    ("D01-declined-not-charged", False, "nothing to dispute: the payment was declined"),
-    ("D02-already-reversed", False, "nothing to dispute: already refunded"),
-    ("D06-possible-fraud", True, "customer says it wasn't them: card block offer + fraud team"),
-    ("D07-above-auto-limit", False, "amount above USD 500: dispute agent"),
-    ("D08-repeat-complainer", False, "repeat complainer: dispute agent"),
-    ("D05-outside-window", False, "older than 120 days: explained, agent offered"),
-)
-STAFF = ("ana.fraude", "luis.disputas")
+# ops.load_runs needs a loaded_at; pinned to AS_OF (not wall-clock) so the generated SQL stays
+# byte-identical across reruns with no data change.
+LOADED_AT = datetime(2026, 6, 18)
+RUN_ID = "evaluator-pack"
 
 
 @dataclass(frozen=True)
@@ -85,36 +83,19 @@ def _staff_token(agent_id: str) -> str:
     return f"staff-{agent_id.split('.')[0]}-evaluator"
 
 
-def _opening(not_me: bool, merchant: str | None, amount: float, currency: str, when: datetime) -> tuple[str, str]:
-    where_es = f" en {merchant}" if merchant else ""
-    where_pt = f" em {merchant}" if merchant else ""
-    day = when.date().isoformat()
-    if not_me:
-        return (
-            f"Tengo un cargo de {amount:.2f} {currency}{where_es} del {day} que yo no hice.",
-            f"Tenho uma cobrança de {amount:.2f} {currency}{where_pt} do dia {day} que eu não fiz.",
-        )
-    return (
-        f"Quiero reclamar un cargo de {amount:.2f} {currency}{where_es} del {day}, el monto no es correcto.",
-        f"Quero contestar uma cobrança de {amount:.2f} {currency}{where_pt} do dia {day}, o valor está errado.",
-    )
+def _check_unique(tokens: list[str], *, what: str) -> None:
+    """Fail loudly (AGENTS.md: no silent fallbacks) instead of letting a collision silently drop a
+    credential from the sessions dict built in _write_env."""
+    seen: dict[str, int] = {}
+    for t in tokens:
+        seen[t] = seen.get(t, 0) + 1
+    dupes = sorted(t for t, n in seen.items() if n > 1)
+    if dupes:
+        raise SystemExit(f"duplicate {what} token(s): {', '.join(dupes)} (fix SCENARIOS/STAFF or the token derivation)")
 
 
-def _pick(con: duckdb.DuckDBPyConnection, rule: str, not_me: bool) -> tuple | None:
-    return con.execute(
-        f"""
-        select s.customer_id, s.transaction_id, t.merchant_name, t.amount, t.currency, t.transaction_type,
-               t.transaction_date
-        from '{GOLD}/dispute_scenarios.parquet' s
-        join '{GOLD}/transactions.parquet' t using (transaction_id)
-        join '{GOLD}/products.parquet' p on p.product_id = t.product_id
-        where s.rule_id = ? and s.customer_says_not_me = ?
-        order by p.is_card is not true, t.merchant_name is null,
-                 t.transaction_type not in ('Purchase', 'Withdrawal'), t.transaction_date desc, s.transaction_id
-        limit 1
-        """,
-        [rule, not_me],
-    ).fetchone()
+def _parquet(name: str) -> str:
+    return str(GOLD / f"{name}.parquet")
 
 
 def _synthetic_rows() -> list[DemoRow]:
@@ -235,15 +216,15 @@ def _rows_from_gold() -> list[DemoRow]:
             raise SystemExit(f"no gold scenario for {rule} (customer_says_not_me={not_me})")
         customer_id, txn_id, merchant, amount, currency, _type, when = picked
         detail = con.execute(
-            f"""
+            """
             select t.product_id, t.transaction_status, t.amount_usd, t.is_fraud,
                    coalesce(s.is_repeat_complainer, false), coalesce(p.is_card, false)
-            from '{GOLD}/transactions.parquet' t
-            left join '{GOLD}/customer_complaint_stats.parquet' s using (customer_id)
-            left join '{GOLD}/products.parquet' p using (product_id)
+            from read_parquet(?) t
+            left join read_parquet(?) s using (customer_id)
+            left join read_parquet(?) p using (product_id)
             where t.transaction_id = ?
             """,
-            [txn_id],
+            [_parquet("transactions"), _parquet("customer_complaint_stats"), _parquet("products"), txn_id],
         ).fetchone()
         if detail is None:
             raise SystemExit(f"transaction {txn_id} missing from gold")
@@ -271,13 +252,90 @@ def _rows_from_gold() -> list[DemoRow]:
     return rows
 
 
-def _insert(table: str, cols: list[str], ddl: str, data: list[tuple]) -> str:
-    lines = [f"create table bank.{table} (\n{ddl}\n);"]
+# Each table's column list is the single source of truth: it drives the SELECT list read from
+# gold, the dict keys built in _sql_from_synthetic, and the name list _insert validates every row
+# against. A column added, renamed or reordered in one place now fails loudly instead of silently
+# shifting values into the wrong column.
+CUSTOMERS_COLS = ["customer_id", "first_name", "country", "segment", "customer_status", "detected_accent"]
+PRODUCTS_COLS = [
+    "product_id",
+    "customer_id",
+    "product_type",
+    "is_card",
+    "product_number_last4",
+    "currency",
+    "product_status",
+    "opening_date",
+    "expiration_date",
+    "has_linked_app",
+]
+TRANSACTIONS_COLS = [
+    "transaction_id",
+    "customer_id",
+    "product_id",
+    "transaction_date",
+    "process_date",
+    "transaction_type",
+    "transaction_category",
+    "amount",
+    "currency",
+    "amount_usd",
+    "amount_usd_source",
+    "channel",
+    "merchant_name",
+    "merchant_category",
+    "transaction_country",
+    "transaction_city",
+    "transaction_status",
+    "response_code",
+    "is_fraud",
+    "fraud_score",
+]
+STATS_COLS = ["customer_id", "complaints_total", "complaints_last_90d", "last_complaint_at", "is_repeat_complainer"]
+BENCHMARKS_COLS = [
+    "category",
+    "priority",
+    "cases",
+    "resolved_cases",
+    "median_resolution_days",
+    "p75_resolution_days",
+    "sla_breach_rate",
+    "rejection_rate",
+]
+SCENARIOS_COLS = [
+    "rule_id",
+    "customer_says_not_me",
+    "transaction_id",
+    "route",
+    "offer_card_block",
+    "customer_id",
+    "transaction_status",
+    "transaction_date",
+    "days_before_as_of",
+    "amount_usd",
+    "is_fraud",
+    "fraud_score",
+    "is_repeat_complainer",
+]
+# Mirrors the ops.load_runs contract pipeline/load_gold.py writes, so pipeline/check_freshness.py
+# and anything else that reads "wherever bank.* exists, ops.load_runs exists too" also works here.
+LOAD_RUNS_COLS = ["run_id", "loaded_at", "table_name", "row_count", "git_sha"]
+
+
+def _insert(table: str, cols: list[str], ddl: str, data: list[dict[str, object]], *, schema: str = "bank") -> str:
+    lines = [f"create table {schema}.{table} (\n{ddl}\n);"]
     if not data:
         return "\n".join(lines)
+    for row in data:
+        missing = [c for c in cols if c not in row]
+        extra = [k for k in row if k not in cols]
+        if missing or extra:
+            raise SystemExit(
+                f"{schema}.{table}: row {sorted(row)} does not match columns {cols} (missing={missing}, extra={extra})"
+            )
     col_names = ", ".join(cols)
-    values = ",\n  ".join("(" + ", ".join(_sql_str(v) for v in row) + ")" for row in data)
-    lines.append(f"insert into bank.{table} ({col_names}) values\n  {values};")
+    values = ",\n  ".join("(" + ", ".join(_sql_str(row[c]) for c in cols) + ")" for row in data)
+    lines.append(f"insert into {schema}.{table} ({col_names}) values\n  {values};")
     return "\n".join(lines)
 
 
@@ -285,108 +343,98 @@ def _fetch_gold(con: duckdb.DuckDBPyConnection, sql: str, params: list[object]) 
     return list(con.execute(sql, params).fetchall())
 
 
+def _rows(cols: list[str], tuples: list[tuple]) -> list[dict[str, object]]:
+    """Zip fetched/built tuples into named rows. strict=True catches an arity drift between a
+    SELECT list (or a synthetic tuple) and `cols` immediately, instead of inside _insert."""
+    return [dict(zip(cols, row, strict=True)) for row in tuples]
+
+
 def _sql_from_gold(rows: list[DemoRow]) -> str:
     con = duckdb.connect()
     customer_ids = [r.customer_id for r in rows]
     placeholders = ", ".join("?" for _ in customer_ids)
-    customers = _fetch_gold(
-        con,
-        f"select customer_id, first_name, country, segment, customer_status, detected_accent "
-        f"from '{GOLD}/customers.parquet' where customer_id in ({placeholders})",
-        customer_ids,
-    )
-    products = _fetch_gold(
-        con,
-        f"select product_id, customer_id, product_type, is_card, product_number_last4, currency, "
-        f"product_status, opening_date, expiration_date, has_linked_app "
-        f"from '{GOLD}/products.parquet' where customer_id in ({placeholders})",
-        customer_ids,
-    )
-    transactions = _fetch_gold(
-        con,
-        f"select transaction_id, customer_id, product_id, transaction_date, process_date, transaction_type, "
-        f"transaction_category, amount, currency, amount_usd, amount_usd_source, channel, merchant_name, "
-        f"merchant_category, transaction_country, transaction_city, transaction_status, response_code, "
-        f"is_fraud, fraud_score "
-        f"from '{GOLD}/transactions.parquet' where customer_id in ({placeholders})",
-        customer_ids,
-    )
-    stats = _fetch_gold(
-        con,
-        f"select customer_id, complaints_total, complaints_last_90d, last_complaint_at, is_repeat_complainer "
-        f"from '{GOLD}/customer_complaint_stats.parquet' where customer_id in ({placeholders})",
-        customer_ids,
-    )
-    scenarios = _fetch_gold(
-        con,
-        f"select rule_id, customer_says_not_me, transaction_id, route, offer_card_block, customer_id, "
-        f"transaction_status, transaction_date, days_before_as_of, amount_usd, is_fraud, fraud_score, "
-        f"is_repeat_complainer from '{GOLD}/dispute_scenarios.parquet' where customer_id in ({placeholders})",
-        customer_ids,
-    )
-    benchmarks = _fetch_gold(
-        con,
-        f"select category, priority, cases, resolved_cases, median_resolution_days, p75_resolution_days, "
-        f"sla_breach_rate, rejection_rate from '{GOLD}/resolution_benchmarks.parquet'",
-        [],
-    )
+
+    def fetch(parquet: str, cols: list[str], *, filter_by_customer: bool = True) -> list[dict[str, object]]:
+        sql = f"select {', '.join(cols)} from read_parquet(?)"
+        params: list[object] = [_parquet(parquet)]
+        if filter_by_customer:
+            sql += f" where customer_id in ({placeholders})"
+            params.extend(customer_ids)
+        return _rows(cols, _fetch_gold(con, sql, params))
+
+    customers = fetch("customers", CUSTOMERS_COLS)
+    products = fetch("products", PRODUCTS_COLS)
+    transactions = fetch("transactions", TRANSACTIONS_COLS)
+    stats = fetch("customer_complaint_stats", STATS_COLS)
+    scenarios = fetch("dispute_scenarios", SCENARIOS_COLS)
+    benchmarks = fetch("resolution_benchmarks", BENCHMARKS_COLS, filter_by_customer=False)
     return _assemble_sql(customers, products, transactions, stats, benchmarks, scenarios)
 
 
 def _sql_from_synthetic(rows: list[DemoRow]) -> str:
-    customers = [
-        (r.customer_id, f"Eval{i}", "Mexico", "Mass", "Active", "mexican") for i, r in enumerate(rows, start=1)
-    ]
-    products = [
-        (
-            r.product_id,
-            r.customer_id,
-            "Credit Card",
-            True,
-            "4242",
-            r.currency,
-            "Active",
-            date(2024, 1, 1),
-            date(2028, 1, 1),
-            True,
-        )
-        for r in rows
-    ]
-    transactions = [
-        (
-            r.transaction_id,
-            r.customer_id,
-            r.product_id,
-            r.when,
-            r.when.date(),
-            "Purchase",
-            "Retail",
-            r.amount,
-            r.currency,
-            r.amount_usd,
-            "native_usd",
-            "POS",
-            r.merchant,
-            "Retail",
-            "Mexico",
-            "CDMX",
-            r.status,
-            "00",
-            r.is_fraud,
-            Decimal("10.0") if r.is_fraud else Decimal("1.0"),
-        )
-        for r in rows
-    ]
-    stats = [
-        (
-            r.customer_id,
-            3 if r.is_repeat else 0,
-            2 if r.is_repeat else 0,
-            datetime(2026, 5, 1, 10, 0, 0) if r.is_repeat else None,
-            r.is_repeat,
-        )
-        for r in rows
-    ]
+    customers = _rows(
+        CUSTOMERS_COLS,
+        [(r.customer_id, f"Eval{i}", "Mexico", "Mass", "Active", "mexican") for i, r in enumerate(rows, start=1)],
+    )
+    products = _rows(
+        PRODUCTS_COLS,
+        [
+            (
+                r.product_id,
+                r.customer_id,
+                "Credit Card",
+                True,
+                "4242",
+                r.currency,
+                "Active",
+                date(2024, 1, 1),
+                date(2028, 1, 1),
+                True,
+            )
+            for r in rows
+        ],
+    )
+    transactions = _rows(
+        TRANSACTIONS_COLS,
+        [
+            (
+                r.transaction_id,
+                r.customer_id,
+                r.product_id,
+                r.when,
+                r.when.date(),
+                "Purchase",
+                "Retail",
+                r.amount,
+                r.currency,
+                r.amount_usd,
+                "native_usd",
+                "POS",
+                r.merchant,
+                "Retail",
+                "Mexico",
+                "CDMX",
+                r.status,
+                "00",
+                r.is_fraud,
+                Decimal("10.0") if r.is_fraud else Decimal("1.0"),
+            )
+            for r in rows
+        ],
+    )
+    stats = _rows(
+        STATS_COLS,
+        [
+            (
+                r.customer_id,
+                3 if r.is_repeat else 0,
+                2 if r.is_repeat else 0,
+                datetime(2026, 5, 1, 10, 0, 0) if r.is_repeat else None,
+                r.is_repeat,
+            )
+            for r in rows
+        ],
+    )
     route = {
         "D09-eligible": "open_dispute",
         "D01-declined-not-charged": "inform",
@@ -396,39 +444,58 @@ def _sql_from_synthetic(rows: list[DemoRow]) -> str:
         "D08-repeat-complainer": "escalate_agent",
         "D05-outside-window": "refuse",
     }
-    scenarios = [
-        (
-            r.rule,
-            r.not_me,
-            r.transaction_id,
-            route[r.rule],
-            r.rule.startswith("D06"),
-            r.customer_id,
-            r.status,
-            r.when,
-            (AS_OF - r.when.date()).days,
-            r.amount_usd,
-            r.is_fraud,
-            Decimal("1.0"),
-            r.is_repeat,
-        )
-        for r in rows
-    ]
-    benchmarks = [
-        ("Dispute", "all", 100, 40, 15.5, 22.0, 0.2, 0.01),
-        ("all", "all", 1000, 400, 12.0, 18.0, 0.15, 0.02),
-    ]
+    scenarios = _rows(
+        SCENARIOS_COLS,
+        [
+            (
+                r.rule,
+                r.not_me,
+                r.transaction_id,
+                route[r.rule],
+                r.rule.startswith("D06"),
+                r.customer_id,
+                r.status,
+                r.when,
+                (AS_OF - r.when.date()).days,
+                r.amount_usd,
+                r.is_fraud,
+                Decimal("1.0"),
+                r.is_repeat,
+            )
+            for r in rows
+        ],
+    )
+    benchmarks = _rows(
+        BENCHMARKS_COLS,
+        [
+            ("Dispute", "all", 100, 40, 15.5, 22.0, 0.2, 0.01),
+            ("all", "all", 1000, 400, 12.0, 18.0, 0.15, 0.02),
+        ],
+    )
     return _assemble_sql(customers, products, transactions, stats, benchmarks, scenarios)
 
 
 def _assemble_sql(
-    customers: list[tuple],
-    products: list[tuple],
-    transactions: list[tuple],
-    stats: list[tuple],
-    benchmarks: list[tuple],
-    scenarios: list[tuple],
+    customers: list[dict[str, object]],
+    products: list[dict[str, object]],
+    transactions: list[dict[str, object]],
+    stats: list[dict[str, object]],
+    benchmarks: list[dict[str, object]],
+    scenarios: list[dict[str, object]],
 ) -> str:
+    # loaded_at is pinned to AS_OF (not datetime.now()) and git_sha to None: this slice isn't tied
+    # to a real pipeline run, and a wall-clock value here would make the gzip output non-reproducible.
+    load_runs = _rows(
+        LOAD_RUNS_COLS,
+        [
+            (RUN_ID, LOADED_AT, "customers", len(customers), None),
+            (RUN_ID, LOADED_AT, "products", len(products), None),
+            (RUN_ID, LOADED_AT, "transactions", len(transactions), None),
+            (RUN_ID, LOADED_AT, "customer_complaint_stats", len(stats), None),
+            (RUN_ID, LOADED_AT, "resolution_benchmarks", len(benchmarks), None),
+            (RUN_ID, LOADED_AT, "dispute_scenarios", len(scenarios), None),
+        ],
+    )
     parts = [
         "-- Evaluator bank.* slice (infra/evaluator_pack.py).",
         "-- Loaded by Postgres from /docker-entrypoint-initdb.d/ on an empty volume.",
@@ -436,7 +503,7 @@ def _assemble_sql(
         "create schema if not exists ops;",
         _insert(
             "customers",
-            ["customer_id", "first_name", "country", "segment", "customer_status", "detected_accent"],
+            CUSTOMERS_COLS,
             """  customer_id text primary key,
   first_name text,
   country text,
@@ -447,18 +514,7 @@ def _assemble_sql(
         ),
         _insert(
             "products",
-            [
-                "product_id",
-                "customer_id",
-                "product_type",
-                "is_card",
-                "product_number_last4",
-                "currency",
-                "product_status",
-                "opening_date",
-                "expiration_date",
-                "has_linked_app",
-            ],
+            PRODUCTS_COLS,
             """  product_id text primary key,
   customer_id text not null,
   product_type text,
@@ -473,28 +529,7 @@ def _assemble_sql(
         ),
         _insert(
             "transactions",
-            [
-                "transaction_id",
-                "customer_id",
-                "product_id",
-                "transaction_date",
-                "process_date",
-                "transaction_type",
-                "transaction_category",
-                "amount",
-                "currency",
-                "amount_usd",
-                "amount_usd_source",
-                "channel",
-                "merchant_name",
-                "merchant_category",
-                "transaction_country",
-                "transaction_city",
-                "transaction_status",
-                "response_code",
-                "is_fraud",
-                "fraud_score",
-            ],
+            TRANSACTIONS_COLS,
             """  transaction_id text primary key,
   customer_id text not null,
   product_id text not null,
@@ -519,7 +554,7 @@ def _assemble_sql(
         ),
         _insert(
             "customer_complaint_stats",
-            ["customer_id", "complaints_total", "complaints_last_90d", "last_complaint_at", "is_repeat_complainer"],
+            STATS_COLS,
             """  customer_id text primary key,
   complaints_total bigint,
   complaints_last_90d bigint,
@@ -529,16 +564,7 @@ def _assemble_sql(
         ),
         _insert(
             "resolution_benchmarks",
-            [
-                "category",
-                "priority",
-                "cases",
-                "resolved_cases",
-                "median_resolution_days",
-                "p75_resolution_days",
-                "sla_breach_rate",
-                "rejection_rate",
-            ],
+            BENCHMARKS_COLS,
             """  category text,
   priority text,
   cases bigint,
@@ -552,21 +578,7 @@ def _assemble_sql(
         ),
         _insert(
             "dispute_scenarios",
-            [
-                "rule_id",
-                "customer_says_not_me",
-                "transaction_id",
-                "route",
-                "offer_card_block",
-                "customer_id",
-                "transaction_status",
-                "transaction_date",
-                "days_before_as_of",
-                "amount_usd",
-                "is_fraud",
-                "fraud_score",
-                "is_repeat_complainer",
-            ],
+            SCENARIOS_COLS,
             """  rule_id text,
   customer_says_not_me boolean,
   transaction_id text,
@@ -583,6 +595,18 @@ def _assemble_sql(
   primary key (rule_id, customer_says_not_me, transaction_id)""",
             scenarios,
         ),
+        _insert(
+            "load_runs",
+            LOAD_RUNS_COLS,
+            """  run_id text not null,
+  loaded_at timestamptz not null,
+  table_name text not null,
+  row_count bigint not null,
+  git_sha text,
+  primary key (run_id, table_name)""",
+            load_runs,
+            schema="ops",
+        ),
         "create index transactions_customer_date on bank.transactions (customer_id, transaction_date desc);",
         "create index products_customer on bank.products (customer_id);",
         "create index dispute_scenarios_customer on bank.dispute_scenarios (customer_id);",
@@ -592,11 +616,15 @@ def _assemble_sql(
 
 def _write_slice(sql: str) -> None:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
-    with gzip.open(SLICE_PATH, "wt", encoding="utf-8") as fh:
-        fh.write(sql)
+    # Pin mtime=0: gzip.open() otherwise stamps the current wall-clock time into the gzip header,
+    # so two runs over byte-identical SQL produce different compressed bytes.
+    with open(SLICE_PATH, "wb") as raw, gzip.GzipFile(fileobj=raw, mode="wb", mtime=0) as fh:
+        fh.write(sql.encode("utf-8"))
 
 
 def _write_env(rows: list[DemoRow], *, source: str) -> None:
+    _check_unique([_token(r.rule) for r in rows], what="session")
+    _check_unique([_staff_token(name) for name in STAFF], what="staff")
     sessions = {_token(r.rule): {"customer_id": r.customer_id, "expires_at": EXPIRES} for r in rows}
     staff = {_staff_token(name): {"agent_id": name, "expires_at": EXPIRES} for name in STAFF}
     sheet: list[str] = []

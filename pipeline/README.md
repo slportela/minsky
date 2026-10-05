@@ -22,7 +22,7 @@ The data pipeline: organizer S3 → bronze → silver → gold (dbt-duckdb) → 
 ## First run on a clean checkout
 
 - `make silver` ends with one error. The singular test `tests/gold/transactions_complete.sql` is selected together with the silver models (it depends on `transactions`) but reads `warehouse.bank.transactions`, which only `make gold` creates. The 12 silver models are built before it fails, but `make pipeline` stops there. Run the remaining steps by hand: `make gold`, then `make publish`.
-- `pipeline/load_gold.py` does not read `.env`. It connects to `GOLD_DATABASE_URL`, or to `postgresql://minsky:minsky@127.0.0.1:5433/minsky` when that is unset. The Postgres from `make up` takes its password from `POSTGRES_PASSWORD` in `.env` (`change-me` in `.env.example`), so with the example file `make gold` fails with a password error. Set `POSTGRES_PASSWORD=minsky` before the first `make up`, or export `GOLD_DATABASE_URL`.
+- `pipeline/load_gold.py` does not read `.env`. It connects to `GOLD_DATABASE_URL`, or to `postgresql://minsky:minsky@127.0.0.1:5433/minsky` when that is unset. `.env.example`'s `POSTGRES_PASSWORD` already matches that default (`minsky`), so `make gold` works unmodified against `make up`'s Postgres. If you changed `POSTGRES_PASSWORD` in your own `.env`, export `GOLD_DATABASE_URL` so `make gold` can still reach it.
 
 ## Read models (gold)
 
