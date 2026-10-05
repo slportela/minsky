@@ -10,7 +10,7 @@ from decimal import Decimal
 
 from minsky_api.agent.wording import (
     confirm_question,
-    done_fallback,
+    fallback_sentence,
     human_amount,
     human_date,
     policy_reason,
@@ -98,27 +98,67 @@ def _escalation_question(language: str) -> str:
 
 def offer_escalation_without_match(language: str, reason: str) -> str:
     """The search ended without a transaction to dispute (not found, or outside what the assistant does)."""
+    pt = _pt(language)
     if reason == "out_of_scope":
-        lead = (
-            "Isso não é algo que eu possa resolver por aqui."
-            if _pt(language)
-            else "Eso no es algo que pueda resolver por aquí."
+        if pt:
+            return (
+                "Isso não é algo que eu consiga resolver por aqui, mas um atendente pode ajudar. "
+                "Quer que eu passe a sua consulta para um atendente? Responda sim ou não."
+            )
+        return (
+            "Eso no es algo que pueda resolver por aquí, pero un asesor sí podría ayudarte. "
+            "¿Quieres que pase tu consulta a un asesor? Responde sí o no."
         )
-    else:
-        lead = "Não consegui identificar a transação." if _pt(language) else "No logré identificar la transacción."
+    lead = (
+        "Não consegui encontrar essa transação com o que você me contou, e sinto muito por não ter conseguido "
+        "ajudar mais."
+        if pt
+        else "No logré encontrar esa transacción con lo que me contaste, y lamento no haber podido ayudarte más."
+    )
     return f"{lead} {_escalation_question(language)}"
 
 
+def repeat_offer(language: str, question: str) -> str:
+    """The reply was neither yes nor no and nothing in it changes the offer: say it again, whole, so it is clear."""
+    return f"{'Não ficou claro.' if _pt(language) else 'No me quedó claro.'} {question}"
+
+
 def declined_escalation(language: str) -> str:
-    return safe_sentence("abort", language, {})
+    """The customer said no to a person. Nothing was registered, and the door stays open."""
+    if _pt(language):
+        return (
+            "Tudo bem, não vou passar o seu caso para um atendente. Se lembrar de mais alguma coisa sobre a "
+            "cobrança ou mudar de ideia, escreva aqui e retomamos."
+        )
+    return (
+        "Está bien, no pasaré tu caso a un asesor. Si recuerdas algo más del cargo o cambias de opinión, "
+        "escríbeme y lo retomamos."
+    )
+
+
+def handoff_done(language: str, handoff_id: str, *, card_blocked: bool = False) -> str:
+    """A person has the case, read back from the case queue: what they have and what the customer need not do."""
+    blocked = f"{fallback_sentence(language, {'card_blocked': True})} " if card_blocked else ""
+    if _pt(language):
+        return (
+            f"{blocked}Um atendente da nossa equipe vai assumir o seu caso e já tem o resumo da nossa conversa, "
+            f"então você não precisa repetir nada. A sua referência é {handoff_id}."
+        )
+    return (
+        f"{blocked}Un asesor de nuestro equipo tomará tu caso y ya tiene el resumen de lo que hablamos, así que no "
+        f"hace falta que repitas nada. Tu referencia es {handoff_id}."
+    )
 
 
 def ask_again(language: str) -> str:
     return safe_sentence("ask_again", language, {})
 
 
-def already_done(language: str) -> str:
-    return done_fallback(language)
+def already_done(language: str, case_ref: str) -> str:
+    """After a case exists: say so with its real reference. Without one there is nothing to say: the search resumes."""
+    if _pt(language):
+        return f"O seu caso já está registrado com a referência {case_ref}. Se precisar de algo mais, escreva aqui."
+    return f"Tu caso ya quedó registrado con la referencia {case_ref}. Si necesitas algo más, escríbeme aquí."
 
 
 def need_more_detail(language: str) -> str:

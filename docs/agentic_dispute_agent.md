@@ -48,6 +48,18 @@ The agent never opens, blocks or escalates. It has no tool for that. It ends SEA
 
 **Output text.** Everything the agent says goes through the checks that already exist in `agent/speak.py`: `action_claims` (no completed-action claims without facts), `ungrounded_number` (every amount and date in the text must come from a tool result or from the customer) and the language check. A refused text is retried a bounded number of times and then falls back to a code template.
 
+### Closing the conversation
+
+What the customer reads when the search ends is written by code (`agent/agentic_wording.py`, es and pt), from what was verified. The agent never writes it.
+
+- **Offer of a person** (nothing found, or not a dispute): says it could not find the transaction and is sorry, then asks yes or no. `give_up(not_found)` is refused until the agent has asked the customer something.
+- **Yes:** says a person will take the case, that they already have the summary of the conversation so nothing needs repeating, and the real reference (read back from the case queue). If a card block was read back it is said first, never otherwise.
+- **No:** says kindly that nothing will be passed on and that the customer can come back. Nothing is registered, and any later message **resumes the search** instead of claiming a case exists.
+- **After a case exists** (a handoff or a dispute): "your case is registered with reference X", with the real reference (`ConversationState.case_ref`).
+- **Something other than yes or no to the offer:** if the offer was "I could not find it", the words are new information and go back to the agent; if it was a policy denial, the whole offer is said again (the reason and the question), since there is nothing to search.
+- The workflow's own closing texts (`done_fallback`, `safe_sentence`) are untouched. `done_fallback` says "your case is registered with the reference I sent you" even when nothing was registered; it only appears in the workflow as the fallback when the model cannot phrase a reply.
+- Portuguese was written for this and has no source data or reviewer (a stated limitation of the project).
+
 ## 4. Query sandbox
 
 The customer's whole history is small: **median 29 transactions, p99 88, max 150** over the three years (134,515 customers, 4.4M transactions; 120-day window: median 3, p99 12). So isolation can be by construction instead of by filtering:

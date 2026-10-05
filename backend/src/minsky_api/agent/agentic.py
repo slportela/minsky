@@ -21,10 +21,12 @@ from minsky_api.agent.agentic_wording import (
     ask_again,
     declined_escalation,
     denial,
+    handoff_done,
     need_more_detail,
     offer_block,
     offer_escalation_without_match,
     recognize_question,
+    repeat_offer,
     transaction_card,
 )
 from minsky_api.agent.language import LanguageDetector, default_language_detector
@@ -240,7 +242,7 @@ async def _run_tool(ctx: ToolContext, state: ConversationState, call: ToolCall, 
 
     if call.name == "give_up":
         reason = args.get("reason") if args.get("reason") in ("not_found", "out_of_scope") else "not_found"
-        if reason == "not_found" and "clarify" not in state.acts:
+        if reason == "not_found" and not state.asked_for_detail:
             # The prompt asks the agent to ask first, and in live run 4 it did not once in three trials. A rule the
             # code can hold is held by the code: nothing found is a question to the customer before it is a person.
             return (
@@ -295,6 +297,7 @@ async def _phase_search(
                 state.agent_items.append({"role": "assistant", "content": step.text})
                 state.search_failures = 0
                 state.acts.append("clarify")
+                state.asked_for_detail = True
                 return step.text
             if retries >= _MAX_TEXT_RETRIES:
                 break
@@ -316,6 +319,7 @@ async def _search_stuck(state: ConversationState) -> str:
     reply = need_more_detail(_lang(state))
     state.agent_items.append({"role": "assistant", "content": reply})
     state.acts.append("clarify")
+    state.asked_for_detail = True
     return reply
 
 
@@ -344,10 +348,9 @@ async def _escalate(
     )
     state.phase = Phase.DONE
     state.pending_question = None
+    state.case_ref = result.handoff.handoff_id
     state.acts.append("handoff")
-    return fallback_sentence(
-        _lang(state), {"handoff_id": result.handoff.handoff_id, "card_blocked": card_blocked is True}
-    )
+    return handoff_done(_lang(state), result.handoff.handoff_id, card_blocked=card_blocked is True)
 
 
 def _repeat_question(state: ConversationState) -> str:
@@ -379,6 +382,7 @@ async def _decide(ctx: ToolContext, state: ConversationState, llm: LLM) -> str:
         verified = await get_dispute(ctx, GetDisputeArgs(dispute_id=opened.dispute.dispute_id))
         state.phase = Phase.DONE
         state.pending_question = None
+        state.case_ref = verified.dispute.dispute_id
         state.acts.append("inform")
         return fallback_sentence(language, {"dispute_id": verified.dispute.dispute_id})
     if decision.route == Route.ESCALATE_FRAUD.value:
@@ -469,7 +473,28 @@ async def _phase_offer_escalation(ctx: ToolContext, state: ConversationState, te
         state.pending_question = None
         state.acts.append("abort")
         return declined_escalation(_lang(state))
-    return _repeat_question(state)
+    if state.confirmation == "yes":
+        return _repeat_question(state)  # an affirmative with extra words: only a plain yes asks for a person
+    if not state.denial_text:
+        # The offer was "I could not find it". Other words are new information, not an answer: the search goes on.
+        _reset_for_new_search(state)
+        note = (
+            "el cliente respondió a la oferta de un asesor con otra cosa en vez de sí o no: atiende su mensaje y "
+            "sigue buscando."
+        )
+        return await _phase_search(ctx, state, text, llm, note=note)
+    state.acts.append("ask_again")
+    return repeat_offer(_lang(state), state.pending_question or "")  # a denial stands: say the offer again, whole
+
+
+def _reset_for_new_search(state: ConversationState) -> None:
+    """Start looking again for another transaction: what was decided about the last one does not carry over."""
+    state.selected_txn_id = state.selected_product_id = state.selected_type = None
+    state.rule_id = state.route = state.denial_text = state.existing_dispute_id = None
+    state.escalation_reason = state.consent_text = state.confirmation = state.pending_question = None
+    state.customer_says_not_me = False
+    state.search_failures = 0
+    state.asked_for_detail = False  # give_up(not_found) needs a fresh question
 
 
 async def run_agentic_turn(
@@ -494,10 +519,20 @@ async def run_agentic_turn(
         if state.language is None:
             state.language = (detector or default_language_detector()).detect(stripped)
 
-        if state.phase == Phase.DONE:
-            reply = already_done(_lang(state))
+        if state.phase == Phase.DONE and state.case_ref:
+            reply = already_done(_lang(state), state.case_ref)
         elif state.turn_count > get_settings().max_turns:
             reply = await _escalate(ctx, state, llm, reason="max_turns")
+        elif state.phase == Phase.DONE:
+            # Closed without a case (the customer declined a person) and writing again: nothing is registered, so
+            # this is a new search, not a "your case is registered".
+            _reset_for_new_search(state)
+            note = (
+                "el cliente vuelve a escribir después de decidir no pasar su caso a un asesor. Si es un agradecimiento "
+                "o una despedida, despídete con amabilidad y sin insistir; si da información o pide algo, sigue "
+                "buscando."
+            )
+            reply = await _phase_search(ctx, state, stripped, llm, note=note)
         elif state.phase in (Phase.UNDERSTAND, Phase.SEARCH):
             if state.phase == Phase.UNDERSTAND:
                 _classify_first_message(state, stripped)

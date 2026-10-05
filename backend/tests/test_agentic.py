@@ -607,7 +607,7 @@ async def test_no_to_a_person_ends_without_a_handoff():
     for text in ("No reconozco un cargo", "sí", "sí"):
         await chat.say(text)
     reply = await chat.say("no")
-    assert chat.state.phase == Phase.DONE and not _handoff_ids(chat) and "Entendido" in reply
+    assert chat.state.phase == Phase.DONE and not _handoff_ids(chat) and "no pasaré tu caso" in reply
 
 
 # ---------------------------------------------------------------- fraud
@@ -668,7 +668,7 @@ async def test_when_the_agent_gives_up_after_asking_the_customer_is_offered_a_pe
     )
     await chat.say("Hay un cargo raro en mi cuenta")
     offer = await chat.say("No me acuerdo de nada más")
-    assert chat.state.phase == Phase.OFFER_ESCALATION and "No logré identificar" in offer and "asesor" in offer
+    assert chat.state.phase == Phase.OFFER_ESCALATION and "No logré encontrar" in offer and "asesor" in offer
     done = await chat.say("sí")
     handoff = _handoff(chat)
     assert handoff.reason == "search_exhausted" and handoff.rule_id is None and handoff.handoff_id in done
@@ -899,3 +899,149 @@ async def test_out_of_scope_needs_no_question_first():
     chat = Chat([], ScriptedAgent([call("give_up", reason="out_of_scope")]))
     await chat.say("Quiero saber el saldo de mi cuenta")
     assert chat.state.phase == Phase.OFFER_ESCALATION
+
+
+# ---------------------------------------------------------------- closing the conversation gracefully (agentic mode)
+
+_NOT_FOUND = [say(ASK), call("give_up", reason="not_found")]
+
+
+async def _offered_a_person(extra_steps: list | None = None, *, language: str | None = None) -> Chat:
+    chat = Chat([txn("T1", "10", "Cafe", JUNE_10)], ScriptedAgent([*_NOT_FOUND, *(extra_steps or [])]))
+    if language:
+        chat.state.language = language
+    await chat.say("Hay un cargo raro en mi cuenta")
+    await chat.say("No me acuerdo")
+    assert chat.state.phase == Phase.OFFER_ESCALATION
+    return chat
+
+
+async def test_the_offer_apologises_and_says_what_a_person_would_do_not_just_that_nothing_was_found():
+    chat = await _offered_a_person()
+    offer = chat.state.pending_question or ""
+    assert "lamento" in offer and "asesor" in offer and offer.endswith("Responde sí o no.")
+
+
+async def test_accepting_a_person_says_what_they_have_and_that_nothing_needs_repeating_with_the_real_reference():
+    chat = await _offered_a_person()
+    done = await chat.say("sí")
+    handoff = _handoff(chat)
+    assert handoff.handoff_id in done and "ya tiene el resumen" in done and "no hace falta que repitas nada" in done
+    assert chat.state.case_ref == handoff.handoff_id
+
+
+async def test_a_block_that_was_read_back_is_said_before_the_handoff_and_one_that_was_not_is_not():
+    chat = _to_card([txn("T1", "30", "Cafe", JUNE_10)], not_me=True)
+    for text in ("No reconozco un cargo", "sí"):
+        await chat.say(text)
+    done = await chat.say("sí")
+    assert done.startswith("Tu tarjeta ya está bloqueada") and _handoff(chat).handoff_id in done
+    declined = _to_card([txn("T1", "30", "Cafe", JUNE_10)], not_me=True)
+    for text in ("No reconozco un cargo", "sí"):
+        await declined.say(text)
+    done = await declined.say("no")
+    assert "bloqueada" not in done and "ya tiene el resumen" in done
+
+
+async def test_declining_a_person_is_said_kindly_and_leaves_the_door_open():
+    chat = await _offered_a_person()
+    reply = await chat.say("no")
+    assert chat.state.phase == Phase.DONE and chat.state.case_ref is None
+    assert "no haré nada" not in reply  # it sounded like abandoning the customer
+    assert "no pasaré tu caso a un asesor" in reply and "escríbeme" in reply and "retomamos" in reply
+
+
+async def test_writing_again_after_declining_a_person_never_claims_a_case_is_registered_and_the_search_resumes():
+    """Before: any message after "no" got "Tu caso ya quedó registrado con la referencia que te envié", which was
+    false: nothing was registered and no reference had been sent."""
+    chat = await _offered_a_person([say("Claro, ¿en qué comercio fue el cargo?")])
+    await chat.say("no")
+    reply = await chat.say("gracias")
+    assert reply == "Claro, ¿en qué comercio fue el cargo?"  # the agent answered: nothing was claimed
+    assert "registrado" not in reply and chat.state.phase == Phase.SEARCH
+    note = chat.agent.requests[-1][-1]["content"]
+    assert note.startswith("SISTEMA") and "decidir no pasar su caso" in note
+
+
+async def test_after_resuming_the_agent_must_ask_again_before_it_gives_up_again():
+    chat = await _offered_a_person([call("give_up", reason="not_found"), say("¿Recuerdas el comercio?")])
+    await chat.say("no")
+    reply = await chat.say("espera")
+    assert reply == "¿Recuerdas el comercio?" and chat.state.phase == Phase.SEARCH  # the early give_up was refused
+    assert "asked the customer" in chat.agent.requests[-1][-1]["output"]
+
+
+async def test_after_a_case_exists_the_closing_says_so_with_the_real_reference():
+    chat = await _offered_a_person()
+    await chat.say("sí")
+    again = await chat.say("gracias")
+    expected = f"Tu caso ya quedó registrado con la referencia {chat.state.case_ref}."
+    assert again == f"{expected} Si necesitas algo más, escríbeme aquí."
+
+
+async def test_a_dispute_that_was_opened_is_the_case_reference_afterwards():
+    chat = Chat(
+        [txn("T1", "123.10", "Cafe Sur", JUNE_10)],
+        ScriptedAgent([sql(FIND_123), call("propose_transaction", transaction_id="T1", customer_says_not_me=False)]),
+    )
+    for text in ("No reconozco un cargo de 123 dólares", "sí", "sí"):
+        await chat.say(text)
+    assert chat.state.case_ref and chat.state.case_ref.startswith("DSP-")
+    assert chat.state.case_ref in await chat.say("gracias")
+
+
+async def test_new_information_in_answer_to_the_offer_goes_back_to_the_search_not_to_a_yes_or_no_loop():
+    """Before: "ya me acordé, fue en Starbucks" got "No me quedó claro. ¿Puedes responder sí o no?" for ever."""
+    chat = await _offered_a_person([say("Gracias, lo busco. ¿Cuánto fue más o menos?")])
+    reply = await chat.say("Espera, ya me acordé, fue en Starbucks")
+    assert reply == "Gracias, lo busco. ¿Cuánto fue más o menos?" and chat.state.phase == Phase.SEARCH
+    note = chat.agent.requests[-1][-1]["content"]
+    assert note.startswith("SISTEMA") and "oferta de un asesor" in note
+    assert not _handoff_ids(chat)  # nothing was created while the customer changed their mind
+
+
+async def test_a_yes_with_extra_words_to_the_offer_asks_for_a_plain_yes():
+    chat = await _offered_a_person()
+    reply = await chat.say("sí, por favor")
+    assert chat.state.phase == Phase.OFFER_ESCALATION and "sí o no" in reply and not _handoff_ids(chat)
+
+
+async def test_an_unclear_reply_to_a_denial_says_the_whole_offer_again_and_does_not_search():
+    chat = _to_card([txn("T1", "900", "TV", JUNE_10)])
+    for text in ("No reconozco un cargo", "sí", "sí"):
+        await chat.say(text)
+    assert chat.state.phase == Phase.OFFER_ESCALATION and chat.state.denial_text
+    before = len(chat.agent.requests)
+    reply = await chat.say("¿y por qué no?")
+    assert reply == f"No me quedó claro. {chat.state.pending_question}"
+    assert "por el monto" in reply and "asesor" in reply  # the reason and the offer, again
+    assert chat.state.phase == Phase.OFFER_ESCALATION and len(chat.agent.requests) == before  # the agent was not called
+
+
+async def _offered_a_person_in_portuguese(extra_steps: list | None = None) -> Chat:
+    steps = [
+        say("Não encontrei nada com isso. Você lembra do estabelecimento ou do dia da cobrança?"),
+        call("give_up", reason="not_found"),
+        *(extra_steps or []),
+    ]
+    chat = Chat([txn("T1", "10", "Cafe", JUNE_10)], ScriptedAgent(steps))
+    chat.state.language = "pt"
+    await chat.say("Tem uma cobrança estranha na minha conta")
+    await chat.say("Não lembro")
+    assert chat.state.phase == Phase.OFFER_ESCALATION
+    return chat
+
+
+async def test_the_closing_is_in_portuguese_when_the_conversation_is():
+    chat = await _offered_a_person_in_portuguese([say("Claro, em qual estabelecimento foi a cobrança?")])
+    offer = chat.state.pending_question or ""
+    assert "sinto muito" in offer and "atendente" in offer and offer.endswith("Responda sim ou não.")
+    declined = await chat.say("não")
+    assert "não vou passar o seu caso" in declined and "retomamos" in declined
+    other = await _offered_a_person_in_portuguese()
+    done = await other.say("sim")
+    assert other.state.case_ref is not None and other.state.case_ref in done
+    assert "já tem o resumo" in done and "não precisa repetir nada" in done
+    again = await other.say("obrigado")
+    expected = f"O seu caso já está registrado com a referência {other.state.case_ref}."
+    assert again == f"{expected} Se precisar de algo mais, escreva aqui."

@@ -75,3 +75,8 @@ class ConversationState:
     # The customer's own words that said yes to the card (agent.consent). The write happens one question later
     # (the recognition answer), so graders read the consent here and not from the turn that ran the tool.
     consent_text: str | None = None
+    # The reference of the case this conversation created (a dispute or a handoff). None means nothing is registered:
+    # what the assistant says after closing must not claim otherwise.
+    case_ref: str | None = None
+    # The agent has asked the customer for a detail since the search (re)started: give_up(not_found) needs it.
+    asked_for_detail: bool = False
