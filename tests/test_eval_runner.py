@@ -633,3 +633,41 @@ def test_a_case_whose_customer_never_answers_yes_or_no_must_expect_escalate() ->
     case = Case.model_validate(data)
     with pytest.raises(ValueError, match="never answers yes or no must expect escalate"):
         check_label(case, facts_from_case(case))
+
+
+# ---------------------------------------------------------------- a provider failure the case did not inject
+
+
+class _RateLimitedLLM(_ProviderLLM):
+    """A provider that fails every call, as one over its rate limit does."""
+
+    async def respond(self, *args: object, **kwargs: object) -> object:
+        from openai import APIConnectionError
+
+        from evals.runner import _LLM_FAULT_REQUEST
+
+        raise APIConnectionError(request=_LLM_FAULT_REQUEST)
+
+    async def step(self, *args: object, **kwargs: object) -> object:
+        return await self.respond()
+
+
+@pytest.mark.parametrize("agent_mode", ["workflow", "agentic"])
+async def test_a_provider_failure_the_case_did_not_inject_is_an_infrastructure_error_not_a_failed_case(
+    monkeypatch: pytest.MonkeyPatch, agent_mode: str
+) -> None:
+    """Live run on the merged main: 23 of 90 trials hit a RateLimitError. The chat route answers with the
+    maintenance message (200, abstain), so they were graded as failed cases and the pass rate read 73 %."""
+    _RateLimitedLLM.instances = []
+    monkeypatch.setattr("evals.runner.LLM", _RateLimitedLLM)
+    record = await run_trial(_case("dispute-eligible-open-es"), extractor="real", budget=_BUDGET, agent_mode=agent_mode)
+    assert record.status == "error" and record.error_class == "RuntimeError"
+    assert record.grade is None  # it is not graded: compare and the summary leave it out
+    assert _RateLimitedLLM.instances[0].client.closed is True
+
+
+async def test_the_outage_case_that_injects_its_own_failure_is_still_graded(monkeypatch: pytest.MonkeyPatch) -> None:
+    _RateLimitedLLM.instances = []
+    monkeypatch.setattr("evals.runner.LLM", _RateLimitedLLM)
+    record = await run_trial(_case("model-outage-maintenance-es"), extractor="real", budget=_BUDGET)
+    assert record.status == "passed", (record.status, record.error_class, record.grade)

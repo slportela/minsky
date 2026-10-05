@@ -148,7 +148,14 @@ def sql(query: str) -> AgentStep:
 class ScriptedAgent:
     """A queue of agent steps, plus the stand-ins for the model's other two jobs (yes/no evidence, summary)."""
 
-    def __init__(self, steps: list[AgentStep], *, narrative: str = "The customer disputed a charge.") -> None:
+    def __init__(
+        self,
+        steps: list[AgentStep],
+        *,
+        narrative: str = "The customer disputed a charge.",
+        classified: dict[str, str] | None = None,
+    ) -> None:
+        self.classified = classified or {}  # what the classifier model says for a given reply, whatever the words
         self.steps = list(steps)
         self.narrative = narrative
         self.requests: list[list[dict[str, Any]]] = []
@@ -171,6 +178,7 @@ class ScriptedAgent:
             said = messages[-1]["content"].strip().rstrip(".!?").casefold()
             affirmative = said in {"sí", "si", "sim"} or said.startswith(("sí,", "si,", "sí ", "si ", "sim,", "sim "))
             decision = "yes" if affirmative else "no" if said in {"no", "não"} else "unclear"
+            decision = self.classified.get(messages[-1]["content"], decision)
             parsed = schema(decision=decision)  # type: ignore[misc]
         elif name == "_NarrativeOut":
             parsed = schema(text=self.narrative)  # type: ignore[misc]
@@ -1099,3 +1107,53 @@ async def test_the_closing_is_in_portuguese_when_the_conversation_is():
     assert "já tem o resumo" in done and "não precisa repetir nada" in done
     again = await other.say("obrigado")
     assert f"referência {other.state.terminal.reference}" in again and "inicie uma nova conversa" in again
+
+
+# ---------------------------------------------------------------- only a plain no rejects the transaction
+
+
+async def test_a_reply_the_classifier_reads_as_a_no_but_is_not_a_plain_no_does_not_reject_the_transaction():
+    """Live run on the merged main: "lo reconozco" to the card was classified as a no, and the agent answered "no
+    volveré a sugerir ese cargo", the opposite of what the customer said."""
+    agent = ScriptedAgent(
+        [
+            sql(FIND_123),
+            call("propose_transaction", transaction_id="T1", customer_says_not_me=False),
+            say("Gracias. ¿Quieres que abra un reclamo por ese cargo de Cafe Sur?"),
+        ],
+        classified={"lo reconozco": "no"},
+    )
+    chat = Chat([txn("T1", "123.10", "Cafe Sur", JUNE_10)], agent)
+    await chat.say("No reconozco un cargo de 123 dólares")
+    reply = await chat.say("lo reconozco")
+    assert chat.state.rejected_txn_ids == []  # nothing was rejected
+    assert reply.startswith("Gracias") and chat.state.unclear_detours == 1
+    note = agent.requests[-1][-1]["content"]
+    assert (
+        note.startswith("SISTEMA") and "con otra cosa en vez de sí o no" in note and "no la propongas otra vez" in note
+    )
+
+
+async def test_a_plain_no_still_rejects_the_transaction():
+    agent = ScriptedAgent(
+        [sql(FIND_123), call("propose_transaction", transaction_id="T1", customer_says_not_me=False), say(ASK)]
+    )
+    chat = Chat([txn("T1", "123.10", "Cafe Sur", JUNE_10)], agent)
+    await chat.say("No reconozco un cargo de 123 dólares")
+    await chat.say("no")
+    assert chat.state.rejected_txn_ids == ["T1"] and chat.state.unclear_detours == 0
+
+
+async def test_three_such_replies_offer_a_person_as_the_workflow_does():
+    agent = ScriptedAgent(
+        [sql(FIND_123)] + [call("propose_transaction", transaction_id="T1", customer_says_not_me=False)] * 3,
+        classified={"lo reconozco": "no", "ese mismo": "no", "claro que sí": "no"},
+    )
+    chat = Chat([txn("T1", "123.10", "Cafe Sur", JUNE_10)], agent)
+    await chat.say("No reconozco un cargo de 123 dólares")
+    await chat.say("lo reconozco")
+    await chat.say("ese mismo")
+    offer = await chat.say("claro que sí")
+    assert chat.state.phase == Phase.OFFER_ESCALATION and "asesor" in offer and chat.state.rejected_txn_ids == []
+    done = await chat.say("sí")
+    assert _handoff(chat).reason == "unclear_confirmation" and _handoff(chat).handoff_id in done

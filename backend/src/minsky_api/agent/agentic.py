@@ -26,6 +26,7 @@ from minsky_api.agent.agentic_wording import (
     repeat_offer,
     transaction_card,
 )
+from minsky_api.agent.consent import explicit_no
 from minsky_api.agent.language import LanguageDetector, default_language_detector
 from minsky_api.agent.orchestrator import (
     _ask,
@@ -443,6 +444,11 @@ async def _decide(ctx: ToolContext, state: ConversationState, llm: LLM) -> str:
 
 async def _phase_confirm_dispute(ctx: ToolContext, state: ConversationState, text: str, llm: LLM) -> str:
     decision = await _consent(ctx, state, text, llm)
+    if decision == "no" and not explicit_no(text):
+        # Only a plain no rejects the transaction. A longer reply that the classifier read as a no is not a decision:
+        # live run on the merged main, "lo reconozco" was read this way and answered "no volveré a sugerir ese cargo",
+        # the opposite of what the customer said. It goes to the agent like any other free-text reply.
+        decision = "unclear"
     if decision in ("yes", "no"):
         state.unclear_detours = 0
     if decision == "yes":
@@ -472,7 +478,8 @@ async def _phase_confirm_dispute(ctx: ToolContext, state: ConversationState, tex
     state.selected_txn_id = state.selected_product_id = state.selected_type = None
     note = (
         f"el cliente respondió a la ficha de la transacción {shown} con otra cosa en vez de sí o no: atiende su "
-        "mensaje. Si sigue siendo esa la transacción correcta puedes proponerla de nuevo."
+        "mensaje. Si sigue siendo esa la transacción correcta puedes proponerla de nuevo; si dice que no es esa, no "
+        "la propongas otra vez."
     )
     return await _phase_search(ctx, state, text, llm, note=note)
 

@@ -682,6 +682,11 @@ async def run_trial(
                                     history = payload["messages"]
                                 record.messages = [_pair(item) for item in history]
                                 index += 1
+                        # A provider failure the case did not inject (a rate limit, a timeout) is answered with the
+                        # maintenance message, which grades as an outcome of the product ("abstain"). It is not: the
+                        # trial measured nothing. It counts as an infrastructure error, which compare leaves out.
+                        if not case.llm_faults and any(call.get("status") == "error" for call in record.model_calls):
+                            raise RuntimeError("provider error during the trial")
                         stored = (
                             app.state.conversations.get(UUID(conversation_id)) if conversation_id is not None else None
                         )
