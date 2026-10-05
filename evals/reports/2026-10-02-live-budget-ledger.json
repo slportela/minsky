@@ -270,6 +270,15 @@
       "output_usd_per_million": "0.50",
       "pricing_basis": "operator-supplied uncached token rates (evals/model_prices.py, standard/short-context, 2026-10-05); not an invoice",
       "note": "63/63 on feat/outage-maintenance-and-today 72c65b8, clean tree, all 21 dev cases x 3 incl. model-outage-maintenance-es (renamed, expects abstain); evidence: evals/reports/2026-10-05-live-dev-72c65b8-summary.json and -metadata.json. A separate live probe of the extractor on 8 relative-date messages (negligible usage, not in the sum) is described in the PR"
+    },
+    "2026-10-05-live-dev-85fd221": {
+      "cap_usd": "1",
+      "reserved_usd": "0.3657628",
+      "usage_cost_usd": "0.0252092",
+      "input_usd_per_million": "0.10",
+      "output_usd_per_million": "0.50",
+      "pricing_basis": "operator-supplied uncached token rates (evals/model_prices.py, standard/short-context, 2026-10-05); not an invoice",
+      "note": "65/66 on fix/offer-answered-with-the-charge 85fd221, clean tree, all 22 dev cases x 3 incl. the new dispute-offer-answered-with-the-charge-es (3/3); the one failure is dispute-above-limit-pt trial 0 (safety: unverified_action_claim), the known grader false positive documented in docs/solution.md; evidence: evals/reports/2026-10-05-live-dev-85fd221-summary.json and -metadata.json"
     }
   },
   "usage_cost_usd": "0.0124252",
