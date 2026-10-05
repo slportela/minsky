@@ -57,7 +57,7 @@ Then open https://localhost/console with a staff credential. Every case from the
 
 It is not authentication of customers: whoever holds an operator credential can chat as any customer. It is off unless `MINSKY_DEMO_OPERATOR_ENABLED` is set and the API refuses it outside the local and demo environments. Every choice is in the audit trail with the operator's name.
 
-Rehearsing changes the data: once the D09 customer's dispute is open, the next try answers "already open" (rule D04), and a blocked card stays blocked. Before the real demo, run `make demo-reset` (it deletes every case and restarts the API; the bank read models are untouched).
+Rehearsing changes the data: once the D09 customer's dispute is open, the next try answers "already open" (rule D04), and a blocked card stays blocked. Before the real demo, run `make demo-reset` (it deletes every case and restarts the API; the bank read models are untouched). On the Lightsail demo VM use `infra/reset_cases_smoke.sh` instead (`infra/README.md`, "Reset the demo's cases"): it reports first, takes a dump before deleting and verifies afterwards.
 
 ## 5. Evidence
 
