@@ -98,7 +98,11 @@ class QuerySandbox:
     """One customer's transactions, queryable and nothing else. Build it per turn: it is not kept in state."""
 
     def __init__(self, transactions: Iterable[Transaction], *, today: date) -> None:
-        self._con = sqlite3.connect(":memory:")
+        # Built on the event loop's thread, queried on a worker thread (tools.history runs query() in
+        # asyncio.to_thread so a slow query cannot freeze every other conversation). One query at a time per
+        # sandbox: it belongs to one customer's one turn, and the agent's steps are sequential, so the connection
+        # is never used by two threads at once.
+        self._con = sqlite3.connect(":memory:", check_same_thread=False)
         self._con.create_function("today", 0, lambda: today.isoformat(), deterministic=True)
         self._con.create_function("fold", 1, _fold_sql, deterministic=True)
         names = ", ".join(name for name, _ in COLUMNS)

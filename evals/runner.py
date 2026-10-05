@@ -10,10 +10,12 @@ import argparse
 import asyncio
 import hashlib
 import json
+import multiprocessing
 import re
 import subprocess
 import time
 from collections.abc import AsyncIterator, Awaitable, Callable, Iterator
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from contextlib import ExitStack, asynccontextmanager, contextmanager
 from dataclasses import asdict
 from decimal import Decimal
@@ -26,7 +28,7 @@ import httpx2
 from httpx import ASGITransport, AsyncClient
 from openai import APITimeoutError
 
-from evals.budget import SpendBudget
+from evals.budget import Budget, SharedSpendBudget, SpendBudget
 from evals.evidence import ToolEvidence, TrialRecord
 from evals.graders import TrialGrade, grade_trial
 from evals.metrics import Rate, language_rates
@@ -362,7 +364,7 @@ class FaultingLLM:
 
 
 class RecordedLLM:
-    def __init__(self, inner: Any, record: TrialRecord, budget: SpendBudget | None = None) -> None:
+    def __init__(self, inner: Any, record: TrialRecord, budget: Budget | None = None) -> None:
         self.inner = inner
         self.record = record
         self.budget = budget
@@ -437,7 +439,7 @@ def _patched(
     current: dict[str, Any],
     case: Case,
     extractor: str,
-    budget: SpendBudget | None = None,
+    budget: Budget | None = None,
     agent_mode: str = "workflow",
 ) -> Iterator[None]:
     @asynccontextmanager
@@ -544,7 +546,7 @@ async def run_trial(
     case: Case,
     *,
     extractor: str = "scripted",
-    budget: SpendBudget | None = None,
+    budget: Budget | None = None,
     timeout_s: float = 120,
     database: str = "sqlite",
     legacy_auth_baseline: bool = False,
@@ -755,6 +757,23 @@ def _select(
     ]
 
 
+# --workers: each trial replaces module globals (patch.object on the chat route, the orchestrators and the tools),
+# changes the environment and clears the settings cache, so two trials cannot share a process. Workers are
+# separate processes; the only thing they share is the spend budget (SharedSpendBudget).
+_WORKER_BUDGET: Budget | None = None
+
+
+def _init_worker(budget: Budget | None) -> None:
+    global _WORKER_BUDGET
+    _WORKER_BUDGET = budget
+
+
+def _trial_in_worker(case_json: str, options: dict[str, Any]) -> str:
+    """One trial in a worker process. It takes and returns plain strings and dicts: nothing else is pickled."""
+    record = asyncio.run(run_trial(Case.model_validate_json(case_json), budget=_WORKER_BUDGET, **options))
+    return record.model_dump_json()
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--cases", type=Path, default=Path("evals/cases/dev"))
@@ -770,6 +789,13 @@ def main(argv: list[str] | None = None) -> int:
         "(docs/agentic_dispute_agent.md); the customer is then a reactive script, see _ReactiveUser",
     )
     parser.add_argument("--trials", type=int, default=1)
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=1,
+        help="run trials in this many worker processes (1 to 16). Results are the same files in one run folder; "
+        "the spend cap is shared by all workers. Mind the provider's rate limit.",
+    )
     parser.add_argument("--max-cost-usd", type=Decimal)
     parser.add_argument("--input-usd-per-million", type=Decimal)
     parser.add_argument("--output-usd-per-million", type=Decimal)
@@ -802,12 +828,21 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("PostgreSQL mode requires data-bound --gold-cases")
     if not chosen or args.trials < 1 or not 0 < args.timeout_s <= 600:
         parser.error("select at least one runnable dev case and a positive trial count")
-    budget = None
+    if not 1 <= args.workers <= 16:
+        parser.error("--workers must be between 1 and 16")
+    workers = min(args.workers, len(chosen) * args.trials)
+    mp_context = multiprocessing.get_context("spawn")  # the default on macOS and Windows; fork would copy asyncio state
+    budget: Budget | None = None
     if args.extractor == "real":
         if any(value is None for value in (args.max_cost_usd, args.input_usd_per_million, args.output_usd_per_million)):
             parser.error("real extraction requires --max-cost-usd and both explicit token-price flags")
         try:
-            budget = SpendBudget(args.max_cost_usd, args.input_usd_per_million, args.output_usd_per_million)
+            if workers > 1:
+                budget = SharedSpendBudget(
+                    args.max_cost_usd, args.input_usd_per_million, args.output_usd_per_million, mp_context
+                )
+            else:
+                budget = SpendBudget(args.max_cost_usd, args.input_usd_per_million, args.output_usd_per_million)
         except ValueError as error:
             parser.error(str(error))
         from minsky_api.agent.prompts import render
@@ -861,6 +896,7 @@ def main(argv: list[str] | None = None) -> int:
         "legacy_auth_baseline": args.legacy_auth_baseline,
         "today": get_settings().today.isoformat(),
         "trials_per_case": args.trials,
+        "workers": workers,
         "cases": {case.id: hashlib.sha256(case.model_dump_json().encode()).hexdigest() for case in chosen},
         "prompts": {
             p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(_prompts_dir().glob("agent*.j2"))
@@ -871,35 +907,56 @@ def main(argv: list[str] | None = None) -> int:
         else "isolated SQLite; production PostgreSQL behavior not verified",
     }
     (output / "metadata.json").write_text(json.dumps(metadata, indent=2))
-    passed = errors = 0
+    tally = {"passed": 0, "errors": 0}
     language_rows: list[tuple[str, int, int]] = []
     language_cases: dict[str, set[str]] = {}
     language_trials: dict[str, int] = {}
-    for case in chosen:
-        for trial in range(args.trials):
-            record = asyncio.run(
-                run_trial(
-                    case,
-                    extractor=args.extractor,
-                    budget=budget,
-                    timeout_s=args.timeout_s,
-                    database=args.database,
-                    legacy_auth_baseline=args.legacy_auth_baseline,
-                    agent_mode=args.agent_mode,
-                )
-            )
-            (output / f"{case.id}-{trial}.json").write_text(record.model_dump_json(indent=2))
-            filename = "errors.jsonl" if record.status == "error" else "results.jsonl"
-            with (output / filename).open("a") as stream:
-                stream.write(record.model_dump_json() + "\n")
-            passed += record.status == "passed"
-            errors += record.status == "error"
-            graded = int(record.status != "error")
-            language = str(case.tags.language)
-            language_cases.setdefault(language, set()).add(case.id)
-            language_trials[language] = language_trials.get(language, 0) + 1
-            language_rows.append((language, int(record.status == "passed"), graded))
-            print(record.status, case.id, record.grade.get("reasons", []) if record.grade else record.error_class)
+    options: dict[str, Any] = {
+        "extractor": args.extractor,
+        "timeout_s": args.timeout_s,
+        "database": args.database,
+        "legacy_auth_baseline": args.legacy_auth_baseline,
+        "agent_mode": args.agent_mode,
+    }
+
+    def settle(case: Case, trial: int, record: TrialRecord) -> None:
+        (output / f"{case.id}-{trial}.json").write_text(record.model_dump_json(indent=2))
+        filename = "errors.jsonl" if record.status == "error" else "results.jsonl"
+        with (output / filename).open("a") as stream:
+            stream.write(record.model_dump_json() + "\n")
+        tally["passed"] += record.status == "passed"
+        tally["errors"] += record.status == "error"
+        graded = int(record.status != "error")
+        language = str(case.tags.language)
+        language_cases.setdefault(language, set()).add(case.id)
+        language_trials[language] = language_trials.get(language, 0) + 1
+        language_rows.append((language, int(record.status == "passed"), graded))
+        print(record.status, case.id, record.grade.get("reasons", []) if record.grade else record.error_class)
+
+    tasks = [(case, trial) for case in chosen for trial in range(args.trials)]
+    if workers == 1:
+        for case, trial in tasks:
+            settle(case, trial, asyncio.run(run_trial(case, budget=budget, **options)))
+    else:
+        with ProcessPoolExecutor(
+            max_workers=workers, mp_context=mp_context, initializer=_init_worker, initargs=(budget,)
+        ) as pool:
+            futures = {
+                pool.submit(_trial_in_worker, case.model_dump_json(), options): (case, trial) for case, trial in tasks
+            }
+            for future in as_completed(futures):
+                case, trial = futures[future]
+                try:
+                    record = TrialRecord.model_validate_json(future.result())
+                except Exception as error:  # a worker that died is one errored trial, not the end of the run
+                    record = TrialRecord(
+                        case_id=case.id,
+                        status="error",
+                        error_class=type(error).__name__,
+                        error_message="Trial could not complete: the worker process failed.",
+                    )
+                settle(case, trial, record)
+    passed, errors = tally["passed"], tally["errors"]
     attempted = len(chosen) * args.trials
     by_language = {
         language: {

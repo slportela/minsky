@@ -661,9 +661,13 @@ async def test_fraud_on_something_that_is_not_a_card_goes_straight_to_the_fraud_
 # ---------------------------------------------------------------- giving up
 
 
-async def test_when_the_agent_gives_up_the_customer_is_offered_a_person_and_the_summary_says_why():
-    chat = Chat([txn("T1", "10", "Cafe", JUNE_10)], ScriptedAgent([call("give_up", reason="not_found")]))
-    offer = await chat.say("Hay un cargo raro en mi cuenta")
+async def test_when_the_agent_gives_up_after_asking_the_customer_is_offered_a_person_and_the_summary_says_why():
+    chat = Chat(
+        [txn("T1", "10", "Cafe", JUNE_10)],
+        ScriptedAgent([say(ASK), call("give_up", reason="not_found")]),
+    )
+    await chat.say("Hay un cargo raro en mi cuenta")
+    offer = await chat.say("No me acuerdo de nada más")
     assert chat.state.phase == Phase.OFFER_ESCALATION and "No logré identificar" in offer and "asesor" in offer
     done = await chat.say("sí")
     handoff = _handoff(chat)
@@ -810,3 +814,88 @@ async def test_markdown_emphasis_in_a_note_is_stripped():
     chat = Chat([txn("T1", "123.10", "Cafe Sur", JUNE_10)], agent)
     card = await chat.say("No reconozco un cargo de 123 dólares")
     assert card.startswith("Es de 123.1 en Cafe Sur.") and "*" not in card
+
+
+# ---------------------------------------------------------------- a slow query must not freeze other conversations
+
+_HEAVY = "SELECT count(*) FROM transactions a, transactions b, transactions c, transactions d, transactions e"
+
+
+async def _max_stall_while(awaitable) -> tuple[float, object]:
+    """The longest gap between ticks of a 10 ms heartbeat while `awaitable` runs: how long the event loop froze."""
+    import asyncio
+    import time
+
+    stalls: list[float] = []
+    running = True
+
+    async def heartbeat() -> None:
+        last = time.monotonic()
+        while running:
+            await asyncio.sleep(0.01)
+            now = time.monotonic()
+            stalls.append(now - last)
+            last = now
+
+    beat = asyncio.create_task(heartbeat())
+    await asyncio.sleep(0.05)  # let the heartbeat settle before the work starts
+    try:
+        outcome = await asyncio.gather(awaitable, return_exceptions=True)
+    finally:
+        running = False
+        await beat
+    return max(stalls), outcome[0]
+
+
+async def test_a_query_that_runs_into_its_deadline_does_not_freeze_the_event_loop():
+    from minsky_api.agent.sandbox import DEADLINE_S
+
+    rows = [txn(f"T{i}", "1.00", "Cafe", JUNE_10) for i in range(150)]
+    ctx = ctx_for(rows)
+    history = await load_history(ctx)
+    stall, outcome = await _max_stall_while(query_transactions(ctx, history, QueryTransactionsArgs(sql=_HEAVY)))
+    assert isinstance(outcome, SandboxError)  # the deadline cut it, as before
+    assert DEADLINE_S >= 0.5 and stall < DEADLINE_S / 2, f"the event loop froze for {stall:.2f}s"
+
+
+async def test_several_slow_queries_run_side_by_side_not_one_after_the_other():
+    import asyncio
+    import time
+
+    rows = [txn(f"T{i}", "1.00", "Cafe", JUNE_10) for i in range(150)]
+    ctx = ctx_for(rows)
+    histories = [await load_history(ctx) for _ in range(3)]
+    started = time.monotonic()
+    results = await asyncio.gather(
+        *(query_transactions(ctx, h, QueryTransactionsArgs(sql=_HEAVY)) for h in histories), return_exceptions=True
+    )
+    elapsed = time.monotonic() - started
+    assert all(isinstance(r, SandboxError) for r in results)
+    assert elapsed < 1.2, f"three 0.5 s deadlines took {elapsed:.2f}s: they ran one after another"
+
+
+async def test_the_agent_cannot_give_up_on_not_found_before_it_has_asked_the_customer_anything():
+    """Live run 4: the agent offered a person without one question in 1 of 3 trials, against its prompt."""
+    agent = ScriptedAgent(
+        [call("give_up", reason="not_found"), say("No encontré nada con eso. ¿Recuerdas el comercio o el día?")]
+    )
+    chat = Chat([txn("T1", "10", "Cafe", JUNE_10)], agent)
+    reply = await chat.say("Hay un cargo raro en mi cuenta")
+    assert reply.startswith("No encontré nada") and chat.state.phase == Phase.SEARCH  # it asked, and nobody was offered
+    refusal = agent.requests[-1][-1]["output"]
+    assert refusal.startswith("error:") and "asked the customer" in refusal
+    assert chat.state.acts[-1] == "clarify" and "offer_handoff" not in chat.state.acts
+
+
+async def test_after_one_question_a_second_give_up_goes_through_even_in_the_same_conversation():
+    agent = ScriptedAgent([say(ASK), call("give_up", reason="not_found")])
+    chat = Chat([txn("T1", "10", "Cafe", JUNE_10)], agent)
+    await chat.say("Hay un cargo raro en mi cuenta")
+    await chat.say("No sé")
+    assert chat.state.phase == Phase.OFFER_ESCALATION
+
+
+async def test_out_of_scope_needs_no_question_first():
+    chat = Chat([], ScriptedAgent([call("give_up", reason="out_of_scope")]))
+    await chat.say("Quiero saber el saldo de mi cuenta")
+    assert chat.state.phase == Phase.OFFER_ESCALATION

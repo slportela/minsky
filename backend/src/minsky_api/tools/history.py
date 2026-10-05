@@ -7,6 +7,7 @@ writes an audit record. `load_history` reads the session customer's rows once an
 
 from __future__ import annotations
 
+import asyncio
 import json
 from collections import Counter
 from dataclasses import dataclass
@@ -106,7 +107,9 @@ async def query_transactions(
         raise ToolError("query_transactions: history belongs to another customer")
     with start_span("tool.query_transactions", tool="query_transactions", sql=args.sql[:300]):
         try:
-            found = history.sandbox.query(args.sql)
+            # SQLite is synchronous and the deadline is half a second: off the event loop, so a slow query of one
+            # customer does not stall every other conversation.
+            found = await asyncio.to_thread(history.sandbox.query, args.sql)
         except SandboxError:
             _audit(
                 ctx,

@@ -12,6 +12,7 @@ AWS        := AWS_PROFILE=$(PROFILE) aws
 EVAL_CAP_USD ?= 1
 EVAL_AGENT_MODE ?= workflow  # workflow | agentic (docs/agentic_dispute_agent.md)
 EVAL_TRIALS ?= 3
+EVAL_WORKERS ?= 1  # trials run in this many processes (1 to 16); one run folder, one shared spend cap
 EVAL_TIMEOUT_S ?= 300
 EVAL_IDS ?=
 
@@ -63,10 +64,10 @@ EVAL_PRICE_FLAGS = $(if $(and $(EVAL_INPUT_RATE),$(EVAL_OUTPUT_RATE)),--input-us
 # EVAL_AGENT_MODE=agentic runs the tool-using agent; its estimate is about 20 times the workflow's, so raise the cap
 # (EVAL_CAP_USD=3). EVAL_IDS=case-a,case-b narrows the run; EVAL_TRIALS sets the trials per case.
 eval-live-estimate:  ## estimate a real dev run; token prices come from evals/model_prices.py
-	uv run python -m evals.runner --include-drafts --extractor real --agent-mode $(EVAL_AGENT_MODE) --trials $(EVAL_TRIALS) $(if $(EVAL_IDS),--ids $(EVAL_IDS)) --timeout-s $(EVAL_TIMEOUT_S) --max-cost-usd $(EVAL_CAP_USD) $(EVAL_PRICE_FLAGS) --estimate-only
+	uv run python -m evals.runner --include-drafts --extractor real --agent-mode $(EVAL_AGENT_MODE) --trials $(EVAL_TRIALS) --workers $(EVAL_WORKERS) $(if $(EVAL_IDS),--ids $(EVAL_IDS)) --timeout-s $(EVAL_TIMEOUT_S) --max-cost-usd $(EVAL_CAP_USD) $(EVAL_PRICE_FLAGS) --estimate-only
 
 eval-live:  ## SPENDS MONEY: run the dev cases with the real model (key in .env); same variables as eval-live-estimate
-	MINSKY_ENVIRONMENT=local uv run python -m evals.runner --include-drafts --extractor real --agent-mode $(EVAL_AGENT_MODE) --trials $(EVAL_TRIALS) $(if $(EVAL_IDS),--ids $(EVAL_IDS)) --timeout-s $(EVAL_TIMEOUT_S) --max-cost-usd $(EVAL_CAP_USD) $(EVAL_PRICE_FLAGS)
+	MINSKY_ENVIRONMENT=local uv run python -m evals.runner --include-drafts --extractor real --agent-mode $(EVAL_AGENT_MODE) --trials $(EVAL_TRIALS) --workers $(EVAL_WORKERS) $(if $(EVAL_IDS),--ids $(EVAL_IDS)) --timeout-s $(EVAL_TIMEOUT_S) --max-cost-usd $(EVAL_CAP_USD) $(EVAL_PRICE_FLAGS)
 
 model-prices:  ## show the recorded token prices for the pinned model
 	@MINSKY_ENVIRONMENT=local uv run python -m evals.model_prices

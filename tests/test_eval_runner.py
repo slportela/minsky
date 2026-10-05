@@ -510,3 +510,110 @@ async def test_the_agentic_real_run_survives_the_outage_case_and_closes_its_clie
     assert record.status == "passed", (record.status, record.error_class, record.grade)
     assert len(_ProviderLLM.instances) == 1 and _ProviderLLM.instances[0].client.closed is True
     assert any("HO-" in text for role, text in record.messages if role == "agent")  # the degraded path handed off
+
+
+# ---------------------------------------------------------------- --workers
+
+
+def _run_main(tmp_path: Path, name: str, *extra: str) -> Path:
+    from evals.runner import main
+
+    out = tmp_path / name
+    ids = "dispute-eligible-open-es,dispute-fraud-block-es,dispute-above-limit-pt"
+    assert (
+        main(
+            ["--include-drafts", "--agent-mode", "agentic", "--trials", "2", "--ids", ids, "--output", str(out), *extra]
+        )
+        == 0
+    )
+    return out
+
+
+def _statuses(folder: Path) -> dict[str, str]:
+    import json
+
+    return {p.name: json.loads(p.read_text())["status"] for p in sorted(folder.glob("*-*.json"))}
+
+
+def test_workers_run_the_same_trials_as_a_sequential_run(tmp_path: Path) -> None:
+    import json
+
+    sequential = _run_main(tmp_path, "one", "--workers", "1")
+    parallel = _run_main(tmp_path, "three", "--workers", "3")
+    assert len(_statuses(parallel)) == 6 and _statuses(parallel) == _statuses(sequential)
+    assert json.loads((parallel / "metadata.json").read_text())["workers"] == 3
+    assert json.loads((sequential / "metadata.json").read_text())["workers"] == 1
+    assert json.loads((parallel / "summary.json").read_text())["attempted"] == 6
+    lines = (parallel / "results.jsonl").read_text().splitlines()
+    assert len(lines) == 6 and not (parallel / "errors.jsonl").exists()  # every trial in one run folder
+
+
+def test_a_run_made_by_workers_can_be_compared_with_a_sequential_one(tmp_path: Path) -> None:
+    from evals.compare import main as compare
+
+    sequential = _run_main(tmp_path, "one", "--workers", "1")
+    parallel = _run_main(tmp_path, "two", "--workers", "2")
+    assert compare([str(sequential), str(parallel), "--output", str(tmp_path / "delta.json")]) == 0
+
+
+def test_more_workers_than_trials_is_fine(tmp_path: Path) -> None:
+    out = _run_main(tmp_path, "many", "--workers", "16")
+    assert len(_statuses(out)) == 6
+
+
+@pytest.mark.parametrize("workers", ["0", "17", "-1"])
+def test_workers_must_be_between_1_and_16(workers: str) -> None:
+    from evals.runner import main
+
+    with pytest.raises(SystemExit):
+        main(["--include-drafts", "--ids", "dispute-eligible-open-es", "--workers", workers])
+
+
+def test_a_worker_trial_returns_a_record_as_plain_json() -> None:
+    from evals.evidence import TrialRecord
+    from evals.runner import _trial_in_worker
+
+    case = _case("dispute-eligible-open-es")
+    options = {
+        "extractor": "scripted",
+        "timeout_s": 120,
+        "database": "sqlite",
+        "legacy_auth_baseline": False,
+        "agent_mode": "agentic",
+    }
+    record = TrialRecord.model_validate_json(_trial_in_worker(case.model_dump_json(), options))
+    assert record.case_id == case.id and record.status == "passed"
+
+
+def test_with_workers_a_real_run_shares_one_cap_between_them(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from evals import runner
+
+    made: list[object] = []
+
+    class Spy(runner.SharedSpendBudget):
+        def __init__(self, *args: object, **kwargs: object) -> None:
+            super().__init__(*args, **kwargs)  # type: ignore[arg-type]
+            made.append(self)
+
+    monkeypatch.setattr(runner, "SharedSpendBudget", Spy)
+    argv = [
+        "--include-drafts",
+        "--extractor",
+        "real",
+        "--estimate-only",
+        "--max-cost-usd",
+        "10",
+        "--input-usd-per-million",
+        "0.1",
+        "--output-usd-per-million",
+        "0.5",
+        "--ids",
+        "dispute-eligible-open-es,dispute-fraud-block-es",
+    ]
+    assert runner.main([*argv, "--workers", "2"]) == 0
+    assert len(made) == 1 and "Conservative estimate" in capsys.readouterr().out
+    made.clear()
+    assert runner.main([*argv, "--workers", "1"]) == 0
+    assert made == []  # one worker keeps the plain in-process budget

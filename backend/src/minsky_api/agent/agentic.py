@@ -240,6 +240,14 @@ async def _run_tool(ctx: ToolContext, state: ConversationState, call: ToolCall, 
 
     if call.name == "give_up":
         reason = args.get("reason") if args.get("reason") in ("not_found", "out_of_scope") else "not_found"
+        if reason == "not_found" and "clarify" not in state.acts:
+            # The prompt asks the agent to ask first, and in live run 4 it did not once in three trials. A rule the
+            # code can hold is held by the code: nothing found is a question to the customer before it is a person.
+            return (
+                "error: you have not asked the customer for a detail yet. Tell them what you did not find and ask "
+                "for the merchant, the approximate amount or the day; give up only if their answer does not help",
+                None,
+            )
         return "ok: the system is offering the customer a person", _offer_escalation_without_match(state, str(reason))
 
     return f"error: unknown tool {call.name}", None
