@@ -62,6 +62,50 @@ class GetTransactionsResult(_Strict):
     transactions: tuple[TransactionView, ...]
 
 
+class FindTransactionsArgs(_Strict):
+    """What the customer described, loosely: the system proposes the closest of the customer's own charges.
+
+    Unlike get_transactions (exact filters) this tolerates a near amount, a day off, a misspelled merchant.
+    Without an amount, a date or a merchant it finds nothing: kind and category only narrow.
+    """
+
+    amount: Decimal | None = Field(default=None, ge=0)
+    currency: str | None = Field(default=None, min_length=3, max_length=3)  # as stated; None = unknown
+    approximate: bool = False  # the customer said "about", "more or less": a wider amount tolerance
+    date_from: date | None = None
+    date_to: date | None = None  # inclusive
+    merchant: str | None = Field(default=None, min_length=1, max_length=100)
+    transaction_type: str | None = Field(default=None, max_length=32)
+    category: str | None = Field(default=None, max_length=32)
+
+    @model_validator(mode="after")
+    def _ranges(self) -> FindTransactionsArgs:
+        if self.date_from is not None and self.date_to is not None and self.date_from > self.date_to:
+            raise ValueError("date_from must not be after date_to")
+        return self
+
+
+class FitView(_Strict):
+    """How one described thing compares to a charge. `found` is the charge's own value (amount with its currency)."""
+
+    criterion: Literal["amount", "date", "merchant", "kind", "category"]
+    fit: Literal["exact", "near", "miss"]
+    found: str | None = None
+
+
+class MatchedTransactionView(_Strict):
+    transaction: TransactionView
+    fits: tuple[FitView, ...] = ()
+
+
+class FindTransactionsResult(_Strict):
+    """The first tier that has any charge: exact, near, closest (one thing differs) or none. Never a mix."""
+
+    tier: Literal["exact", "near", "closest", "none"]
+    request: FindTransactionsArgs
+    matches: tuple[MatchedTransactionView, ...] = ()
+
+
 class GetTransactionArgs(_Strict):
     transaction_id: str = Field(min_length=1)
 

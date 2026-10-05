@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 
 from minsky_api.agent.speak import action_claims
@@ -11,11 +11,13 @@ from minsky_api.agent.wording import (
     fallback_sentence,
     human_amount,
     human_date,
+    near_match_reply,
     policy_reason,
     safe_sentence,
     with_candidates,
     with_yes_no_hint,
 )
+from minsky_api.store.models import Transaction
 
 
 def test_dates_and_amounts_read_naturally():
@@ -123,3 +125,109 @@ def test_a_question_that_already_asks_for_a_yes_or_no_is_left_alone():
         "¿Es este? Dime si o no.",
     ):
         assert with_yes_no_hint(text, "es") == text
+
+
+def _found(*matches: tuple[Transaction, tuple[tuple[str, str, str | None], ...]], **request: object):
+    from minsky_api.tools.schemas import (
+        FindTransactionsArgs,
+        FindTransactionsResult,
+        FitView,
+        MatchedTransactionView,
+        TransactionView,
+    )
+
+    return FindTransactionsResult(
+        tier="near",
+        request=FindTransactionsArgs(**request),  # type: ignore[arg-type]
+        matches=tuple(
+            MatchedTransactionView(
+                transaction=TransactionView.model_validate(txn),
+                fits=tuple(FitView(criterion=c, fit=f, found=found) for c, f, found in fits),  # type: ignore[arg-type]
+            )
+            for txn, fits in matches
+        ),
+    )
+
+
+def _row(
+    amount: str = "83.00", *, merchant: str | None = "Super Ahorro", currency: str = "USD", usd: str | None = None
+):
+    return Transaction(
+        transaction_id="T1",
+        customer_id="C1",
+        product_id="P1",
+        transaction_date=datetime(2026, 6, 18, 2, 0),
+        transaction_type="Purchase",
+        amount=Decimal(amount),
+        currency=currency,
+        amount_usd=Decimal(usd or amount),
+        amount_usd_source="native_usd",
+        merchant_name=merchant,
+    )
+
+
+def test_a_near_proposal_says_what_was_not_found_what_was_and_how_it_differs():
+    found = _found(
+        (_row(), (("amount", "near", "83.00 USD"), ("date", "near", "2026-06-18"))),
+        amount=Decimal("80"),
+        approximate=True,
+        date_from=date(2026, 6, 17),
+        date_to=date(2026, 6, 17),
+    )
+    text = near_match_reply(found, "es")
+    assert text.startswith("No encontré un cargo de aproximadamente 80 del 17 de junio de 2026.")
+    assert "Super Ahorro, 83.00 USD, 18 de junio de 2026 (monto cercano, fecha cercana)" in text
+    assert text.endswith("Responde sí o no.")
+
+
+def test_a_near_proposal_in_portuguese_is_complete_too():
+    found = _found((_row(), (("amount", "miss", "83.00 USD"),)), amount=Decimal("80"), merchant="Super Ahorro")
+    text = near_match_reply(found, "pt")
+    assert text.startswith("Não encontrei uma cobrança de 80 em Super Ahorro.")
+    assert "outro valor" in text and text.endswith("Responda sim ou não.")
+
+
+def test_several_near_charges_are_numbered_with_what_differs_in_each():
+    found = _found(
+        (_row("83.00"), (("amount", "near", "83.00 USD"),)),
+        (
+            _row("84.00", merchant="Cine Premium"),
+            (("amount", "near", "84.00 USD"), ("merchant", "miss", "Cine Premium")),
+        ),
+        amount=Decimal("80"),
+    )
+    text = near_match_reply(found, "es")
+    lines = text.splitlines()
+    assert lines[1].startswith("1. Super Ahorro, 83.00 USD") and "(monto cercano)" in lines[1]
+    assert lines[2].startswith("2. Cine Premium, 84.00 USD") and "otro comercio" in lines[2]
+    assert "número" in lines[0]
+
+
+def test_a_charge_in_a_local_currency_is_shown_in_both():
+    found = _found(
+        (_row("500000.00", currency="COP", usd="123.00"), (("amount", "miss", "123.00 USD"),)),
+        amount=Decimal("500000"),
+        currency="COP",
+    )
+    assert "500000.00 COP (123.00 USD)" in near_match_reply(found, "es")
+    assert "de 500000 COP" in near_match_reply(found, "es")
+
+
+def test_the_requested_kind_category_and_range_are_named():
+    found = _found(
+        (_row(merchant=None), (("kind", "miss", "Purchase"),)),
+        transaction_type="Withdrawal",
+        category="Food",
+        date_from=date(2026, 6, 1),
+        date_to=date(2026, 6, 5),
+    )
+    text = near_match_reply(found, "es")
+    assert text.startswith(
+        "No encontré un retiro de la categoría comida entre el 1 de junio de 2026 y el 5 de junio de 2026."
+    )
+
+
+def test_a_near_proposal_never_claims_an_action():
+    found = _found((_row(), (("amount", "near", "83.00 USD"),)), amount=Decimal("80"))
+    for language in ("es", "pt"):
+        assert action_claims(near_match_reply(found, language)) == frozenset()

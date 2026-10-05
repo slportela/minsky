@@ -47,6 +47,8 @@ class ConversationState:
     claims_card_blocked: bool = False
     # Text of the confirmation question already sent. None unless phase is a confirm phase.
     pending_question: str | None = None
+    # How the selected charge was found when it was not an exact match: "near" or "closest". Audit trail only.
+    match_tier: str | None = None
     search_details: DisputeDetails = field(default_factory=DisputeDetails)
     # Last user/agent texts for the HTTP contract (server-owned history).
     messages: list[tuple[str, str]] = field(default_factory=list)  # ("user"|"agent", text)

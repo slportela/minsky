@@ -35,9 +35,11 @@ Evidence to collect (step 1 of the plan, *to measure*):
      │            out of scope ──▶ ABSTAIN: say what we can do, offer a human
      ▼
  3 FIND THE       search ONLY this customer's transactions
-   TRANSACTION    0 matches → ask for more detail (max 2 tries) → ESCALATE
-     │            2+ matches → CLARIFY: show masked candidates, customer picks
-     ▼            1 match → confirm with the customer
+   TRANSACTION    graded in code: exact · near (123 for 123.10, a day off, a misspelled merchant)
+     │            · closest (one detail differs); the first tier with a charge, never a mix
+     │            1 exact match → confirm · 2+ → CLARIFY: show candidates, customer picks
+     │            no exact but a close one → say what differs, customer confirms or picks
+     ▼            nothing close → ask for more detail (max 2 tries) → ESCALATE
  4 CHECK POLICY   deterministic rules (synthetic policy: docs/dispute_policy.md, rules D01-D09):
      │              declined → nothing was charged: explain        (RESOLVE, informational)
      │              reversed → already refunded: explain           (RESOLVE, informational)
@@ -69,8 +71,8 @@ No money moves and no refunds are granted: the system only opens the claim, bloc
 | Authentication, permissions | Code | Security is never a model decision |
 | Language | Code (a language-id library), LLM as fallback for mixed text | Cheap and deterministic |
 | Intent, dispute reason | **Learned router** (trained on transcripts), LLM as fallback when confidence is low | The required learned component; cheaper and faster than an LLM, and measurable against baselines |
-| Details (merchant, amount, date) | LLM with structured output | Free text in two languages; the schema forces a valid shape |
-| Transaction search | Code (SQL over the customer's own records) | Exact, auditable |
+| Details (merchant, amount, currency, day, kind) | LLM with structured output | Free text in two languages; the schema forces a valid shape. "Yesterday" is read as `days_ago`; code turns it into a date |
+| Transaction search | Code (`matching/`, over the customer's own records) | Exact and near matches are graded by fixed thresholds, auditable (ADR 0015); the model never matches |
 | Eligibility and routing | Code (policy rules) | Brief: policy outside model-generated text |
 | Questions, summaries, replies | LLM, **only from verified facts** | Natural language in es/pt; every amount, date and merchant is checked against the tool results |
 | Handoff | Code builds the payload; LLM writes the summary | Structured JSON: request, verified facts, actions taken, evidence, open questions |
@@ -101,7 +103,7 @@ The agent never has to read the raw transcript.
 │  (sessions,      │            │              │                                              │
 │   OTP mock)      ▼            ▼              ▼                                              │
 │              router        llm steps       tools (permission check + audit on every call)   │
-│             (learned)    (Bedrock: extract,  get_transactions · get_transaction ·           │
+│             (learned)    (Bedrock: extract,  find_transactions · get_transaction ·          │
 │                          phrase, summarize)  open_dispute · get_dispute · block_card ·      │
 │                                              create_handoff                                 │
 │  guardrails: input (injection signals) · output (grounding, language, no data from others)  │

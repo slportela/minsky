@@ -30,6 +30,13 @@ SCRIPTED = (
     "dispute-fraud-no-block-es",
     "dispute-already-disputed-es",
     "model-outage-handoff-es",
+    "dispute-near-amount-es",
+    "dispute-near-amount-pt",
+    "dispute-near-amount-and-date-es",
+    "dispute-date-only-two-charges-es",
+    "dispute-merchant-misspelled-es",
+    "dispute-kind-narrows-es",
+    "dispute-local-currency-es",
 )
 
 

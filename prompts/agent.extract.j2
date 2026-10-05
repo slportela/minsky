@@ -1,8 +1,8 @@
 {#
-version: 2
+version: 3
 owner: agent
 model: gpt-6-luna
-changed: 2026-10-01 first extract prompt for orchestrator v0
+changed: 2026-10-05 flexible matching: currency, approximate, days_ago, transaction_type, category
 #}
 Extrae los datos de un reclamo de transacción bancaria a partir del mensaje del cliente.
 Responde solo con el esquema. Si el pedido no es un reclamo de transacción (saludos, otro producto,
@@ -10,7 +10,18 @@ consulta general sin cargo), marca out_of_scope=true.
 customer_says_not_me=true si el cliente dice que no reconoce el cargo o que no fue él.
 Si menciona un id de transacción, llénalo en transaction_id.
 amount es el monto en la moneda del cargo si aparece; si no, null.
-date_from/date_to son fechas de calendario si el cliente da un rango o un día.
+currency solo si el cliente nombra la moneda: dólares o USD es USD, pesos colombianos es COP, pesos argentinos
+es ARS, pesos mexicanos es MXN. Si dice solo "pesos" o no dice moneda, null.
+approximate=true solo si el cliente es impreciso con el monto ("más o menos", "alrededor de", "como", "cerca de",
+"aproximadamente"). Si no lo es, null.
+date_from/date_to son fechas de calendario escritas por el cliente (un día, un rango). No conoces la fecha de
+hoy: para fechas relativas deja date_from/date_to en null y llena days_ago: hoy es 0, ayer es 1, anteayer es 2,
+"hace N días" es N.
+transaction_type solo si el cliente nombra el tipo de movimiento: compra es Purchase, retiro es Withdrawal,
+transferencia es Transfer, pago es Payment, depósito es Deposit, ajuste es Adjustment. "Cargo" o "movimiento"
+a secas no dicen el tipo: null.
+category solo si el cliente dice el rubro de una compra: comida es Food, servicios es Services, transporte
+es Transport, entretenimiento es Entertainment, salud es Health, otros es Other. Si no, null.
 
 reset_search=true si el cliente pide empezar una búsqueda distinta o descartar los filtros anteriores;
 si solo agrega o corrige un dato, reset_search=false. Extrae solo los datos presentes en este mensaje.

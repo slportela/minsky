@@ -16,6 +16,7 @@ from minsky_api.tools import (
     BlockCardArgs,
     CreateHandoffArgs,
     EvaluateDisputeArgs,
+    FindTransactionsArgs,
     GetDisputeArgs,
     GetTransactionArgs,
     GetTransactionsArgs,
@@ -26,6 +27,7 @@ from minsky_api.tools import (
     block_card,
     create_handoff,
     evaluate_dispute,
+    find_transactions,
     get_dispute,
     get_transaction,
     get_transactions,
@@ -167,6 +169,8 @@ async def test_all_tools_deny_bad_session(session: ToolSession):
     ctx = _ctx(session, get_result=_txn(), exec_rows=[_txn()])
     with pytest.raises(ToolDenied):
         await get_transactions(ctx)
+    with pytest.raises(ToolDenied):
+        await find_transactions(ctx, FindTransactionsArgs(amount=Decimal("25")))
     with pytest.raises(ToolDenied):
         await get_transaction(ctx, GetTransactionArgs(transaction_id="T1"))
     with pytest.raises(ToolDenied):
@@ -407,3 +411,57 @@ async def test_fraud_on_a_non_card_product_does_not_offer_a_block():
             bank[Product] = product
         result = await evaluate_dispute(_ctx(_valid(), get_result=bank), EvaluateDisputeArgs(transaction_id="T1"))
         assert result.route == "escalate_fraud" and result.offer_card_block is False
+
+
+@pytest.mark.asyncio
+async def test_find_transactions_grades_the_customers_rows_and_audits_the_tier():
+    ctx = _ctx(_valid(), exec_rows=[_txn(amount_usd="123.10")])
+    result = await find_transactions(ctx, FindTransactionsArgs(amount=Decimal("123")))
+    assert result.tier == "near"
+    assert result.matches[0].transaction.transaction_id == "T1"
+    assert [(fit.criterion, fit.fit, fit.found) for fit in result.matches[0].fits] == [("amount", "near", "123.10 USD")]
+    entry = ctx.cases.list_audit()[-1]
+    assert (entry.tool, entry.outcome, entry.reason) == ("find_transactions", "ok", "near")
+
+
+@pytest.mark.asyncio
+async def test_find_transactions_reads_only_the_session_customers_rows():
+    ctx = _ctx(_valid("C7"), exec_rows=[])
+    await find_transactions(ctx, FindTransactionsArgs(amount=Decimal("25")))
+    from sqlalchemy.dialects import postgresql
+
+    statement = ctx.db.exec_statements[0]  # type: ignore[attr-defined]
+    assert "C7" in statement.compile(dialect=postgresql.dialect()).params.values()
+    assert "customer_id" in str(statement)
+
+
+@pytest.mark.asyncio
+async def test_find_transactions_without_a_strong_detail_finds_nothing_and_exposes_no_row():
+    ctx = _ctx(_valid(), exec_rows=[_txn(), _txn(transaction_id="T2")])
+    result = await find_transactions(ctx, FindTransactionsArgs(transaction_type="Purchase"))
+    assert result.tier == "none" and result.matches == ()
+
+
+@pytest.mark.asyncio
+async def test_find_transactions_hides_fraud_signals():
+    ctx = _ctx(_valid(), exec_rows=[_txn(is_fraud=True)])
+    result = await find_transactions(ctx, FindTransactionsArgs(amount=Decimal("25")))
+    dumped = result.model_dump_json()
+    assert "is_fraud" not in dumped and "fraud_score" not in dumped and "customer_id" not in dumped
+
+
+@pytest.mark.asyncio
+async def test_find_transactions_store_failure_is_tool_error_and_audited():
+    ctx = _ctx(_valid(), fail_exec=True)
+    with pytest.raises(ToolError, match="find_transactions store failure"):
+        await find_transactions(ctx, FindTransactionsArgs(amount=Decimal("25")))
+    assert ctx.cases.list_audit()[-1].outcome == "error"
+
+
+def test_find_transactions_args_reject_inverted_dates_and_bad_currency():
+    with pytest.raises(ValueError):
+        FindTransactionsArgs(date_from=date(2026, 6, 15), date_to=date(2026, 6, 1))
+    with pytest.raises(ValueError):
+        FindTransactionsArgs(currency="DOLLARS")
+    with pytest.raises(ValueError):
+        FindTransactionsArgs(amount=Decimal("-1"))

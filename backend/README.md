@@ -15,8 +15,9 @@ FastAPI service for dispute intake: the orchestrator, the policy, the mock bank 
    │  ├─▶ guardrails/  input checks (injection signals)
    │  ├─▶ router/      intent + dispute reason (learned); low confidence → llm/
    │  ├─▶ llm/         extract details (structured output) · choose the reply act and wording · summarize handoffs
-   │  ├─▶ tools/       get_transactions · get_transaction · classify_reply · open_dispute ·
+   │  ├─▶ tools/       find_transactions · get_transactions · get_transaction · classify_reply · open_dispute ·
    │  │                get_dispute · block_card · create_handoff; each checks the session and writes an audit record
+   │  ├─▶ matching/    grade what the customer described against their own charges (pure, no I/O)
    │  ├─▶ policy/      decide(facts) → route + rule id (pure, no I/O)
    │  └─▶ guardrails/  output checks: every fact grounded in tool results, reply language
    ▼
@@ -29,6 +30,7 @@ FastAPI service for dispute intake: the orchestrator, the policy, the mock bank 
 ## Rules for this code
 
 - `policy/` has no I/O and no model calls. It is tested rule by rule (`tests/test_policy_disputes.py`).
+- `matching/` has no I/O and no model calls either. It grades each charge against what the customer said (amount, day, merchant, kind, category) as exact, near or miss, and returns the first tier that has a charge: exact, near, closest or none, never a mix. A near or closest charge is only proposed, with what differs said by code (`agent/wording.py`); the customer still confirms and the policy still reads the charge's real facts. Thresholds are `SearchConfig`; changing one needs an eval delta (ADR 0015, `tests/test_matching_transactions.py`).
 - `tools/` never take a customer id from the model: they read it from the session. Every tool has a denial test. Plain async + Pydantic (no LangGraph); `open_dispute` / `block_card` require `confirmed=True`. `classify_reply` classifies a reply to a confirmation the system already sent, checks the session, writes an audit row, and does not act.
 - `store/` reads `bank.*` by entity key (async, pooled). Customer authorization is checked once in identity/tools, not on every store query. Writes go through the `CasesBackend` protocol: `SqlCasesBackend` (Postgres `cases.*`, `MINSKY_CASES_BACKEND=postgres`, the compose default) or `InMemoryCasesBackend` (tests, offline evals). Every dispute and handoff also queues a triaged back-office case (`tools/casework.py`, `policy/triage.py`), served to agents by `api/console.py` with staff credentials (`MINSKY_STAFF_SESSIONS`, ADR 0013).
 - `identity/` resolves a server-provisioned, expiring bearer credential to `ToolSession`; customer ids

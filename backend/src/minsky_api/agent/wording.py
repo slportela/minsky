@@ -9,6 +9,8 @@ from __future__ import annotations
 from datetime import date
 from decimal import Decimal
 
+from minsky_api.tools.schemas import FindTransactionsResult, MatchedTransactionView, TransactionView
+
 _MONTHS = {
     "es": ("enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre",
            "noviembre", "diciembre"),
@@ -228,3 +230,138 @@ def done_fallback(language: str) -> str:
     if _lang(language) == "pt":
         return "O seu caso já está registrado com a referência que enviei. Se precisar de outra coisa, escreva aqui."
     return "Tu caso ya quedó registrado con la referencia que te envié. Si necesitas algo más, escríbeme aquí."
+
+
+# --- Near and closest matches: what was asked, what exists, what differs -----------------------------------------
+# Written by code, not the model: every figure and date is the customer's own words or a verified row, and the
+# customer must see exactly what differs before saying yes. The model is not asked to phrase this.
+
+_A_KIND = {
+    "es": {
+        "Purchase": "un cargo",
+        "Transfer": "una transferencia",
+        "Withdrawal": "un retiro",
+        "Payment": "un pago",
+        "Adjustment": "un ajuste",
+        "Deposit": "un depósito",
+    },
+    "pt": {
+        "Purchase": "uma cobrança",
+        "Transfer": "uma transferência",
+        "Withdrawal": "um saque",
+        "Payment": "um pagamento",
+        "Adjustment": "um ajuste",
+        "Deposit": "um depósito",
+    },
+}
+_CATEGORY = {
+    "es": {
+        "Food": "comida",
+        "Services": "servicios",
+        "Transport": "transporte",
+        "Entertainment": "entretenimiento",
+        "Health": "salud",
+        "Other": "otros",
+    },
+    "pt": {
+        "Food": "alimentação",
+        "Services": "serviços",
+        "Transport": "transporte",
+        "Entertainment": "entretenimento",
+        "Health": "saúde",
+        "Other": "outros",
+    },
+}
+_FIT_TAGS = {
+    "es": {
+        ("amount", "near"): "monto cercano",
+        ("amount", "miss"): "otro monto",
+        ("date", "near"): "fecha cercana",
+        ("date", "miss"): "otra fecha",
+        ("merchant", "near"): "comercio parecido",
+        ("merchant", "miss"): "otro comercio",
+        ("kind", "miss"): "otro tipo de movimiento",
+        ("category", "miss"): "otra categoría",
+    },
+    "pt": {
+        ("amount", "near"): "valor próximo",
+        ("amount", "miss"): "outro valor",
+        ("date", "near"): "data próxima",
+        ("date", "miss"): "outra data",
+        ("merchant", "near"): "estabelecimento parecido",
+        ("merchant", "miss"): "outro estabelecimento",
+        ("kind", "miss"): "outro tipo de movimentação",
+        ("category", "miss"): "outra categoria",
+    },
+}
+
+
+def _plain(value: Decimal) -> str:
+    return format(value.normalize(), "f")
+
+
+def _requested(found: FindTransactionsResult, language: str) -> str:
+    """'un cargo de aproximadamente 80 USD del 17 de junio de 2026 en Super Ahorro': what the customer described."""
+    pt = _lang(language) == "pt"
+    request = found.request
+    noun = _A_KIND[_lang(language)].get(request.transaction_type or "", _A_KIND[_lang(language)]["Purchase"])
+    parts = [noun]
+    if request.category:
+        name = _CATEGORY[_lang(language)].get(request.category, request.category)
+        parts.append(f"da categoria {name}" if pt else f"de la categoría {name}")
+    if request.amount is not None:
+        amount = _plain(request.amount) + (f" {request.currency.upper()}" if request.currency else "")
+        parts.append(f"de aproximadamente {amount}" if request.approximate else f"de {amount}")
+    if request.date_from is not None or request.date_to is not None:
+        start = request.date_from or request.date_to
+        end = request.date_to or request.date_from
+        assert start is not None and end is not None
+        if start == end:
+            parts.append(f"em {human_date(start, language)}" if pt else f"del {human_date(start, language)}")
+        elif pt:
+            parts.append(f"entre {human_date(start, language)} e {human_date(end, language)}")
+        else:
+            parts.append(f"entre el {human_date(start, language)} y el {human_date(end, language)}")
+    if request.merchant:
+        parts.append(f"em {request.merchant}" if pt else f"en {request.merchant}")
+    return " ".join(parts)
+
+
+def _charge_money(txn: TransactionView) -> str:
+    """The amount as the customer knows it: own currency first, with the USD figure the rest of the chat uses."""
+    if txn.currency and txn.currency != "USD" and txn.amount is not None:
+        return f"{txn.amount.quantize(Decimal('0.01'))} {txn.currency} ({human_amount(txn.amount_usd)})"
+    return human_amount(txn.amount_usd)
+
+
+def _charge_line(match: MatchedTransactionView, language: str) -> str:
+    txn = match.transaction
+    name = txn.merchant_name or transaction_noun(txn.transaction_type, language)
+    when = human_date(txn.transaction_date.date(), language) if txn.transaction_date else "?"
+    tags = [
+        _FIT_TAGS[_lang(language)][(fit.criterion, fit.fit)]
+        for fit in match.fits
+        if (fit.criterion, fit.fit) in _FIT_TAGS[_lang(language)]
+    ]
+    suffix = f" ({', '.join(tags)})" if tags else ""
+    return f"{name}, {_charge_money(txn)}, {when}{suffix}"
+
+
+def near_match_candidates(found: FindTransactionsResult, language: str) -> str:
+    """The numbered options, each saying what differs from what the customer described."""
+    return "\n".join(f"{index}. {_charge_line(match, language)}" for index, match in enumerate(found.matches, start=1))
+
+
+def near_match_reply(found: FindTransactionsResult, language: str) -> str:
+    """No exact charge but a close one: what was not found, what was, how it differs. Never picks for the customer."""
+    pt = _lang(language) == "pt"
+    head = f"{'Não encontrei' if pt else 'No encontré'} {_requested(found, language)}."
+    if len(found.matches) == 1:
+        line = _charge_line(found.matches[0], language)
+        if pt:
+            return f"{head} Encontrei um parecido: {line}. É esse que você quer revisar? Responda sim ou não."
+        return f"{head} Sí encontré uno parecido: {line}. ¿Es ese el que quieres revisar? Responde sí o no."
+    options = near_match_candidates(found, language)
+    if pt:
+        return f"{head} Encontrei estes parecidos. Indique o número do que você quer revisar:\n{options}"
+    return f"{head} Encontré estos parecidos. Indica el número del que quieres revisar:\n{options}"
