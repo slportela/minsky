@@ -224,3 +224,94 @@ def test_step_checks_the_model_that_answered():
         asyncio.run(
             _llm(_tool_response(model="gpt-5-mini"), []).step("x", [{"role": "user", "content": "hola"}], tools=_SPEC)
         )
+
+
+# ---------------------------------------------------------------- llm smoke: the tool round trip
+
+
+def _llm_sequence(replies: list[dict], sent: list[dict]) -> LLM:
+    queue = list(replies)
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        sent.append(json.loads(request.content))
+        return httpx2.Response(200, json=queue.pop(0))
+
+    client = AsyncOpenAI(
+        api_key="test-key",
+        base_url="http://provider.test/v1",
+        max_retries=0,
+        http_client=httpx2.AsyncClient(transport=httpx2.MockTransport(handler)),
+    )
+    return LLM(SETTINGS, client)
+
+
+def _call_reply(arguments: str = '{"city": "Lima"}') -> dict:
+    body = _tool_response()
+    body["output"][0]["name"] = "lookup_temperature"
+    body["output"][0]["arguments"] = arguments
+    return body
+
+
+def test_the_tool_round_trip_sends_the_result_back_without_provider_ids():
+    from minsky_api.llm.smoke import tool_round_trip
+
+    sent: list[dict] = []
+    llm = _llm_sequence([_call_reply(), _response("Ahora hay 22 grados en Lima.")], sent)
+    lines = asyncio.run(tool_round_trip(llm))
+    assert "step 1: 1 tool call(s)" in lines[0] and "step 2: 0 tool call(s)" in "\n".join(lines)
+    second = sent[1]["input"]
+    assert [i.get("type") for i in second[1:]] == ["function_call", "function_call_output"]
+    call, output = second[1], second[2]
+    assert call["call_id"] == output["call_id"] == "call_1"
+    assert "id" not in call and "id" not in output  # nothing is stored provider-side: no ids to dangle
+
+
+@pytest.mark.parametrize(
+    ("replies", "message"),
+    [
+        ([_response("Hace calor.")], "did not call the tool"),
+        ([_call_reply("not json")], "not JSON"),
+        ([_call_reply(), _response("No sé la temperatura.")], "does not use the tool result"),
+        ([_call_reply(), _call_reply()], "called the tool again"),
+    ],
+)
+def test_the_tool_round_trip_names_the_stage_that_failed(replies, message):
+    from minsky_api.llm.smoke import SmokeFailure, tool_round_trip
+
+    with pytest.raises(SmokeFailure, match=message) as failure:
+        asyncio.run(tool_round_trip(_llm_sequence(replies, [])))
+    assert failure.value.lines  # what happened before the failure is kept for the report
+
+
+def test_a_provider_refusal_of_the_round_trip_prints_a_hint_about_reasoning_items(monkeypatch, capsys):
+    from minsky_api.llm import smoke
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        if b"function_call_output" in request.content:
+            error = {"error": {"message": "Item 'fc_1' was provided without its required 'reasoning' item."}}
+            return httpx2.Response(400, json=error)
+        return httpx2.Response(200, json=_call_reply() if b"tools" in request.content else _response("hola"))
+
+    client = AsyncOpenAI(
+        api_key="test-key",
+        base_url="http://provider.test/v1",
+        max_retries=0,
+        http_client=httpx2.AsyncClient(transport=httpx2.MockTransport(handler)),
+    )
+    monkeypatch.setattr(smoke, "get_settings", lambda: SETTINGS)
+    monkeypatch.setattr(smoke, "LLM", lambda settings: LLM(settings, client))
+    assert asyncio.run(smoke.run(tools=True)) == 1
+    out = capsys.readouterr().out
+    assert "FAILED the provider refused" in out and "reasoning" in out and "hint:" in out
+    assert "test-key" not in out  # the key is never printed
+
+
+def test_the_plain_smoke_does_not_run_the_tool_round_trip(monkeypatch, capsys):
+    from minsky_api.llm import smoke
+
+    sent: list[dict] = []
+    llm = _llm_sequence([_response("Soy gpt-6-luna.")], sent)
+    monkeypatch.setattr(smoke, "get_settings", lambda: SETTINGS)
+    monkeypatch.setattr(smoke, "LLM", lambda settings: llm)
+    assert asyncio.run(smoke.run(tools=False)) == 0
+    assert len(sent) == 1  # one call: no tool round trip

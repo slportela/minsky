@@ -7,9 +7,13 @@ PROFILE    := $(shell grep '^BRONZE_AWS_PROFILE=' .env 2>/dev/null | cut -d= -f2
 LAKE_URI   := $(patsubst %/bronze,%,$(BRONZE_URI))
 AWS        := AWS_PROFILE=$(PROFILE) aws
 
-.PHONY: demo-reset demo-sessions help setup lock-check lint typecheck test llm-smoke regression-smoke eval-smoke eval-smoke-agentic eval-live-estimate frontend-check eval-check router ci model-prices up down logs demo-plan demo-apply pipeline bronze mirror silver gold publish docs freshness-check
+.PHONY: demo-reset demo-sessions help setup lock-check lint typecheck test llm-smoke llm-smoke-tools regression-smoke eval-smoke eval-smoke-agentic eval-live-estimate eval-live frontend-check eval-check router ci model-prices up down logs demo-plan demo-apply pipeline bronze mirror silver gold publish docs freshness-check
 
 EVAL_CAP_USD ?= 1
+EVAL_AGENT_MODE ?= workflow  # workflow | agentic (docs/agentic_dispute_agent.md)
+EVAL_TRIALS ?= 3
+EVAL_TIMEOUT_S ?= 300
+EVAL_IDS ?=
 
 # ---- Development ---------------------------------------------------------------------------
 
@@ -38,6 +42,9 @@ frontend-check:  ## frontend type check
 llm-smoke:  ## one real call to the configured model (MINSKY_LLM_* in .env): key, endpoint, pinned model
 	MINSKY_ENVIRONMENT=local uv run python -m minsky_api.llm.smoke
 
+llm-smoke-tools:  ## the plain call plus the tool round trip the agentic search needs (a few cents)
+	MINSKY_ENVIRONMENT=local uv run python -m minsky_api.llm.smoke --tools
+
 eval-check:  ## validate every eval case and the case set (schema, leakage, coverage)
 	uv run python -m evals.checks evals/cases --prompts prompts
 
@@ -53,8 +60,13 @@ eval-smoke-agentic:  ## the same smoke through the tool-using agent (scripted ag
 #   make eval-live-estimate EVAL_INPUT_RATE=0.10 EVAL_OUTPUT_RATE=0.50
 EVAL_PRICE_FLAGS = $(if $(and $(EVAL_INPUT_RATE),$(EVAL_OUTPUT_RATE)),--input-usd-per-million $(EVAL_INPUT_RATE) --output-usd-per-million $(EVAL_OUTPUT_RATE),$(shell MINSKY_ENVIRONMENT=local uv run python -m evals.model_prices --flags))
 
-eval-live-estimate:  ## estimate a real dev smoke; token prices come from evals/model_prices.py
-	uv run python -m evals.runner --include-drafts --extractor real --trials 3 --max-cost-usd $(EVAL_CAP_USD) $(EVAL_PRICE_FLAGS) --estimate-only
+# EVAL_AGENT_MODE=agentic runs the tool-using agent; its estimate is about 20 times the workflow's, so raise the cap
+# (EVAL_CAP_USD=3). EVAL_IDS=case-a,case-b narrows the run; EVAL_TRIALS sets the trials per case.
+eval-live-estimate:  ## estimate a real dev run; token prices come from evals/model_prices.py
+	uv run python -m evals.runner --include-drafts --extractor real --agent-mode $(EVAL_AGENT_MODE) --trials $(EVAL_TRIALS) $(if $(EVAL_IDS),--ids $(EVAL_IDS)) --timeout-s $(EVAL_TIMEOUT_S) --max-cost-usd $(EVAL_CAP_USD) $(EVAL_PRICE_FLAGS) --estimate-only
+
+eval-live:  ## SPENDS MONEY: run the dev cases with the real model (key in .env); same variables as eval-live-estimate
+	MINSKY_ENVIRONMENT=local uv run python -m evals.runner --include-drafts --extractor real --agent-mode $(EVAL_AGENT_MODE) --trials $(EVAL_TRIALS) $(if $(EVAL_IDS),--ids $(EVAL_IDS)) --timeout-s $(EVAL_TIMEOUT_S) --max-cost-usd $(EVAL_CAP_USD) $(EVAL_PRICE_FLAGS)
 
 model-prices:  ## show the recorded token prices for the pinned model
 	@MINSKY_ENVIRONMENT=local uv run python -m evals.model_prices
