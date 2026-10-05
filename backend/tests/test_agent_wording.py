@@ -86,17 +86,19 @@ def test_every_act_that_can_be_refused_has_a_code_written_sentence_in_both_langu
 
 def test_the_confirm_txn_sentence_names_the_transaction_and_asks_for_a_yes_or_no():
     es = safe_sentence("confirm_txn", "es", _TXN)
-    assert "Cafe" in es and "25.00 USD" in es and "10 de junio de 2026" in es and es.endswith("Responde sí o no.")
+    assert "Cafe" in es and "25.00 USD" in es and "10 de junio de 2026" in es
+    assert es.endswith("Responde sí o no, por favor.")
     pt = safe_sentence("confirm_txn", "pt", _TXN)
-    assert "Cafe" in pt and pt.endswith("Responda sim ou não.")
+    assert "Cafe" in pt and pt.endswith("Responda sim ou não, por favor.")
     assert "None" not in safe_sentence("confirm_txn", "es", {**_TXN, "when": None})
 
 
 def test_the_question_acts_use_the_policy_reason_and_never_report_an_action():
     for act in ("confirm_open", "offer_block"):
         text = safe_sentence(act, "es", _REASON)
-        assert text == "El cargo cumple las condiciones para abrir el reclamo ahora mismo."
-        assert not action_claims(text)
+        # The reason is carried whole; only the acknowledgement in front of it is the act's own.
+        assert text.endswith("El cargo cumple las condiciones para abrir el reclamo ahora mismo.")
+        assert text.startswith("Gracias") and not action_claims(text)
     assert safe_sentence("abort", "es", {}) and not action_claims(safe_sentence("abort", "es", {}))
 
 
@@ -109,10 +111,12 @@ def test_an_act_with_no_sentence_is_a_bug_and_raises():
 
 def test_the_transaction_question_always_tells_the_customer_how_to_answer():
     assert (
-        with_yes_no_hint("¿Reconoces este cargo de Cafe?", "es") == "¿Reconoces este cargo de Cafe? Responde sí o no."
+        with_yes_no_hint("¿Reconoces este cargo de Cafe?", "es")
+        == "¿Reconoces este cargo de Cafe? Responde sí o no, por favor."
     )
     assert (
-        with_yes_no_hint("Você reconhece esta cobrança?", "pt") == "Você reconhece esta cobrança? Responda sim ou não."
+        with_yes_no_hint("Você reconhece esta cobrança?", "pt")
+        == "Você reconhece esta cobrança? Responda sim ou não, por favor."
     )
 
 

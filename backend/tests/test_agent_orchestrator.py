@@ -777,7 +777,7 @@ def test_the_question_a_yes_authorizes_is_written_by_code():
     state, _ = asyncio.run(run_turn(state, "Cafe 25", ctx, llm))  # type: ignore[arg-type]
     state, reply = asyncio.run(run_turn(state, "sí", ctx, llm))  # type: ignore[arg-type]
     assert state.phase == Phase.CONFIRM_ACT
-    assert reply.endswith("¿Abro el reclamo por este cargo? Responde sí o no.")
+    assert reply.endswith("¿Quieres que abra el reclamo por este cargo? Responde sí o no, por favor.")
     assert state.pending_question == reply
 
 
@@ -853,9 +853,12 @@ def test_a_transfer_is_not_called_a_charge():
     assert transaction_noun("Withdrawal", "pt") == "saque"
     assert (
         confirm_question("confirm_open", "es", "Transfer")
-        == "¿Abro el reclamo por esta transferencia? Responde sí o no."
+        == "¿Quieres que abra el reclamo por esta transferencia? Responde sí o no, por favor."
     )
     assert "cargo" in confirm_question("confirm_open", "es", None)
+    # Portuguese contracts the preposition: "a contestação desta cobrança", never "de esta cobrança".
+    assert "a contestação desta cobrança" in confirm_question("confirm_open", "pt", "Purchase")
+    assert "a contestação deste saque" in confirm_question("confirm_open", "pt", "Withdrawal")
 
 
 # ---- clarify: the model asks, code owns the option list -------------------------------------------------------
@@ -1053,7 +1056,7 @@ def test_a_refused_transaction_question_is_a_code_written_one():
     llm = _NthSpeech(_details(), n=1, speech=_refused("confirm_txn"), repeat=2)
     state, reply = _turns(llm, _ctx(), "Cafe 25")
     assert state.phase == Phase.CONFIRM_TXN
-    assert "Cafe" in reply and "25.00 USD" in reply and reply.endswith("Responde sí o no.")
+    assert "Cafe" in reply and "25.00 USD" in reply and reply.endswith("Responde sí o no, por favor.")
     assert state.pending_question == reply and "900" not in reply
 
 
@@ -1070,7 +1073,7 @@ def test_a_refused_transaction_question_after_picking_a_candidate_is_a_code_writ
     llm = _NthSpeech(_details(merchant="Cafe", amount=None), n=2, speech=_refused("confirm_txn"), repeat=2)
     state, reply = _turns(llm, ctx, "Cafe", "2")
     assert state.phase == Phase.CONFIRM_TXN
-    assert "Cafe Sur" in reply and reply.endswith("Responde sí o no.") and "900" not in reply
+    assert "Cafe Sur" in reply and reply.endswith("Responde sí o no, por favor.") and "900" not in reply
 
 
 def test_a_refused_ask_again_is_a_code_written_one():
@@ -1084,7 +1087,7 @@ def test_a_refused_open_confirmation_keeps_the_code_written_question():
     llm = _NthSpeech(_details(), n=2, speech=_refused("confirm_open"), repeat=2)
     state, reply = _turns(llm, _ctx(), "Cafe 25", "sí")
     assert state.phase == Phase.CONFIRM_ACT
-    assert reply.startswith("El cargo cumple las condiciones") and reply.endswith("Responde sí o no.")
+    assert "El cargo cumple las condiciones" in reply and reply.endswith("Responde sí o no, por favor.")
     assert "900" not in reply and state.pending_question == reply
 
 
@@ -1093,7 +1096,8 @@ def test_a_refused_card_offer_keeps_the_code_written_question():
     llm = _NthSpeech(_details(customer_says_not_me=True), n=2, speech=_refused("offer_block"), repeat=2)
     state, reply = _turns(llm, ctx, "No fui yo en Cafe", "sí")
     assert state.phase == Phase.CARD_OFFER
-    assert "alguien podría estar usando tu tarjeta" in reply and "¿Bloqueo tu tarjeta ahora?" in reply
+    assert "alguien podría estar usando tu tarjeta" in reply
+    assert "¿Quieres que bloquee tu tarjeta ahora" in reply
 
 
 def test_a_refused_abort_is_a_code_written_one():
@@ -1128,5 +1132,5 @@ def test_the_transaction_question_ends_with_a_code_owned_yes_or_no_hint_exactly_
     llm = FakeLLM(_details())
     state, reply = _turns(llm, ctx, "Cafe 25")
     assert state.phase == Phase.CONFIRM_TXN
-    assert reply.endswith("Responde sí o no.") and reply.count("sí o no") == 1
+    assert reply.endswith("Responde sí o no, por favor.") and reply.count("sí o no") == 1
     assert state.pending_question == reply  # the classifier sees the question the customer saw
