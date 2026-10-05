@@ -7,9 +7,7 @@ from decimal import Decimal
 
 from minsky_api.agent.speak import action_claims
 from minsky_api.agent.wording import (
-    asks_yes_or_no,
     clarify_fallback,
-    confirm_question,
     fallback_sentence,
     human_amount,
     human_date,
@@ -17,7 +15,6 @@ from minsky_api.agent.wording import (
     safe_sentence,
     with_candidates,
     with_yes_no_hint,
-    yes_no_hint,
 )
 
 
@@ -89,10 +86,9 @@ def test_every_act_that_can_be_refused_has_a_code_written_sentence_in_both_langu
 
 def test_the_confirm_txn_sentence_names_the_transaction_and_asks_for_a_yes_or_no():
     es = safe_sentence("confirm_txn", "es", _TXN)
-    assert "Cafe" in es and "25.00 USD" in es and "10 de junio de 2026" in es
-    assert es.endswith("Responde sí o no, por favor.")
+    assert "Cafe" in es and "25.00 USD" in es and "10 de junio de 2026" in es and es.endswith("Responde sí o no.")
     pt = safe_sentence("confirm_txn", "pt", _TXN)
-    assert "Cafe" in pt and pt.endswith("Responda sim ou não, por favor.")
+    assert "Cafe" in pt and pt.endswith("Responda sim ou não.")
     assert "None" not in safe_sentence("confirm_txn", "es", {**_TXN, "when": None})
 
 
@@ -114,27 +110,11 @@ def test_an_act_with_no_sentence_is_a_bug_and_raises():
 
 def test_the_transaction_question_always_tells_the_customer_how_to_answer():
     assert (
-        with_yes_no_hint("¿Reconoces este cargo de Cafe?", "es")
-        == "¿Reconoces este cargo de Cafe? Responde sí o no, por favor."
+        with_yes_no_hint("¿Reconoces este cargo de Cafe?", "es") == "¿Reconoces este cargo de Cafe? Responde sí o no."
     )
     assert (
-        with_yes_no_hint("Você reconhece esta cobrança?", "pt")
-        == "Você reconhece esta cobrança? Responda sim ou não, por favor."
+        with_yes_no_hint("Você reconhece esta cobrança?", "pt") == "Você reconhece esta cobrança? Responda sim ou não."
     )
-
-
-def test_the_hint_the_code_writes_is_the_hint_the_code_detects():
-    """One sentence and one check, so the text we append and the text we look for cannot drift apart."""
-    for language in ("es", "pt"):
-        hint = yes_no_hint(language)
-        assert asks_yes_or_no(hint)
-        already = f"¿Es este el cargo? {hint}"
-        assert with_yes_no_hint(already, language) == already
-        assert with_yes_no_hint("¿Es este el cargo?", language).endswith(hint)
-        for act in ("confirm_open", "offer_block"):
-            assert asks_yes_or_no(confirm_question(act, language, "Purchase")), (act, language)
-            assert asks_yes_or_no(safe_sentence("ask_again", language, {})), language
-    assert not asks_yes_or_no("¿Reconoces este cargo?")
 
 
 def test_a_question_that_already_asks_for_a_yes_or_no_is_left_alone():

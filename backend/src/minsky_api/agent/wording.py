@@ -124,18 +124,6 @@ def _this(transaction_type: str | None, language: str) -> str:
     return _NOUNS[_lang(language)].get(transaction_type or "", _NOUNS[_lang(language)]["Purchase"])[1]
 
 
-# Only a plain "sí" or "no" authorizes anything (agent.consent), so every question that a yes would
-# act on says so literally. One sentence and one test for it, so what we write and what we detect
-# cannot drift apart.
-def yes_no_hint(language: str) -> str:
-    return "Responda sim ou não, por favor." if _lang(language) == "pt" else "Responde sí o no, por favor."
-
-
-def asks_yes_or_no(text: str) -> bool:
-    folded = text.casefold()
-    return any(phrase in folded for phrase in ("sí o no", "sim ou não", "si o no"))
-
-
 # The question a "yes" authorizes is written by code, never by the model, so the customer always
 # consents to exactly the action that runs (AGENTS rule 1). Appended to the model's sentence.
 # It asks what the customer wants rather than announcing what the bank does, and it stays a question:
@@ -144,24 +132,25 @@ def confirm_question(act: str, language: str, transaction_type: str | None = Non
     this = _this(transaction_type, language)
     if _lang(language) == "pt":
         # The verb, not "a contestação de <noun>", which would need the preposition contracted.
-        question = (
-            f"Você quer que eu conteste {this}?"
-            if act == "confirm_open"
-            else "Você quer que eu bloqueie o seu cartão agora, para proteger a sua conta?"
-        )
-    elif act == "confirm_open":
-        question = f"¿Quieres que abra el reclamo por {this}?"
-    else:
-        question = "¿Quieres que bloquee tu tarjeta ahora, para proteger tu cuenta?"
-    return f"{question} {yes_no_hint(language)}"
+        if act == "confirm_open":
+            return f"Você quer que eu conteste {this}? Responda sim ou não."
+        return "Você quer que eu bloqueie o seu cartão agora, para proteger a sua conta? Responda sim ou não."
+    if act == "confirm_open":
+        return f"¿Quieres que abra el reclamo por {this}? Responde sí o no."
+    return "¿Quieres que bloquee tu tarjeta ahora, para proteger tu cuenta? Responde sí o no."
 
 
 def with_yes_no_hint(text: str, language: str) -> str:
     """The transaction question is the model's. Code makes sure it says how to answer.
 
-    A question that already asks for a yes or a no is left alone, so the hint never appears twice.
+    Only a plain "sí" or "no" authorizes anything (agent.consent), and the questions for the two actions already
+    end with "Responde sí o no" from code. A question that already asks for a yes or a no is left alone.
     """
-    return text if asks_yes_or_no(text) else f"{text.rstrip()} {yes_no_hint(language)}"
+    folded = text.casefold()
+    if "sí o no" in folded or "sim ou não" in folded or "si o no" in folded:
+        return text
+    hint = "Responda sim ou não." if _lang(language) == "pt" else "Responde sí o no."
+    return f"{text.rstrip()} {hint}"
 
 
 def with_candidates(text: str, candidates: str) -> str:
@@ -208,8 +197,7 @@ def safe_sentence(act: str, language: str, facts: dict[str, object]) -> str:
     if act == "clarify":
         return clarify_fallback(language, candidates if isinstance(candidates, str) else None)
     if act == "ask_again":
-        apology = "Desculpe, não entendi bem." if pt else "Disculpa, no te entendí bien."
-        return f"{apology} {yes_no_hint(language)}"
+        return "Não ficou claro. Pode responder sim ou não?" if pt else "No me quedó claro. ¿Puedes responder sí o no?"
     if act == "abort":
         return (
             "Entendido, obrigado por me dizer: não vou fazer nada com este caso. "
@@ -230,14 +218,17 @@ def safe_sentence(act: str, language: str, facts: dict[str, object]) -> str:
         )
     if act == "confirm_txn":
         merchant, amount, when = facts.get("merchant"), facts.get("amount"), facts.get("when")
-        found = (
-            f"Obrigado por me contar. Encontrei esta transação: {merchant}, {amount}"
-            if pt
-            else f"Gracias por contarme. Encontré esta transacción: {merchant}, {amount}"
+        if pt:
+            return (
+                f"Você reconhece a transação de {merchant} no valor de {amount}"
+                + (f" em {when}" if when else "")
+                + "? Responda sim ou não."
+            )
+        return (
+            f"¿Reconoces el movimiento de {merchant} por {amount}"
+            + (f" del {when}" if when else "")
+            + "? Responde sí o no."
         )
-        when_part = f", {when}" if when else ""
-        question = ". É essa que você quer revisar?" if pt else ". ¿Es esa la que quieres revisar?"
-        return f"{found}{when_part}{question} {yes_no_hint(language)}"
     raise ValueError(f"no code-written sentence for act {act!r}")
 
 
