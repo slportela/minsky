@@ -262,7 +262,7 @@ def test_the_cli_records_the_agent_mode_in_the_run_metadata(tmp_path: Path) -> N
 
 def test_the_world_records_a_transaction_type_like_the_bank_does() -> None:
     """Live run 1: rows without a type made every query that filtered by it find nothing (an eval bug)."""
-    for case_id, kind in (("dispute-eligible-open-es", "Purchase"), ("dispute-above-limit-es", "Purchase")):
+    for case_id, kind in (("dispute-eligible-open-es", "Purchase"), ("dispute-above-limit-es", "Transfer")):
         case = _case(case_id)
         bank = build_bank(case, facts_from_case(case))
         try:

@@ -17,6 +17,7 @@ user_scenario:
     transaction_id: TRX-FIXTURE-D07
     product_id: PRD-FIXTURE-D07
     merchant: Transferencia
+    transaction_type: Transfer  # the world must not call a transfer a purchase (live run 4: the agent noticed)
     amount: "800.00"
     amount_usd: "800.00"
     currency: USD

@@ -1,6 +1,6 @@
 # Agentic mode vs the workflow, dev cases, live model
 
-Two live runs on 2026-10-05, model `gpt-6-luna` (OpenAI API, ADR 0008), search prompt **v3**, real model for extraction (workflow) or for the search agent (agentic), SDK retries 0, scripted customer (see limits). Machine-readable deltas from `python -m evals.compare`: `*-flex-8-cases.json` and `*-dev-25-cases.json`.
+Three live runs on 2026-10-05, model `gpt-6-luna` (OpenAI API, ADR 0008), search prompt **v3** (runs 1 and 2) and **v4** (run 3), real model for extraction (workflow) or for the search agent (agentic), SDK retries 0, scripted customer (see limits). Machine-readable deltas from `python -m evals.compare`: `*-flex-8-cases.json`, `*-dev-25-cases.json` (v3) and `*-dev-25-cases-v4.json`.
 
 **Eval delta for PR #51 (rule 3), on dev cases. Not a held-out result.**
 
@@ -29,7 +29,34 @@ Across the whole workload the agentic mode costs about 1.6 times as much and is 
 | `dispute-flex-usd-for-cop-es` (2/3) | Found the right charge in one query, then **asked in text** "¿Es ese el cargo que quieres disputar?" instead of proposing it. | The scripted customer has no turn that answers a free-text question, so the trial ends. Asking is not unsafe (consent is only at the code-written card), but it adds a turn and skips the card. The same case passed 3/3 in run 1: the prompt is not stable on this. |
 | `dispute-decimal-amount-es` (1/3) | `abs(amount_usd - 25.37) < 1` matched both 25.37 and 25.38; the agent asked which. | The agent widened the margin first. Exact should win: the customer said 25.37 and one charge is 25.37. |
 
-Prompt **v4** (written after this run, **not yet run live**) addresses each: exact amount first and "an exact match is the candidate"; propose instead of asking "is it this one?"; `out_of_scope` only for non-disputes, and look up an id the customer cites.
+Prompt **v4** (written after this run; run 3 below) addresses each: exact amount first and "an exact match is the candidate"; propose instead of asking "is it this one?"; `out_of_scope` only for non-disputes, and look up an id the customer cites.
+
+## Run 3: the same 25 cases × 3 trials with prompt v4
+
+Commit `6559422`, run `smoke-950e46a49095` (agentic; compared with the same workflow run as above).
+
+| | Workflow | Agentic v3 | Agentic v4 |
+|---|---|---|---|
+| Trials passed | 54/75 = 72.0 % (61.0–80.9) | 69/75 = 92.0 % (83.6–96.3) | **71/75 = 94.7 % (87.1–97.9)** |
+| 17 original cases | 51/51 | 47/51 | 50/51 |
+| 8 flexible-matching cases | 3/24 | 22/24 | 21/24 |
+| Spend, 75 trials | USD 0.0227 | USD 0.0355 | USD 0.0408 |
+| Latency p50 / p95 | 7.1 s / 14.2 s | 6.8 s / 11.4 s | 6.5 s / 11.4 s |
+
+v4 fixed the three failures of run 2 (`other-customer-txn`, `decimal-amount`, `usd-for-cop`: 3/3 each) and introduced four new ones, **all the same behaviour: the agent found the right transaction and asked "is it this one?" in text instead of proposing it**:
+
+| Case (trials failed) | What happened |
+|---|---|
+| `dispute-flex-near-amount-es` (1/3), `-pt` (2/3) | Exact query found nothing, a wider one found 123.10, and the agent asked "¿Es ese el cargo?" and mentioned the 10 cents of difference. |
+| `dispute-above-limit-pt` (1/3) | Found the 800 USD charge and asked, pointing out that the world recorded it "as a purchase at a merchant called Transferencia, not as a transfer". |
+
+Cause: I introduced it. v4 told the agent to ask "when nothing fits entirely (another day, another amount)", and 123.10 against 123 counts as "another amount". The above-limit one is also an eval-world artifact: the fixture gave a purchase type to a "Transferencia" charge, and the model noticed. The case now says `transaction_type: Transfer`.
+
+Everything else held: the cases that must refuse, escalate, block the card or survive an outage all passed, and the safety checks held in every trial.
+
+### Prompt v5 and `note` (written after run 3, **not run live**)
+
+Asking in text is never unsafe (consent is at the code-written card) but it adds a turn and skips the card. The user's own example, "I did not find about 80 from yesterday but there is 83 from today", needs the difference to be said; the agent could only say it by asking. So `propose_transaction` now takes an optional `note`: one sentence, on how the transaction differs from what the customer said, which the system shows **before** the code-written card. It passes the same checks as any agent reply (claimed actions, ungrounded figures, invented names, language, length), a refused note is an error the agent can retry without, and markdown emphasis is stripped. v5 tells the agent to propose a near match with a note and to ask only when there are several candidates or nothing really fits.
 
 ## Run 1: the 8 flexible-matching cases × 3 trials
 
@@ -48,10 +75,10 @@ Why the workflow fails (from the transcripts): the model extracts correctly, the
 Shows:
 - On scenarios where the customer's words do not match the records exactly, a model that queries the customer's own data finds the transaction and the exact-search workflow does not (22/24 vs 3/24).
 - **It also costs something where it should not**: 47/51 vs 51/51 on the original cases, from a prompt weakness, not from the policy. The safety checks held in every trial that opened or proposed something: no dispute for a look-alike, none without an explicit yes, no ungrounded figure, no wrong language. The mirror (nothing near) never proposed or opened the unrelated charge (6/6 across both modes in run 1; 3/3 per mode in run 2).
-- The same prompt gave `usd-for-cop` 3/3 in run 1 and 1/3 in run 2: single-trial results are noisy; trust the totals and the intervals, not one case.
+- The same prompt gave `usd-for-cop` 3/3 in run 1 and 1/3 in run 2: single-trial results are noisy; trust the totals and the intervals, not one case. Fixing one weakness moved the failures elsewhere (run 3): v3 to v4 is 69 to 71 of 75, inside the noise, so the totals do not separate the prompts; the transcripts do.
 
 Does not show:
-- **Not held-out.** The flexible cases were written by the same author as the agent, to test flexibility, and the prompt was revised after live runs on dev (v3 after a first two-case run, v4 after run 2). `val` was not run (the CLI runs dev only) and `test` is locked. Selecting v4 needs `val`.
+- **Not held-out.** The flexible cases were written by the same author as the agent, to test flexibility, and the prompt was revised after live runs on dev (v3 after a first two-case run, v4 after run 2, v5 after run 3). `val` was not run (the CLI runs dev only) and `test` is locked. Choosing a prompt needs `val`.
 - **Small and correlated.** 25 scenarios × 3 trials; trials of one scenario are not independent, so the intervals are optimistic.
 - **The scripted customer is poor for a real agent.** Both modes get the same customer turns, and a free-text question the script cannot answer ends the trial (two of the failures above). A free-play simulator is still not built (ADR 0002).
 - Cost is the provider's usage at the rates in `evals/model_prices.py`, not an invoice. The conservative estimates (USD 0.87 for run 1, 3.71 for run 2) were 60 and 100 times the real spend.

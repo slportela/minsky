@@ -60,6 +60,15 @@ def test_search_prompt_v4_fixes_the_three_failures_of_the_25_case_live_run():
     in text instead of proposing; (3) a cited transaction id of someone else was given up as out_of_scope."""
     text = render("agent.search.j2", today="2026-06-18")
     assert "con un margen de un centavo" in text and "no le pidas elegir entre ella y otras" in text
-    assert "no le preguntes tú" in text and "propose_transaction" in text
+    assert "tú no le preguntes" in text and "propose_transaction" in text
     assert "out_of_scope solo si lo que pide no es reclamar una transacción" in text
     assert "es una búsqueda como cualquier otra" in text and "nunca hablas de otros clientes" in text
+
+
+def test_search_prompt_v5_proposes_a_near_match_with_a_note_instead_of_asking_about_it():
+    """Live run 4: told to ask when the amount differs, the agent asked "is it this one?" about a charge that was
+    10 cents off, in 4 trials. The difference now goes in `note`, shown before the code-written card."""
+    text = render("agent.search.j2", today="2026-06-18")
+    assert "aunque difiera un poco" in text and "dila en `note`" in text
+    assert "propose_transaction(transaction_id, customer_says_not_me, note)" in text
+    assert "sin proponer nada" in text  # nothing fits: say what was not found and ask, do not propose

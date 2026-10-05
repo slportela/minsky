@@ -743,3 +743,70 @@ def _handoff(chat: Chat) -> HandoffRecord:
 
 def _handoff_ids(chat: Chat) -> list[str]:
     return [c.case_id for c in chat.ctx.cases.list_cases() if c.kind == "handoff"]
+
+
+# ---------------------------------------------------------------- the note on a proposal
+
+
+async def test_a_note_on_how_the_charge_differs_is_shown_before_the_card():
+    note = "No encontré 123.00 exacto, pero sí uno de 123.1 en Cafe Sur."
+    agent = ScriptedAgent(
+        [sql(FIND_123), call("propose_transaction", transaction_id="T1", customer_says_not_me=False, note=note)]
+    )
+    chat = Chat([txn("T1", "123.10", "Cafe Sur", JUNE_10)], agent)
+    card = await chat.say("No reconozco un cargo de 123 dólares")
+    assert card.startswith(note) and "123.10 USD" in card and "Responde sí o no" in card
+    assert chat.state.phase == Phase.CONFIRM_DISPUTE and chat.state.pending_question == card
+
+
+async def test_a_proposal_without_a_note_is_the_card_alone():
+    agent = ScriptedAgent([sql(FIND_123), call("propose_transaction", transaction_id="T1", customer_says_not_me=False)])
+    chat = Chat([txn("T1", "123.10", "Cafe Sur", JUNE_10)], agent)
+    card = await chat.say("No reconozco un cargo de 123 dólares")
+    assert card.startswith("Encontré este movimiento")
+
+
+@pytest.mark.parametrize(
+    ("note", "why"),
+    [
+        ("Ya abrí tu reclamo por ese cargo y quedará resuelto pronto.", "claims an action"),
+        ("Es un cargo de 999.99 dólares del día de hoy.", "999.99"),
+        ("Es de Amazon y no de Cafe Sur.", "Amazon"),
+        ("x" * 241, "longer than 240"),
+    ],
+)
+async def test_a_note_that_claims_an_action_or_invents_a_fact_refuses_the_proposal_and_the_agent_can_retry(note, why):
+    agent = ScriptedAgent(
+        [
+            sql(FIND_123),
+            call("propose_transaction", transaction_id="T1", customer_says_not_me=False, note=note),
+            call("propose_transaction", transaction_id="T1", customer_says_not_me=False),
+        ]
+    )
+    chat = Chat([txn("T1", "123.10", "Cafe Sur", JUNE_10)], agent)
+    card = await chat.say("No reconozco un cargo de 123 dólares")
+    refusal = next(
+        i["output"]
+        for i in agent.requests[-1]
+        if i.get("type") == "function_call_output" and "note" in str(i["output"])
+    )
+    assert refusal.startswith("error:") and why in refusal
+    assert note not in card  # the refused note never reaches the customer
+    assert chat.state.phase == Phase.CONFIRM_DISPUTE  # the retry without a note went through
+
+
+async def test_markdown_emphasis_in_a_note_is_stripped():
+    agent = ScriptedAgent(
+        [
+            sql(FIND_123),
+            call(
+                "propose_transaction",
+                transaction_id="T1",
+                customer_says_not_me=False,
+                note="Es de **123.1** en Cafe Sur.",
+            ),
+        ]
+    )
+    chat = Chat([txn("T1", "123.10", "Cafe Sur", JUNE_10)], agent)
+    card = await chat.say("No reconozco un cargo de 123 dólares")
+    assert card.startswith("Es de 123.1 en Cafe Sur.") and "*" not in card

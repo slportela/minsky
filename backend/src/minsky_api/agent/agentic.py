@@ -75,6 +75,14 @@ SEARCH_TOOLS: tuple[ToolSpec, ...] = (
                     "type": "boolean",
                     "description": "True only if the customer said they did not make it or do not recognise it.",
                 },
+                "note": {
+                    "type": "string",
+                    "description": (
+                        "One sentence, in the customer's language, on how this transaction differs from what the "
+                        "customer said (amount, day, merchant), using only data from the queries. The system shows "
+                        "it before asking the customer to confirm. Empty if it matches."
+                    ),
+                },
             },
             "required": ["transaction_id", "customer_says_not_me"],
             "additionalProperties": False,
@@ -93,6 +101,7 @@ SEARCH_TOOLS: tuple[ToolSpec, ...] = (
 )
 
 _MAX_TEXT_RETRIES = 1
+_MAX_NOTE_CHARS = 240
 _RULE_ID = re.compile(r"\bD0\d\b")
 _ISO_DATE = re.compile(r"(\d{4})-(\d{2})-(\d{2})")
 _SENTENCE_BREAK = re.compile(r"[.!?¿¡\n]+\s*")
@@ -209,12 +218,24 @@ async def _run_tool(ctx: ToolContext, state: ConversationState, call: ToolCall, 
         txn = await _get_owned_txn(ctx, txn_id)
         if txn is None:
             return "error: that transaction is not available", None
+        shown = ""
+        note = args.get("note")
+        if isinstance(note, str) and note.strip():
+            # The agent's one sentence on how this differs from what the customer said goes in front of the code-
+            # written card. It is the agent's text, so it passes the same checks as any reply.
+            clean = " ".join(note.replace("*", "").split())
+            if len(clean) > _MAX_NOTE_CHARS:
+                return f"error: the note is longer than {_MAX_NOTE_CHARS} characters", None
+            problem = _text_problem(clean, state)
+            if problem is not None:
+                return f"error: your note was refused ({problem}); write it again or leave it empty", None
+            shown = f"{clean} "
         state.selected_txn_id = txn.transaction_id
         state.selected_product_id = txn.product_id
         state.selected_type = txn.transaction_type
         state.customer_says_not_me = state.customer_says_not_me or args.get("customer_says_not_me") is True
         state.acts.append("confirm_txn")
-        card = _ask(state, Phase.CONFIRM_DISPUTE, transaction_card(txn, _lang(state)))
+        card = _ask(state, Phase.CONFIRM_DISPUTE, shown + transaction_card(txn, _lang(state)))
         return "ok: the system is asking the customer to confirm this transaction; wait for the answer", card
 
     if call.name == "give_up":

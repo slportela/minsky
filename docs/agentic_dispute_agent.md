@@ -38,7 +38,7 @@ The agent never opens, blocks or escalates. It has no tool for that. It ends SEA
 | Tool | Does | Guard |
 |---|---|---|
 | `query_transactions(sql)` | Read-only query over the customer's own data (section 4) | Sandbox, row cap, timeout; the audit record keeps a digest of the SQL and the row count, the trace span keeps the SQL text (first 300 characters) |
-| `propose_transaction(transaction_id, customer_says_not_me)` | Ends SEARCH | Rejected unless the id was returned by an earlier query in this conversation and belongs to the session customer |
+| `propose_transaction(transaction_id, customer_says_not_me, note?)` | Ends SEARCH. The optional `note` is one sentence on how the transaction differs from what the customer said; it passes the reply checks and is shown before the code-written card | Rejected unless the id was returned by an earlier query in this conversation and belongs to the session customer |
 
 **Context.** Unlike the extractor, the agent receives the whole conversation plus its tool calls and results. Rows from the database (merchant names, free text) are untrusted data, not instructions; the prompt says so and an eval case injects text through a merchant name.
 
