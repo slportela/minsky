@@ -157,6 +157,25 @@ The cases in `evals/cases/` follow the flow above. Each step's branches become c
 - Spanish only in the data; Portuguese is generated.
 - Satisfaction scales in the data are truncated (`known_issues.md`), so CSAT/NPS baselines are biased.
 
+**Agent behavior** (found by the live dev runs of 2026-10-04)
+
+- Confirmation is classified by the model (`prompts/agent.confirm.j2`). Only a "yes" can act, bounded by code: a reply with hedge words ("no", "pero", "mejor") never confirms, and a reply that is only "no" is decided by code. A model misreading therefore cannot start an action, but it can fail to escalate. Declines longer than a plain "no" still depend on the model: 240 of 240 direct probe calls were read correctly, a small sample. The card-block offer still opens with the D06 reason ("si no hiciste esta compra…"), a double negative that made the model read a plain "no" as "yes" in 5 of 60 probe calls before the code decided it.
+- A reply that fails the speech checks twice is replaced by a code-written sentence on the paths that have a fallback: after a write, D04, the settled case, and clarification with candidates. The clarification after a "no" at the transaction question has none, so a refused reply there still ends in HTTP 503. This is read from the code and was not seen in a live run.
+- `api/chat.py` maps any `ValueError` raised during a turn to HTTP 400 with the exception text. A model or parsing failure that is not handled upstream would reach the customer that way.
+
+**Evaluation**
+
+- The live runs use the dev split only: 16 runnable generated draft cases, 3 trials each, `gpt-6-luna`, an isolated SQLite bank. The runner's own summary marks the safety checks as partial: `ungrounded_fact`, `wrong_language` and `followed_injected_instruction` are not graded in this mode. Replies were not held out and the test split was not used. Intervals are wide: 48 of 48 is 92.6%-100%.
+- The val comparison ("always send to an agent" against Minsky) is offline with scripted understanding, and its labels come from the same `decide()` the system runs.
+- Only the run on `96f4ab3` has its summary and metadata versioned (`evals/reports/2026-10-04-live-dev-96f4ab3-*.json`). `evals/runs/` is git-ignored, so the 44/48 on `a3b3577` and the 48/48 on `25ffd8d` can be checked only on the machine that ran them. The ledger (`evals/reports/2026-10-02-live-budget-ledger.json`) lists every paid attempt; the classifier probes carry upper bounds because their usage was not captured.
+- Token prices in `evals/model_prices.py` cover the Standard service tier only.
+
+**Model path and deployment**
+
+- Serving calls the interim provider directly (ADR 0008), a deviation from rule 6 of `AGENTS.md`. Moving to Bedrock is not a configuration change: in the second AWS account no model was invocable on 2026-10-04 (`gpt-6-luna` is denied; Claude needs the Anthropic use-case form), and the client makes OpenAI Responses API calls (`responses.parse`) whose support on Bedrock's OpenAI-compatible endpoint has not been verified here. The comment in `backend/src/minsky_api/config.py` that describes a switch by base URL and model id should be corrected.
+- The S3 lake (bronze, silver, gold) was rebuilt from the organizer source in the second AWS account on 2026-10-04; `bank.transactions` has 4,425,008 rows, the count ADR 0012 recorded. The decision to consolidate there is not yet recorded in an ADR, and ADR 0012 still says the lake stays in the first account.
+- `MINSKY_TEST_SESSIONS` credentials minted for the demo must expire after 2026-10-16, the date the link has to stay up.
+
 ## Stack
 
 Proposed in ADR 0006:
