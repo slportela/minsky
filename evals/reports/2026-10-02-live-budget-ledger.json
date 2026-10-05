@@ -170,6 +170,15 @@
       "output_usd_per_million": "0.50",
       "pricing_basis": "operator-supplied uncached token rates (evals/model_prices.py, standard/short-context, 2026-10-04); not an invoice",
       "note": "240 direct classify_confirmation calls after the change (2 questions x 6 non-bare replies x 20, max_output_tokens=256); usage was not captured, so this is an upper bound (300 input and 256 output tokens per call), not a measurement"
+    },
+    "2026-10-05-live-dev-57ed1fc": {
+      "cap_usd": "1",
+      "reserved_usd": "0.2681492",
+      "usage_cost_usd": "0.0176608",
+      "input_usd_per_million": "0.10",
+      "output_usd_per_million": "0.50",
+      "pricing_basis": "operator-supplied uncached token rates (evals/model_prices.py, standard/short-context); not an invoice",
+      "note": "48/48 passed on fix/consent-and-reply-language 57ed1fc (explicit consent, reply-language check, code-written fallbacks); evidence: evals/reports/2026-10-05-live-dev-57ed1fc-summary.json and -metadata.json"
     }
   },
   "usage_cost_usd": "0.0124252",
