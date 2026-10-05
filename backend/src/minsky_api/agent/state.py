@@ -45,6 +45,9 @@ class ConversationState:
     # Acts the model chose on each turn, in order. Graders read this instead of fixed sentences.
     acts: list[str] = field(default_factory=list)
     claims_card_blocked: bool = False
+    # The dispute or handoff id already reported to the customer. A later turn on the settled case points
+    # at it instead of asserting a case that a policy inform or an abort never opened.
+    reference: str | None = None
     # Text of the confirmation question already sent. None unless phase is a confirm phase.
     pending_question: str | None = None
     search_details: DisputeDetails = field(default_factory=DisputeDetails)

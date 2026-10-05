@@ -99,6 +99,9 @@ def test_the_code_written_sentences_before_a_write_claim_nothing():
             assert claims(wording.confirm_question(act, language, "Purchase")) == set(), (act, language)
         assert claims(wording.clarify_fallback(language, None)) == set(), language
         assert claims(wording.inform_fallback(language, "D01-declined", None)) == set(), language
+        # A settled conversation did not necessarily open a case: D01-D03 and an abort write nothing.
+        assert claims(wording.done_fallback(language)) == set(), language
+        assert not new_opening(wording.done_fallback(language)), language
 
 
 def test_the_code_written_sentences_after_a_write_carry_a_reference_for_what_they_claim():

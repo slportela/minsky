@@ -67,8 +67,9 @@ def fallback_sentence(language: str, facts: dict[str, object]) -> str:
     pt = _lang(language) == "pt"
     dispute_id = facts.get("dispute_id") or facts.get("existing_dispute_id")
     handoff_id = facts.get("handoff_id")
-    # This path only runs after a confirmation, so thanking the customer for it is always true.
-    parts: list[str] = ["Obrigado por confirmar." if pt else "Gracias por confirmarlo."]
+    # The opener must hold on every path that reaches here, including a handoff the customer never
+    # confirmed (out of scope, clarify exhausted, turn limit) and one they declined (no card block).
+    parts: list[str] = ["Obrigado por escrever." if pt else "Gracias por escribirnos."]
     if facts.get("card_blocked") is True:
         parts.append(
             "Seu cartão já está bloqueado para proteger o seu dinheiro."
@@ -268,14 +269,26 @@ def inform_fallback(language: str, rule_id: str | None, existing_dispute_id: str
     return " ".join(parts)
 
 
-def done_fallback(language: str) -> str:
-    """After the conversation's case is settled: no new facts, only what to do next."""
-    if _lang(language) == "pt":
+def done_fallback(language: str, reference: str | None = None) -> str:
+    """After the conversation's case is settled: no new facts, only what to do next.
+
+    It points at a reference only when one was already reported. A settled conversation did not
+    necessarily open anything: a policy inform (D01-D03) and an abort both end here with nothing
+    written, and claiming a registered case there would report an action that never happened.
+    """
+    pt = _lang(language) == "pt"
+    if reference:
         return (
-            "Obrigado por escrever de novo. O seu caso já está registrado com a referência que enviei e nossa equipe "
-            "vai avisar cada avanço. Se precisar de outra coisa, me conte e eu te ajudo."
+            f"Obrigado por escrever de novo. A referência do seu caso é {reference}, e nossa equipe vai avisar "
+            "cada avanço. Se precisar de outra coisa, me conte e eu te ajudo."
+            if pt
+            else f"Gracias por escribirme de nuevo. La referencia de tu caso es {reference}, y nuestro equipo te "
+            "avisará de cada avance. Si necesitas algo más, cuéntame y te ayudo."
         )
     return (
-        "Gracias por escribirme de nuevo. Tu caso ya quedó registrado con la referencia que te envié y nuestro equipo "
-        "te avisará de cada avance. Si necesitas algo más, cuéntame y te ayudo."
+        "Obrigado por escrever de novo. Sobre este caso já compartilhei o que tenho. "
+        "Se precisar de outra coisa, me conte e eu te ajudo."
+        if pt
+        else "Gracias por escribirme de nuevo. Sobre este caso ya te compartí lo que tengo. "
+        "Si necesitas algo más, cuéntame y te ayudo."
     )

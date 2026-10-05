@@ -13,8 +13,8 @@ A live `--extractor real --trials 3` run on the dev split is still required befo
 
 | Check | Result |
 |---|---|
-| `make ci` | green: 516 unit tests, eval-check clean, 4/4 regression smoke, 17/17 offline dev smoke (`evals/runs/smoke-5e4dc03a5641`), frontend typecheck and API tests |
-| Claim reading of every code-owned sentence, before vs. after | identical: no new claim in any of the 34 sentences across `es` and `pt` |
+| `make ci` | green: 519 unit tests, eval-check clean, 4/4 regression smoke, 17/17 offline dev smoke, frontend typecheck and API tests |
+| Claim reading of every code-owned sentence, before vs. after | no new claim in any of the 34 sentences across `es` and `pt`; one pre-existing claim removed |
 | Live dev run (48 trials, pass rate, provider cost) | **not run** |
 
 The offline dev smoke runs with no provider, and its stub emits bag-of-facts text rather than
@@ -37,13 +37,24 @@ committed version and the previous one. The flags are the same in both:
 | `fallback_sentence` after an open | `dispute_opened` | `DSP-…` in the text |
 | `fallback_sentence` after a block and handoff | `card_blocked`, `handoff` | `HO-…` in the text, `card_blocked` in facts |
 | `inform_fallback` (D04) | `dispute_opened` | `DSP-…` in the text |
-| `done_fallback` | `dispute_opened` | the id was sent on an earlier turn (unchanged from before) |
+| `done_fallback` | none (was `dispute_opened`) | names a reference only when one was reported |
 
-`done_fallback` and the bare `fallback_sentence` carried these same flags before this change;
-the grader reads the conversation's agent turns together, and both paths only run after a
-reference has been sent. Two tests in `tests/test_eval_claims.py` now pin the invariant:
-sentences before a write claim nothing, and sentences after a write carry the reference for
-what they claim.
+Three tests pin the invariant: in `tests/test_eval_claims.py`, sentences before a write claim
+nothing and sentences after a write carry the reference for what they claim; in
+`backend/tests/test_agent_orchestrator.py`, a follow-up after an abort names no reference.
+
+### One pre-existing claim removed
+
+`done_fallback` used to say "Tu caso ya quedó registrado con la referencia que te envié" on
+every settled conversation, which the grader reads as `dispute_opened`. But `Phase.DONE` is
+reached with nothing written on two routes — the terminal policy inform (D01-D03) and an abort —
+so on those the sentence claimed an action that never happened and would have raised
+`UNVERIFIED_ACTION_CLAIM` had the model failed on that turn. No eval case had hit it.
+
+`ConversationState` now carries the id already reported to the customer (`state.reference`),
+recorded in `_public_facts` where every id passes through, and `done_fallback` names a
+reference only when there is one. All six variants (two languages, no reference / dispute id /
+handoff id) now claim nothing.
 
 ## Before and after (es, unless noted)
 
@@ -56,13 +67,30 @@ what they claim.
 | Customer declines | Entendido, no haré nada con este caso. Si necesitas algo más, escríbeme aquí. | Entendido, gracias por decírmelo: no haré nada con este caso. Si necesitas algo más, escríbeme aquí y te ayudo. |
 | No transaction found | No encontré esa transacción. ¿Puedes decirme el comercio, el monto o la fecha? | Disculpa, no encontré esa transacción. ¿Me puedes decir el comercio, el monto o la fecha, por favor? Con cualquiera de esos datos la busco de nuevo. |
 | Several candidates | Encontré más de una transacción que coincide. ¿Cuál es la que quieres revisar? | Gracias por los datos. Encontré más de una transacción que coincide y prefiero no elegir por ti: ¿cuál es la que quieres revisar? |
-| After the open | Tu reclamo DSP-… quedó registrado; nuestro equipo lo revisará y te avisaremos de cada avance. | Gracias por confirmarlo. Tu reclamo DSP-… quedó registrado; nuestro equipo lo revisará y te avisaremos de cada avance. Quedo aquí si necesitas algo más. |
+| After the open | Tu reclamo DSP-… quedó registrado; nuestro equipo lo revisará y te avisaremos de cada avance. | Gracias por escribirnos. Tu reclamo DSP-… quedó registrado; nuestro equipo lo revisará y te avisaremos de cada avance. Quedo aquí si necesitas algo más. |
 | D04, already disputed | Ya hay un reclamo abierto para ese cargo. La referencia de tu reclamo es DSP-…. | Gracias por contárnoslo. Ya hay un reclamo abierto para ese cargo. La referencia de tu reclamo es DSP-…. Si tienes otra duda sobre este caso, escríbeme aquí. |
-| Settled case, new message | Tu caso ya quedó registrado con la referencia que te envié. Si necesitas algo más, escríbeme aquí. | Gracias por escribirme de nuevo. Tu caso ya quedó registrado con la referencia que te envié y nuestro equipo te avisará de cada avance. Si necesitas algo más, cuéntame y te ayudo. |
+| Settled case, a case was opened | Tu caso ya quedó registrado con la referencia que te envié. Si necesitas algo más, escríbeme aquí. | Gracias por escribirme de nuevo. La referencia de tu caso es DSP-…, y nuestro equipo te avisará de cada avance. Si necesitas algo más, cuéntame y te ayudo. |
+| Settled case, nothing was written (D01-D03, abort) | Tu caso ya quedó registrado con la referencia que te envié. Si necesitas algo más, escríbeme aquí. *(false)* | Gracias por escribirme de nuevo. Sobre este caso ya te compartí lo que tengo. Si necesitas algo más, cuéntame y te ayudo. |
 | Open confirmation (pt) | Posso abrir a contestação **de esta** cobrança? Responda sim ou não. | Você quer que eu abra a contestação **desta** cobrança? Responda sim ou não, por favor. |
 
 The last row is a grammar fix: Portuguese contracts the preposition, and the old sentence read
 wrong in every `confirm_open` turn in `pt`.
+
+The `confirm_txn` row is more than a tone change. The old fallback asked a *recognition*
+question ("¿Reconoces el movimiento…?") while `_phase_confirm_txn` reads the answer as an
+*identification* one. A customer disputing an unrecognized charge would naturally answer "no" —
+that is the whole content of their complaint — and the orchestrator would discard the correct
+transaction and return to clarify. The prompt always had the right semantics; only the code
+fallback was inverted. No eval case could catch it: every scripted confirmation reply is `sí`.
+
+### The acknowledgement had to be weaker than first written
+
+The lead-in on `fallback_sentence` started as "Gracias por confirmarlo", on the assumption that
+the path only runs after a confirmation. It does not. Four of its five call sites have no
+confirmation behind them — `out_of_scope` (which fires on the customer's *first* message),
+`clarify_exhausted`, `max_turns`, and `possible_fraud_no_block`, which runs precisely because
+the customer answered **no** to the card block. It is now "Gracias por escribirnos", which
+holds on every path, with two orchestrator tests driving the two paths that broke it.
 
 ## What politeness could not change
 
