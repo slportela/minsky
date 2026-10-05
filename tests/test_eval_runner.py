@@ -34,6 +34,7 @@ SCRIPTED = (
     "dispute-already-disputed-es",
     "dispute-natural-reply-then-yes-es",
     "dispute-unclear-replies-handoff-es",
+    "dispute-follow-up-after-case-es",
     "model-outage-handoff-es",
 )
 

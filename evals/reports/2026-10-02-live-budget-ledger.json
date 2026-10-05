@@ -243,6 +243,15 @@
       "output_usd_per_million": "0.50",
       "pricing_basis": "operator-supplied uncached token rates (evals/model_prices.py, standard/short-context, 2026-10-05); not an invoice",
       "note": "57/57 passed on main de541d6 (merge of #52 and #53), clean tree, all 19 dev cases x 3; same backend source hash as the fe9a3df run (883740509b78), so the dispute-above-limit-pt grader false positive did not show up in this sample; evidence: evals/reports/2026-10-05-live-dev-de541d6-summary.json and -metadata.json"
+    },
+    "2026-10-05-live-dev-31cfe5b": {
+      "cap_usd": "1",
+      "reserved_usd": "0.2897221",
+      "usage_cost_usd": "0.0207578",
+      "input_usd_per_million": "0.10",
+      "output_usd_per_million": "0.50",
+      "pricing_basis": "operator-supplied uncached token rates (evals/model_prices.py, standard/short-context, 2026-10-05); not an invoice",
+      "note": "60/60 on feat/terminal-conversation-state 31cfe5b, clean tree, all 20 dev cases x 3 including the new dispute-follow-up-after-case-es; evidence: evals/reports/2026-10-05-live-dev-31cfe5b-summary.json and -metadata.json"
     }
   },
   "usage_cost_usd": "0.0124252",

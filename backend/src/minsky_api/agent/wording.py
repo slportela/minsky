@@ -9,6 +9,10 @@ from __future__ import annotations
 import re
 from datetime import date
 from decimal import Decimal
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from minsky_api.agent.state import Terminal
 
 _MONTHS = {
     "es": ("enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre",
@@ -257,6 +261,57 @@ def inform_fallback(language: str, rule_id: str | None, existing_dispute_id: str
             else f" La referencia de tu reclamo es {existing_dispute_id}."
         )
     return text.strip() or done_fallback(language)
+
+
+_NEW_CONVERSATION = {
+    "es": "Esta conversación terminó. Si quieres disputar otro cargo, inicia una nueva conversación.",
+    "pt": "Esta conversa terminou. Se quiser contestar outra cobrança, inicie uma nova conversa.",
+}
+
+
+def terminal_reply(language: str, terminal: Terminal | None) -> str:
+    """Every message after the case is settled gets this, whatever it says. Code writes it, whole.
+
+    The model used to answer these messages and improvised: it offered "other options with the bank" to a customer
+    whose case had just gone to a specialist, and asked for details on a case that was already closed. A closed
+    conversation says its status, gives the reference, and says how to start another one.
+    """
+    pt = _lang(language) == "pt"
+    closing = _NEW_CONVERSATION["pt" if pt else "es"]
+    if terminal is None:
+        return done_fallback(language)
+    parts: list[str] = []
+    if terminal.outcome == "dispute_opened":
+        parts.append(
+            f"A sua contestação está aberta com a referência {terminal.reference}."
+            if pt
+            else f"Tu reclamo está abierto con la referencia {terminal.reference}."
+        )
+    elif terminal.outcome == "handoff":
+        if terminal.card_blocked:
+            parts.append("O seu cartão está bloqueado." if pt else "Tu tarjeta está bloqueada.")
+        if terminal.dispute_id:
+            parts.append(
+                f"A sua contestação {terminal.dispute_id} está aberta."
+                if pt
+                else f"Tu reclamo {terminal.dispute_id} está abierto."
+            )
+        parts.append(
+            f"O seu caso está com um especialista, referência {terminal.reference}; a equipe vai avisar você."
+            if pt
+            else f"Tu caso está con un especialista, referencia {terminal.reference}; el equipo te avisará."
+        )
+    elif terminal.outcome == "informed":
+        parts.append("Não abri nenhuma contestação nova." if pt else "No abrí ningún reclamo nuevo.")
+        if terminal.dispute_id:
+            parts.append(
+                f"A contestação já aberta é {terminal.dispute_id}."
+                if pt
+                else f"El reclamo ya abierto es {terminal.dispute_id}."
+            )
+    else:
+        parts.append("Não fiz nenhuma alteração." if pt else "No hice ningún cambio.")
+    return " ".join([*parts, closing])
 
 
 def done_fallback(language: str) -> str:

@@ -784,43 +784,75 @@ def test_d04_already_disputed_answers_with_the_existing_reference():
     assert len([c for c in ctx.cases.list_cases()]) == 0  # nothing new was opened or queued
 
 
-def test_follow_up_after_the_case_gets_a_code_answer_when_the_model_invents_a_date():
-    """Review item 7: '¿cuándo se resuelve?' after the dispute is opened. An invented date is refused and
-    the customer gets the code-written answer instead of a 503."""
+_NEW_CONVERSATION_ES = "Esta conversación terminó. Si quieres disputar otro cargo, inicia una nueva conversación."
+
+
+class _NoModelAfterTheCase(FakeLLM):
+    """Any model call fails: once the case is settled the conversation must not need the model."""
+
+    async def respond(self, *args: Any, **kwargs: Any) -> LLMResult[Any]:
+        raise AssertionError("the model was called after the conversation ended")
+
+
+def _settled(texts: tuple[str, ...]) -> tuple[ToolContext, ConversationState]:
     ctx = _ctx()
     state = _state()
     llm = FakeLLM(_details())
-    for text in ("Cafe 25", "sí", "sí"):
+    for text in texts:
         state, _ = asyncio.run(run_turn(state, text, ctx, llm))  # type: ignore[arg-type]
     assert state.phase == Phase.DONE
-    invent = _NthSpeech(_details(), n=1, speech=Speech(act="inform", text="Se resolverá el 20 de junio de 2026."))
-    state, reply = asyncio.run(run_turn(state, "¿Cuándo se resuelve?", ctx, invent))  # type: ignore[arg-type]
-    assert "20 de junio" not in reply and "referencia" in reply
+    return ctx, state
 
 
-def test_follow_up_after_the_case_uses_template_on_provider_outage():
-    """A DONE-phase timeout must not open a second assistant_unavailable handoff."""
-    import httpx2
-    import openai
+def test_after_an_opened_dispute_every_message_gets_the_status_and_a_new_conversation_notice():
+    """A conversation that ended is terminal: code answers with the status and the reference, whatever is said, and
+    the model is not called. Found by hand: "¿Y cómo sigue?" got "consulta otras opciones con el banco" right after
+    the case went to a specialist."""
+    ctx, state = _settled(("Cafe 25", "sí", "sí"))
+    assert state.terminal is not None and state.terminal.outcome == "dispute_opened"
+    reference = state.terminal.reference
+    assert reference
+    before = len(ctx.cases.list_cases()), len(ctx.cases.list_audit())
+    for text in ("¿Cuándo se resuelve?", "ok", "sí", "quiero reclamar otro cargo de 80 USD"):
+        state, reply = asyncio.run(run_turn(state, text, ctx, _NoModelAfterTheCase(_details())))  # type: ignore[arg-type]
+        assert reply == f"Tu reclamo está abierto con la referencia {reference}. {_NEW_CONVERSATION_ES}"
+        assert state.phase == Phase.DONE
+    assert (len(ctx.cases.list_cases()), len(ctx.cases.list_audit())) == before  # nothing new, not even a lookup
 
+
+def test_after_a_handoff_the_status_is_the_handoff_and_a_card_block_is_reported_only_if_it_happened():
+    ctx, state = _settled(("Cafe 25", "sí", "no"))  # declining the action ends it without any change
+    assert state.terminal is not None and state.terminal.outcome == "cancelled"
+    state, reply = asyncio.run(run_turn(state, "¿y ahora?", ctx, _NoModelAfterTheCase(_details())))  # type: ignore[arg-type]
+    assert reply == f"No hice ningún cambio. {_NEW_CONVERSATION_ES}"
+
+    from minsky_api.agent.state import Terminal
+    from minsky_api.agent.wording import terminal_reply
+
+    handed = Terminal("handoff", "HO-123")
+    assert (
+        terminal_reply("es", handed)
+        == f"Tu caso está con un especialista, referencia HO-123; el equipo te avisará. {_NEW_CONVERSATION_ES}"
+    )
+    blocked = Terminal("handoff", "HO-123", card_blocked=True)
+    assert terminal_reply("es", blocked).startswith("Tu tarjeta está bloqueada. Tu caso está con un especialista")
+    assert "bloqueada" not in terminal_reply("es", handed)
+    assert "nova conversa" in terminal_reply("pt", handed) and "HO-123" in terminal_reply("pt", handed)
+    informed = Terminal("informed", dispute_id="DSP-9")
+    assert terminal_reply("es", informed).startswith("No abrí ningún reclamo nuevo. El reclamo ya abierto es DSP-9.")
+
+
+def test_a_handoff_ends_the_conversation_the_same_way_whatever_caused_it():
     ctx = _ctx()
     state = _state()
-    llm = FakeLLM(_details())
-    for text in ("Cafe 25", "sí", "sí"):
-        state, _ = asyncio.run(run_turn(state, text, ctx, llm))  # type: ignore[arg-type]
-    assert state.phase == Phase.DONE
-    before_cases = len(ctx.cases.list_cases())
-
-    class _TimeoutLLM(FakeLLM):
-        async def respond(self, *args: Any, schema: type | None = None, **kwargs: Any) -> LLMResult[Any]:
-            if schema is not None and schema.__name__ == "Speech":
-                raise openai.APITimeoutError(request=httpx2.Request("POST", "https://llm.invalid/v1/responses"))
-            return await super().respond(*args, schema=schema, **kwargs)
-
-    state, reply = asyncio.run(run_turn(state, "¿Cuándo se resuelve?", ctx, _TimeoutLLM(_details())))  # type: ignore[arg-type]
-    assert state.phase == Phase.DONE
-    assert "referencia" in reply
-    assert len(ctx.cases.list_cases()) == before_cases
+    llm = FakeLLM(_details(), decisions=["unclear", "unclear", "unclear"])
+    state, _ = asyncio.run(run_turn(state, "Cafe 25", ctx, llm))  # type: ignore[arg-type]
+    for text in ("lo reconozco", "ese mismo", "claro que sí"):
+        state, reply = asyncio.run(run_turn(state, text, ctx, llm))  # type: ignore[arg-type]
+    assert state.terminal is not None and state.terminal.outcome == "handoff"
+    ref = state.terminal.reference
+    state, reply = asyncio.run(run_turn(state, "hola?", ctx, _NoModelAfterTheCase(_details())))  # type: ignore[arg-type]
+    assert ref and ref in reply and reply.endswith(_NEW_CONVERSATION_ES)
 
 
 def test_a_transfer_is_not_called_a_charge():

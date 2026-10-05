@@ -60,6 +60,12 @@ Evidence to collect (step 1 of the plan, *to measure*):
  8 REPLY          case reference + expected resolution time (from historical complaints)
 ```
 
+The conversation ends there. Opening a dispute, a handoff, an explanation with nothing to open, or a declined action all
+leave it in a terminal state (`Terminal` in `agent/state.py`). Every later message gets the same code-written reply
+(`wording.terminal_reply`): the status, the case reference, and "if you want to dispute another charge, start a new
+conversation". The model and the tools are not called, so nothing can be opened, blocked or promised after the end. The
+status comes from what the tools returned (a card is reported blocked only if it was).
+
 No money moves and no refunds are granted: the system only opens the claim, blocks a card after confirmation, and hands off.
 
 ### Where AI is used, and where it is not
