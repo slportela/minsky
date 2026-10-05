@@ -339,7 +339,7 @@ async def test_open_dispute_enforces_the_policy(txn, stats, says_not_me, rule):
 @pytest.mark.asyncio
 async def test_evaluate_dispute_returns_the_decision_without_writing():
     cases = InMemoryCasesBackend()
-    ctx = _ctx(_valid(), get_result=_bank(_txn(is_fraud=True)), cases=cases)
+    ctx = _ctx(_valid(), get_result={**_bank(_txn(is_fraud=True)), Product: _card()}, cases=cases)
     result = await evaluate_dispute(ctx, EvaluateDisputeArgs(transaction_id="T1"))
     assert (result.rule_id, result.route, result.offer_card_block) == ("D06-possible-fraud", "escalate_fraud", True)
     assert "is_fraud" not in result.model_dump()
@@ -396,3 +396,14 @@ def test_get_transactions_args_reject_inverted_ranges():
         GetTransactionsArgs(min_amount=Decimal("50"), max_amount=Decimal("10"))
     with pytest.raises(ValueError):
         GetTransactionsArgs(date_from=date(2026, 6, 15), date_to=date(2026, 6, 1))
+
+
+@pytest.mark.asyncio
+async def test_fraud_on_a_non_card_product_does_not_offer_a_block():
+    """A transfer or account payment has no card: the tool never offers a block it cannot perform."""
+    for product in (_card(is_card=False), _card(customer_id="C2"), None):
+        bank: dict[type, Any] = {**_bank(_txn(is_fraud=True))}
+        if product is not None:
+            bank[Product] = product
+        result = await evaluate_dispute(_ctx(_valid(), get_result=bank), EvaluateDisputeArgs(transaction_id="T1"))
+        assert result.route == "escalate_fraud" and result.offer_card_block is False

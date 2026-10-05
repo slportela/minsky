@@ -90,6 +90,16 @@ def percentile(values: Sequence[float], q: float) -> float | None:
     return ordered[rank - 1]
 
 
+def language_rates(rows: Sequence[tuple[str, int, int]]) -> dict[str, Rate]:
+    """Pass rates by language. Each row is (language, passed, graded). Zero graded is not defined."""
+    totals: dict[str, list[int]] = {}
+    for language, passed, graded in rows:
+        bucket = totals.setdefault(language, [0, 0])
+        bucket[0] += passed
+        bucket[1] += graded
+    return {language: Rate(passed, graded) for language, (passed, graded) in totals.items()}
+
+
 def cost_per(total_cost: float, count: int) -> float | None:
     """Cost per attempted case or per successful resolution; None ('not defined') if count == 0."""
     return total_cost / count if count else None

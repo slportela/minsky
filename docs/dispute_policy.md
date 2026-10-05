@@ -30,3 +30,23 @@ What the system never does:
 - approve a dispute outcome;
 - block a card without an explicit confirmation;
 - act on another customer's records.
+
+## Card block offer
+
+D06 offers a card block only when the charge is on one of the customer's own cards (`evaluate_dispute` reads the product). A transfer or an account payment has no card to block, so the case goes straight to the fraud team without asking a question that cannot be acted on.
+
+## Triage (synthetic)
+
+> **Synthetic targets, written for the hackathon.** The data has no SLA deadline to derive them from: `sla_breached` is unrelated to resolution time, and critical and low-priority disputes take the same ~15.6 days today (`docs/known_issues.md`). Code: `backend/src/minsky_api/policy/triage.py`; tests: `backend/tests/test_policy_triage.py`.
+
+Every dispute the system opens and every handoff it creates becomes a back-office case. The first matching row decides its priority, queue and due time:
+
+| When | Priority | Queue | Due within |
+|---|---|---|---|
+| Possible fraud (D06), or the card was blocked | Critical | fraud | 4 hours |
+| Amount above USD 500 | High | disputes | 2 days |
+| Handoff for a repeat complainer (D08) or another policy rule | Medium | disputes | 5 days |
+| Handoff without a rule (out of scope, clarification or turn limit) | Medium | general | 5 days |
+| Dispute opened automatically (D09) | Low | disputes | 10 days |
+
+The console orders open cases by priority, then due time. Each case also shows the bank's historical median resolution time for that priority (`bank.resolution_benchmarks`), so the agent and the customer get a realistic expectation. Changing a target needs an eval delta, like the policy thresholds.

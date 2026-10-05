@@ -30,10 +30,23 @@ class ConversationState:
     candidate_txn_ids: list[str] = field(default_factory=list)
     selected_txn_id: str | None = None
     selected_product_id: str | None = None
+    selected_type: str | None = None  # Purchase, Transfer, ...: how the customer names it
     rule_id: str | None = None
     route: str | None = None
     customer_says_not_me: bool = False
-    dispute_reason: str = "unrecognized_charge"
+    dispute_reason: str = "unspecified"  # set from the router only when it is confident
+    # The learned router's reading of the first message (a suggestion for the back office, never a decision).
+    router_label: str | None = None
+    router_confidence: float | None = None
+    # Set from the first customer message; later turns reuse it.
+    language: str | None = None
+    # Model decision for the confirm turn in progress (yes, no, unclear). Code acts only on yes.
+    confirmation: str | None = None
+    # Acts the model chose on each turn, in order. Graders read this instead of fixed sentences.
+    acts: list[str] = field(default_factory=list)
+    claims_card_blocked: bool = False
+    # Text of the confirmation question already sent. None unless phase is a confirm phase.
+    pending_question: str | None = None
     search_details: DisputeDetails = field(default_factory=DisputeDetails)
     # Last user/agent texts for the HTTP contract (server-owned history).
     messages: list[tuple[str, str]] = field(default_factory=list)  # ("user"|"agent", text)

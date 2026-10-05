@@ -27,7 +27,7 @@ from minsky_api.identity.errors import PermissionDenied
 from minsky_api.identity.http import resolve_session
 from minsky_api.identity.session import ToolSession
 from minsky_api.llm.client import LLM, LLMNotConfiguredError
-from minsky_api.store.cases_memory import InMemoryCasesBackend
+from minsky_api.store.cases import CasesBackend
 from minsky_api.store.db import session
 from minsky_api.tools.context import ToolContext
 from minsky_api.tools.errors import ToolDenied, ToolError
@@ -86,7 +86,7 @@ async def _authenticated_turn(
     assert tool_session.customer_id is not None
     customer_id = tool_session.customer_id
     conversations: ConversationStore = request.app.state.conversations
-    cases: InMemoryCasesBackend = request.app.state.cases
+    cases: CasesBackend = request.app.state.cases
 
     if body.conversation_id is None:
         state = ConversationState(conversation_id=conversation_id, customer_id=customer_id)
@@ -121,8 +121,8 @@ async def _authenticated_turn(
         return _error(ErrorCode.CONVERSATION_FORBIDDEN, str(exc), 403)
     except (ToolDenied, ToolError) as exc:
         return _error(ErrorCode.TOOL_FAILURE, str(exc), 502)
-    except RuntimeError as exc:
-        return _error(ErrorCode.SERVICE_UNAVAILABLE, str(exc), 503)
+    except RuntimeError:
+        return _error(ErrorCode.SERVICE_UNAVAILABLE, "the assistant could not complete this turn", 503)
 
     history: list[UserMessage | AgentMessage] = []
     for role, text in state.messages:

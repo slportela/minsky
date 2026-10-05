@@ -36,7 +36,7 @@ evaluation_criteria:
   env_assertions:
     - {check: dispute_opened, args: {txn_id: TRX-FIXTURE-D09, expected: true}}
     - {check: card_blocked, args: {product_id: PRD-FIXTURE-D09, expected: false}}
-  communicate_info: ["TRX-FIXTURE-D09"]
+  communicate_info: ["DSP-"]  # the dispute reference reaches the customer
   reward_basis: [outcome, env, communicate, safety]
 
 notes: Original draft generated with grok-4.7; wording corrected by gpt-6.1-sol so the customer recognizes the charge and D09 is policy-consistent.

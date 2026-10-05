@@ -7,7 +7,7 @@ PROFILE    := $(shell grep '^BRONZE_AWS_PROFILE=' .env 2>/dev/null | cut -d= -f2
 LAKE_URI   := $(patsubst %/bronze,%,$(BRONZE_URI))
 AWS        := AWS_PROFILE=$(PROFILE) aws
 
-.PHONY: help setup lock-check lint typecheck test llm-smoke regression-smoke eval-smoke eval-live-estimate frontend-check eval-check ci up down logs demo-plan demo-apply pipeline bronze mirror silver gold publish docs
+.PHONY: demo-reset demo-sessions help setup lock-check lint typecheck test llm-smoke regression-smoke eval-smoke eval-live-estimate frontend-check eval-check router ci model-prices up down logs demo-plan demo-apply pipeline bronze mirror silver gold publish docs
 
 EVAL_CAP_USD ?= 1
 
@@ -23,7 +23,7 @@ setup:  ## install Python and frontend dependencies, and git hooks
 
 lint:  ## ruff lint + format check
 	uv run ruff check .
-	uv run ruff format --check evals tests backend
+	uv run ruff format --check evals tests backend ml
 
 typecheck:  ## pyright on typed packages
 	uv run pyright
@@ -44,11 +44,24 @@ eval-check:  ## validate every eval case and the case set (schema, leakage, cove
 eval-smoke:  ## partial offline dev smoke with durable evidence (scripted extraction)
 	uv run python -m evals.runner --include-drafts
 
-eval-live-estimate:  ## estimate real dev smoke; set EVAL_INPUT_RATE and EVAL_OUTPUT_RATE to pinned model rates
-	uv run python -m evals.runner --include-drafts --extractor real --trials 3 --max-cost-usd $(EVAL_CAP_USD) --input-usd-per-million $(EVAL_INPUT_RATE) --output-usd-per-million $(EVAL_OUTPUT_RATE) --estimate-only
+# Token prices for the pinned model come from evals/model_prices.py, so one dated table feeds every
+# run instead of a rate retyped per command. The runner still gets both prices as explicit flags.
+# Force a price (a change the table does not have yet) by setting both on the command line:
+#   make eval-live-estimate EVAL_INPUT_RATE=0.10 EVAL_OUTPUT_RATE=0.50
+EVAL_PRICE_FLAGS = $(if $(and $(EVAL_INPUT_RATE),$(EVAL_OUTPUT_RATE)),--input-usd-per-million $(EVAL_INPUT_RATE) --output-usd-per-million $(EVAL_OUTPUT_RATE),$(shell MINSKY_ENVIRONMENT=local uv run python -m evals.model_prices --flags))
+
+eval-live-estimate:  ## estimate a real dev smoke; token prices come from evals/model_prices.py
+	uv run python -m evals.runner --include-drafts --extractor real --trials 3 --max-cost-usd $(EVAL_CAP_USD) $(EVAL_PRICE_FLAGS) --estimate-only
+
+model-prices:  ## show the recorded token prices for the pinned model
+	@MINSKY_ENVIRONMENT=local uv run python -m evals.model_prices
 
 regression-smoke:  ## offline chat regressions (scripted extraction; no provider spend)
 	uv run python -m evals.regression_smoke --output evals/runs/pr24-regressions.json
+
+router:  ## train and evaluate the learned router; writes ml/reports and the backend artifact
+	uv run python -m ml.router.generate
+	uv run python -m ml.router.train
 
 lock-check:  ## lockfiles resolve only from public registries (a private mirror breaks setup for everyone else)
 	@bad=$$( grep -nE '(registry|url) = "https://' uv.lock | grep -vE '"https://(pypi\.org|files\.pythonhosted\.org)/'; \
@@ -61,6 +74,13 @@ ci: lock-check lint typecheck test eval-check regression-smoke eval-smoke fronte
 
 COMPOSE_LOCAL := docker compose -f compose.yaml -f compose.local.yaml
 DEMO          := tofu -chdir=infra/tofu/envs/demo
+
+demo-sessions:  ## print demo customer + agent-console credentials for .env (needs make gold)
+	uv run python infra/demo_sessions.py
+
+demo-reset:  ## delete every case (disputes, handoffs, blocks, audit, queue) so the demo can be replayed
+	$(COMPOSE_LOCAL) exec postgres psql -U $${POSTGRES_USER:-minsky} -d $${POSTGRES_DB:-minsky} -c "DROP SCHEMA IF EXISTS cases CASCADE"
+	$(COMPOSE_LOCAL) restart api
 
 up:  ## start the full stack locally (https://localhost)
 	$(COMPOSE_LOCAL) up -d --build

@@ -51,7 +51,7 @@ evaluation_criteria:
     args:
       expected: true
   communicate_info:
-  - D06-possible-fraud
+  - HO-  # the handoff reference reaches the customer; rule ids stay internal
   reward_basis:
   - outcome
   - env

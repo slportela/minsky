@@ -89,6 +89,8 @@ class ErrorCode(StrEnum):
     CONVERSATION_FORBIDDEN = "conversation_forbidden"
     SERVICE_UNAVAILABLE = "service_unavailable"
     TOOL_FAILURE = "tool_failure"
+    CASE_NOT_FOUND = "case_not_found"
+    CASE_CONFLICT = "case_conflict"
 
 
 class ErrorResponse(_Strict):
