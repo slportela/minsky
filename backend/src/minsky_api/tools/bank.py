@@ -27,6 +27,7 @@ from typing import Any, NoReturn, Protocol
 from minsky_api.config import get_settings
 from minsky_api.identity.errors import PermissionDenied
 from minsky_api.identity.session import require_customer
+from minsky_api.observability import start_span
 from minsky_api.policy.disputes import Decision, DisputeFacts, Route, TxnStatus, decide
 from minsky_api.policy.triage import CaseKind
 from minsky_api.store.complaint_stats import ComplaintStatsStore
@@ -258,6 +259,11 @@ async def evaluate_dispute(ctx: ToolContext, args: EvaluateDisputeArgs) -> Evalu
 
 
 async def open_dispute(ctx: ToolContext, args: OpenDisputeArgs) -> OpenDisputeResult:
+    with start_span("tool.open_dispute", tool="open_dispute"):
+        return await _open_dispute(ctx, args)
+
+
+async def _open_dispute(ctx: ToolContext, args: OpenDisputeArgs) -> OpenDisputeResult:
     audit_args = {
         "transaction_id": args.transaction_id,
         "reason": args.reason,

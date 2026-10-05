@@ -8,6 +8,7 @@ from fastapi import FastAPI
 from minsky_api.agent.memory import ConversationStore
 from minsky_api.api import chat_router, console_router
 from minsky_api.config import Settings, get_settings
+from minsky_api.observability import configure_tracing
 from minsky_api.store.cases import CasesBackend
 from minsky_api.store.cases_memory import InMemoryCasesBackend
 from minsky_api.store.cases_sql import SqlCasesBackend
@@ -29,6 +30,7 @@ def _cases_backend(settings: Settings) -> CasesBackend:
 
 def create_app() -> FastAPI:
     settings = get_settings()
+    configure_tracing()  # no-op unless OTEL_EXPORTER_OTLP_ENDPOINT is set (ADR 0007)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
