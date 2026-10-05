@@ -102,6 +102,9 @@ class ErrorCode(StrEnum):
     TOOL_FAILURE = "tool_failure"
     CASE_NOT_FOUND = "case_not_found"
     CASE_CONFLICT = "case_conflict"
+    NOT_FOUND = "not_found"
+    CUSTOMER_NOT_FOUND = "customer_not_found"
+    RATE_LIMITED = "rate_limited"
 
 
 class ErrorResponse(_Strict):

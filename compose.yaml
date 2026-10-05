@@ -25,6 +25,8 @@ services:
     environment:
       MINSKY_TEST_SESSIONS: ${MINSKY_TEST_SESSIONS:-}
       MINSKY_STAFF_SESSIONS: ${MINSKY_STAFF_SESSIONS:-}  # agent console credentials (make demo-sessions)
+      MINSKY_DEMO_OPERATOR_ENABLED: ${MINSKY_DEMO_OPERATOR_ENABLED:-false}  # ADR 0015: only with local or demo
+      MINSKY_DEMO_OPERATOR_SESSIONS: ${MINSKY_DEMO_OPERATOR_SESSIONS:-}  # credentials that choose the customer
       MINSKY_CASES_BACKEND: postgres  # cases.* (disputes, handoffs, case queue) survive restarts
       MINSKY_ENVIRONMENT: ${MINSKY_ENVIRONMENT:-local}
       MINSKY_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-minsky}:${POSTGRES_PASSWORD:-minsky}@postgres:5432/${POSTGRES_DB:-minsky}
