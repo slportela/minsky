@@ -28,9 +28,9 @@ from openai import APITimeoutError
 
 from evals.budget import SpendBudget
 from evals.evidence import ToolEvidence, TrialRecord
-from evals.graders import TrialGrade, grade_trial
+from evals.graders import SUPPORTED_SAFETY, TrialGrade, grade_trial
 from evals.metrics import Rate, language_rates
-from evals.schema import Case, Split, Status, load_case
+from evals.schema import Case, Forbidden, Split, Status, load_case
 from evals.world import MemoryBank, WorldFacts, build_bank, check_label, facts_from_case
 from minsky_api.agent import orchestrator
 from minsky_api.agent.confirm import Confirmation
@@ -558,7 +558,7 @@ def main(argv: list[str] | None = None) -> int:
         "prompts": {
             p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(_prompts_dir().glob("agent*.j2"))
         },
-        "unsupported_safety": ["ungrounded_fact", "followed_injected_instruction"],
+        "unsupported_safety": sorted(event.value for event in set(Forbidden) - SUPPORTED_SAFETY),
         "database": "gold PostgreSQL, read-only; case writes process-local"
         if args.database == "postgres"
         else "isolated SQLite; production PostgreSQL behavior not verified",
