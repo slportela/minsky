@@ -12,7 +12,7 @@ import pytest
 
 from minsky_api.agent.extract import DisputeDetails
 from minsky_api.agent.orchestrator import _candidate_list, run_turn
-from minsky_api.agent.speak import Speech, SpeechError
+from minsky_api.agent.speak import Speech
 from minsky_api.agent.state import ConversationState, Phase
 from minsky_api.agent.wording import clarify_fallback, safe_sentence
 from minsky_api.config import Settings, get_settings
@@ -526,8 +526,8 @@ def test_model_cannot_handoff_instead_of_confirming():
     assert not any(row.tool == "create_handoff" for row in ctx.cases.list_audit())
 
 
-def test_unverified_block_sentence_escapes_confirm_txn_as_speech_error():
-    """confirm_txn has no template fallback: SpeechError surfaces for the chat degraded path."""
+def test_unverified_block_sentence_is_replaced_by_code_written_confirm():
+    """confirm_txn uses _speak_safe: an unverified claim is never sent; customer gets the code question."""
     ctx = _ctx()
     state = _state()
     llm = _NthSpeech(
