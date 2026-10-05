@@ -18,6 +18,7 @@ from minsky_api.agent.wording import (
     human_date,
     inform_fallback,
     policy_reason,
+    safe_sentence,
     transaction_noun,
     with_candidates,
 )
@@ -90,6 +91,21 @@ async def _speak(state: ConversationState, llm: LLM, allowed: tuple[str, ...], *
             if attempt == _SPEAK_ATTEMPTS - 1:
                 raise
     raise AssertionError("unreachable")
+
+
+async def _speak_safe(state: ConversationState, llm: LLM, allowed: tuple[str, ...], **facts: object) -> Speech:
+    """Like _speak, but a reply refused twice becomes a code-written sentence instead of an error (HTTP 503).
+
+    The sentence is for the first allowed act and says only what code verified (wording.safe_sentence). A
+    missing key or a model other than the pinned one still fails loudly: those are not phrasing failures.
+    """
+    try:
+        return await _speak(state, llm, allowed, **facts)
+    except (LLMNotConfiguredError, ModelMismatchError):
+        raise
+    except RuntimeError:
+        act = allowed[0]
+        return Speech(act=act, text=safe_sentence(act, _lang(state), _public_facts(state, **facts)))
 
 
 async def _speak_verified(state: ConversationState, llm: LLM, allowed: tuple[str, ...], **facts: object) -> str:
@@ -275,7 +291,7 @@ async def _after_candidates(
     state.selected_product_id = txn.product_id
     state.selected_type = txn.transaction_type
     state.candidate_txn_ids = [txn.transaction_id]
-    speech = await _speak(state, llm, ("confirm_txn",), **_txn_facts(txn, _lang(state)))
+    speech = await _speak_safe(state, llm, ("confirm_txn",), **_txn_facts(txn, _lang(state)))
     return _ask(state, Phase.CONFIRM_TXN, _accept(state, speech))
 
 
@@ -292,14 +308,14 @@ async def _apply_policy(ctx: ToolContext, state: ConversationState, llm: LLM) ->
     state.route = decision.route
     route = decision.route
     if route == Route.OPEN_DISPUTE.value:
-        speech = await _speak(state, llm, ("confirm_open",), rule_id=decision.rule_id)
+        speech = await _speak_safe(state, llm, ("confirm_open",), rule_id=decision.rule_id)
         question = f"{_accept(state, speech)} {confirm_question('confirm_open', _lang(state), state.selected_type)}"
         return _ask(state, Phase.CONFIRM_ACT, question)
     if route == Route.ESCALATE_FRAUD.value and not decision.offer_card_block:
         # Not a card charge (e.g. a transfer): nothing to block, straight to the fraud team.
         return await _handoff(ctx, state, llm, reason="possible_fraud", rule_id=decision.rule_id)
     if route == Route.ESCALATE_FRAUD.value:
-        speech = await _speak(state, llm, ("offer_block",), rule_id=decision.rule_id)
+        speech = await _speak_safe(state, llm, ("offer_block",), rule_id=decision.rule_id)
         question = f"{_accept(state, speech)} {confirm_question('offer_block', _lang(state))}"
         return _ask(state, Phase.CARD_OFFER, question)
     if route == Route.ESCALATE_AGENT.value:
@@ -381,7 +397,7 @@ async def _phase_clarify(ctx: ToolContext, state: ConversationState, text: str, 
             state.selected_txn_id = txn.transaction_id
             state.selected_product_id = txn.product_id
             state.selected_type = txn.transaction_type
-            speech = await _speak(state, llm, ("confirm_txn",), **_txn_facts(txn, _lang(state)))
+            speech = await _speak_safe(state, llm, ("confirm_txn",), **_txn_facts(txn, _lang(state)))
             return _ask(state, Phase.CONFIRM_TXN, _accept(state, speech))
     details = await extract_dispute_details(llm, text)
     state.customer_says_not_me = state.customer_says_not_me or details.customer_says_not_me
@@ -424,7 +440,7 @@ async def _consent(ctx: ToolContext, state: ConversationState, text: str, llm: L
 
 
 async def _ask_again(state: ConversationState, llm: LLM) -> str:
-    speech = await _speak(state, llm, ("ask_again",))
+    speech = await _speak_safe(state, llm, ("ask_again",))
     return _accept(state, speech)
 
 
@@ -433,7 +449,7 @@ async def _phase_confirm_txn(ctx: ToolContext, state: ConversationState, text: s
     if decision == "yes":
         return await _apply_policy(ctx, state, llm)
     if decision == "no":
-        speech = await _speak(state, llm, ("clarify", "abort"))
+        speech = await _speak_safe(state, llm, ("clarify", "abort"))
         if speech.act == "abort":
             state.phase = Phase.DONE
             state.pending_question = None
@@ -450,7 +466,7 @@ async def _phase_confirm_txn(ctx: ToolContext, state: ConversationState, text: s
 async def _phase_confirm_act(ctx: ToolContext, state: ConversationState, text: str, llm: LLM) -> str:
     decision = await _consent(ctx, state, text, llm)
     if decision == "no":
-        speech = await _speak(state, llm, ("abort",))
+        speech = await _speak_safe(state, llm, ("abort",))
         state.phase = Phase.DONE
         state.pending_question = None
         return _accept(state, speech)

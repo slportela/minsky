@@ -14,7 +14,7 @@ from minsky_api.agent.extract import DisputeDetails
 from minsky_api.agent.orchestrator import _candidate_list, run_turn
 from minsky_api.agent.speak import Speech
 from minsky_api.agent.state import ConversationState, Phase
-from minsky_api.agent.wording import clarify_fallback
+from minsky_api.agent.wording import clarify_fallback, safe_sentence
 from minsky_api.config import Settings, get_settings
 from minsky_api.identity import SessionState, ToolSession
 from minsky_api.llm.client import LLMNotConfiguredError, LLMResult
@@ -518,8 +518,11 @@ def test_model_cannot_handoff_instead_of_confirming():
     ctx = _ctx()
     state = _state()
     llm = _NthSpeech(_details(), n=1, speech=Speech(act="handoff", text="Quiero una persona."))
-    with pytest.raises(RuntimeError, match="not allowed"):
-        asyncio.run(run_turn(state, "Cafe 25", ctx, llm))  # type: ignore[arg-type]
+    state, reply = asyncio.run(run_turn(state, "Cafe 25", ctx, llm))  # type: ignore[arg-type]
+    # The act is refused twice, so the customer gets the code-written question and nothing else happens.
+    assert "Quiero una persona" not in reply
+    assert state.phase == Phase.CONFIRM_TXN
+    assert state.acts[-1] == "confirm_txn"
     assert not any(row.tool == "create_handoff" for row in ctx.cases.list_audit())
 
 
@@ -535,8 +538,10 @@ def test_unverified_block_sentence_does_not_send_or_act():
             claims_card_blocked=False,
         ),
     )
-    with pytest.raises(RuntimeError, match="unverified"):
-        asyncio.run(run_turn(state, "Cafe 25", ctx, llm))  # type: ignore[arg-type]
+    state, reply = asyncio.run(run_turn(state, "Cafe 25", ctx, llm))  # type: ignore[arg-type]
+    # The unverified "Bloqueé la tarjeta" is never sent: the customer gets the code-written question instead.
+    assert "Bloqueé" not in reply and "bloque" not in reply.casefold()
+    assert state.claims_card_blocked is False
     tools = [row.tool for row in ctx.cases.list_audit()]
     assert "open_dispute" not in tools
     assert "block_card" not in tools
@@ -999,3 +1004,94 @@ def test_explicit_no_does_not_block_the_card_when_the_model_says_yes():
     state, _ = asyncio.run(run_turn(state, "não", ctx, llm))  # type: ignore[arg-type]
     assert ctx.cases.get_card_block("P1") is None
     assert not any(row.tool == "block_card" and row.outcome == "ok" for row in ctx.cases.list_audit())
+
+
+# ---- a reply refused twice is a code-written sentence on every path, never an HTTP 503 ----------------------------
+
+_REFUSED = "Te cobraremos 900 USD de comisión."  # an invented amount: the grounding check refuses it every time
+
+
+def _refused(act: str) -> Speech:
+    return Speech(act=act, text=_REFUSED)
+
+
+def _turns(llm: FakeLLM, ctx: ToolContext, *texts: str) -> tuple[ConversationState, str]:
+    state = _state()
+    reply = ""
+    for text in texts:
+        state, reply = asyncio.run(run_turn(state, text, ctx, llm))  # type: ignore[arg-type]
+    return state, reply
+
+
+def test_a_refused_transaction_question_is_a_code_written_one():
+    llm = _NthSpeech(_details(), n=1, speech=_refused("confirm_txn"), repeat=2)
+    state, reply = _turns(llm, _ctx(), "Cafe 25")
+    assert state.phase == Phase.CONFIRM_TXN
+    assert "Cafe" in reply and "25.00 USD" in reply and reply.endswith("Responde sí o no.")
+    assert state.pending_question == reply and "900" not in reply
+
+
+def test_a_refused_transaction_question_after_picking_a_candidate_is_a_code_written_one():
+    t1 = _txn(transaction_id="T1", merchant="Cafe")
+    t2 = _txn(transaction_id="T2", merchant="Cafe Sur")
+    ctx = ToolContext(
+        session=_valid(),
+        db=FakeSession(
+            get_result={CustomerComplaintStats: _stats(), Product: _card(), Transaction: t2}, exec_rows=[t1, t2]
+        ),  # type: ignore[arg-type]
+        cases=InMemoryCasesBackend(),
+    )
+    llm = _NthSpeech(_details(merchant="Cafe", amount=None), n=2, speech=_refused("confirm_txn"), repeat=2)
+    state, reply = _turns(llm, ctx, "Cafe", "2")
+    assert state.phase == Phase.CONFIRM_TXN
+    assert "Cafe Sur" in reply and reply.endswith("Responde sí o no.") and "900" not in reply
+
+
+def test_a_refused_ask_again_is_a_code_written_one():
+    llm = _NthSpeech(_details(), n=2, speech=_refused("ask_again"), repeat=2)
+    state, reply = _turns(llm, _ctx(), "Cafe 25", "tal vez")
+    assert state.phase == Phase.CONFIRM_TXN
+    assert reply == safe_sentence("ask_again", "es", {})
+
+
+def test_a_refused_open_confirmation_keeps_the_code_written_question():
+    llm = _NthSpeech(_details(), n=2, speech=_refused("confirm_open"), repeat=2)
+    state, reply = _turns(llm, _ctx(), "Cafe 25", "sí")
+    assert state.phase == Phase.CONFIRM_ACT
+    assert reply.startswith("El cargo cumple las condiciones") and reply.endswith("Responde sí o no.")
+    assert "900" not in reply and state.pending_question == reply
+
+
+def test_a_refused_card_offer_keeps_the_code_written_question():
+    ctx = _ctx(_txn(is_fraud=True))
+    llm = _NthSpeech(_details(customer_says_not_me=True), n=2, speech=_refused("offer_block"), repeat=2)
+    state, reply = _turns(llm, ctx, "No fui yo en Cafe", "sí")
+    assert state.phase == Phase.CARD_OFFER
+    assert "alguien podría estar usando tu tarjeta" in reply and "¿Bloqueo tu tarjeta ahora?" in reply
+
+
+def test_a_refused_abort_is_a_code_written_one():
+    llm = _NthSpeech(_details(), n=3, speech=_refused("abort"), repeat=2)
+    ctx = _ctx()
+    state, reply = _turns(llm, ctx, "Cafe 25", "sí", "no")
+    assert state.phase == Phase.DONE
+    assert reply == safe_sentence("abort", "es", {})
+    assert not any(row.tool == "open_dispute" for row in ctx.cases.list_audit())
+
+
+def test_a_refused_clarify_or_abort_after_a_no_is_a_code_written_clarification():
+    llm = _NthSpeech(_details(), n=2, speech=_refused("clarify"), repeat=2)
+    state, reply = _turns(llm, _ctx(), "Cafe 25", "no")
+    assert state.phase == Phase.CLARIFY
+    assert reply == clarify_fallback("es", None)
+
+
+def test_a_missing_key_is_still_loud_on_the_paths_that_now_have_a_fallback():
+    class _NotConfigured(FakeLLM):
+        async def respond(self, *args: Any, schema: type | None = None, **kwargs: Any) -> LLMResult[Any]:
+            if schema is not None and schema.__name__ == "Speech":
+                raise LLMNotConfiguredError("no key")
+            return await super().respond(*args, schema=schema, **kwargs)
+
+    with pytest.raises(LLMNotConfiguredError):
+        _turns(_NotConfigured(_details()), _ctx(), "Cafe 25")

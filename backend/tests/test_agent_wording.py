@@ -12,6 +12,7 @@ from minsky_api.agent.wording import (
     human_amount,
     human_date,
     policy_reason,
+    safe_sentence,
     with_candidates,
 )
 
@@ -67,3 +68,39 @@ def test_clarify_fallback_is_a_complete_question_in_both_languages():
         no_list = clarify_fallback(language, None)
         assert "?" in no_list and "D0" not in no_list
     assert clarify_fallback("pt", None) != clarify_fallback("es", None)
+
+
+_TXN = {"kind": "cargo", "merchant": "Cafe", "amount": "25.00 USD", "when": "10 de junio de 2026"}
+_REASON = {"reason": "el cargo cumple las condiciones para abrir el reclamo ahora mismo"}
+
+
+def test_every_act_that_can_be_refused_has_a_code_written_sentence_in_both_languages():
+    facts = {**_TXN, **_REASON}
+    for act in ("clarify", "ask_again", "abort", "confirm_open", "offer_block", "confirm_txn"):
+        for language in ("es", "pt"):
+            text = safe_sentence(act, language, facts)
+            assert text.strip() and "D0" not in text, (act, language)
+    assert safe_sentence("ask_again", "pt", {}) != safe_sentence("ask_again", "es", {})
+
+
+def test_the_confirm_txn_sentence_names_the_transaction_and_asks_for_a_yes_or_no():
+    es = safe_sentence("confirm_txn", "es", _TXN)
+    assert "Cafe" in es and "25.00 USD" in es and "10 de junio de 2026" in es and es.endswith("Responde sí o no.")
+    pt = safe_sentence("confirm_txn", "pt", _TXN)
+    assert "Cafe" in pt and pt.endswith("Responda sim ou não.")
+    assert "None" not in safe_sentence("confirm_txn", "es", {**_TXN, "when": None})
+
+
+def test_the_question_acts_use_the_policy_reason_and_never_report_an_action():
+    for act in ("confirm_open", "offer_block"):
+        text = safe_sentence(act, "es", _REASON)
+        assert text == "El cargo cumple las condiciones para abrir el reclamo ahora mismo."
+        assert not action_claims(text)
+    assert safe_sentence("abort", "es", {}) and not action_claims(safe_sentence("abort", "es", {}))
+
+
+def test_an_act_with_no_sentence_is_a_bug_and_raises():
+    import pytest
+
+    with pytest.raises(ValueError, match="no code-written sentence"):
+        safe_sentence("handoff", "es", {})
