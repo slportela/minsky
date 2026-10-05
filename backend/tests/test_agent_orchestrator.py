@@ -119,6 +119,25 @@ class FakeLLM:
         return "unclear"
 
 
+_NTH_INSTANCES: list[Any] = []
+
+
+@pytest.fixture(autouse=True)
+def _every_scripted_speech_is_reached():
+    """A scripted speech on call n that never happens means the test passes without testing what it says.
+
+    The call order changes whenever a step stops using the model (the transaction question did), and the
+    tests that count calls silently stop injecting. This turns that into a failure.
+    """
+    _NTH_INSTANCES.clear()
+    yield
+    for llm in _NTH_INSTANCES:
+        assert llm.injected == llm._repeat, (
+            f"the scripted speech on model call {llm._target} was reached {llm.injected} of {llm._repeat} times: "
+            "the call order changed and this test no longer tests what it says"
+        )
+
+
 class _NthSpeech(FakeLLM):
     """One scripted speech on call `n` (1-based). Every other speech uses the fact stand-in."""
 
@@ -136,11 +155,14 @@ class _NthSpeech(FakeLLM):
         self._target = n
         self._repeat = repeat  # 2 = the bounded retry fails too
         self._speech = speech
+        self.injected = 0
+        _NTH_INSTANCES.append(self)
 
     async def respond(self, *args: Any, schema: type | None = None, **kwargs: Any) -> LLMResult[Any]:
         if schema is not None and schema.__name__ == "Speech":
             self._n += 1
             if self._target <= self._n < self._target + self._repeat:
+                self.injected += 1
                 return LLMResult(
                     text=self._speech.model_dump_json(),
                     parsed=self._speech,
@@ -514,48 +536,13 @@ def test_clarify_exhausted_handoff(monkeypatch):
         get_settings.cache_clear()
 
 
-def test_model_cannot_handoff_instead_of_confirming():
-    ctx = _ctx()
-    state = _state()
-    llm = _NthSpeech(_details(), n=1, speech=Speech(act="handoff", text="Quiero una persona."))
-    state, reply = asyncio.run(run_turn(state, "Cafe 25", ctx, llm))  # type: ignore[arg-type]
-    # The act is refused twice, so the customer gets the code-written question and nothing else happens.
-    assert "Quiero una persona" not in reply
-    assert state.phase == Phase.CONFIRM_TXN
-    assert state.acts[-1] == "confirm_txn"
-    assert not any(row.tool == "create_handoff" for row in ctx.cases.list_audit())
-
-
-def test_unverified_block_sentence_is_replaced_by_code_written_confirm():
-    """confirm_txn uses _speak_safe: an unverified claim is never sent; customer gets the code question."""
-    ctx = _ctx()
-    state = _state()
-    llm = _NthSpeech(
-        _details(),
-        n=1,
-        speech=Speech(
-            act="confirm_txn",
-            text="Bloqueé la tarjeta. Cafe 25.00 USD 10 de junio de 2026",
-            claims_card_blocked=False,
-        ),
-    )
-    state, reply = asyncio.run(run_turn(state, "Cafe 25", ctx, llm))  # type: ignore[arg-type]
-    # The unverified "Bloqueé la tarjeta" is never sent: the customer gets the code-written question instead.
-    assert "Bloqueé" not in reply and "bloque" not in reply.casefold()
-    assert state.claims_card_blocked is False
-    tools = [row.tool for row in ctx.cases.list_audit()]
-    assert "open_dispute" not in tools
-    assert "block_card" not in tools
-    assert "create_handoff" not in tools
-
-
 def test_inform_route_does_not_let_the_model_create_a_handoff():
     txn = _txn(status="Declined")
     ctx = _ctx(txn, exec_rows=[txn])
     state = _state()
     llm = _NthSpeech(
         _details(),
-        n=2,
+        n=1,
         speech=Speech(act="handoff", text="Quiero una persona."),
         decisions=["yes"],
     )
@@ -571,7 +558,7 @@ def test_inform_route_does_not_let_the_model_create_a_handoff():
 def test_speech_failure_after_open_reports_the_dispute_id():
     ctx = _ctx()
     state = _state()
-    llm = _RaiseOnSpeech(_details(), fail_on=3)
+    llm = _RaiseOnSpeech(_details(), fail_on=2)
     state, _ = asyncio.run(run_turn(state, "Cafe 25", ctx, llm))  # type: ignore[arg-type]
     state, _ = asyncio.run(run_turn(state, "sí", ctx, llm))  # type: ignore[arg-type]
     state, reply = asyncio.run(run_turn(state, "sí", ctx, llm))  # type: ignore[arg-type]
@@ -678,7 +665,7 @@ def test_detector_runs_once_and_sim_keeps_portuguese():
     opening = "Quiero disputar un cargo en Cafe de 25"
     state, reply = asyncio.run(run_turn(state, opening, ctx, llm, detector=detector))  # type: ignore[arg-type]
     assert state.language == "pt"
-    assert reply.startswith("pt:")
+    assert reply.startswith("É esta a cobrança a que você se refere")
     assert detector.calls == [opening]
     state, reply = asyncio.run(run_turn(state, "sim", ctx, llm, detector=detector))  # type: ignore[arg-type]
     assert detector.calls == [opening]
@@ -692,7 +679,7 @@ def test_spanish_first_message_keeps_spanish_phrases():
     llm = FakeLLM(_details())
     state, reply = asyncio.run(run_turn(state, "Quiero disputar un cargo en Cafe de 25", ctx, llm))  # type: ignore[arg-type]
     assert state.language == "es"
-    assert reply.startswith("es:")
+    assert reply.startswith("¿Es este el cargo al que te refieres")
 
 
 def test_quero_opener_replies_in_portuguese_and_sim_confirms():
@@ -701,21 +688,10 @@ def test_quero_opener_replies_in_portuguese_and_sim_confirms():
     llm = FakeLLM(_details())
     state, reply = asyncio.run(run_turn(state, "Quero disputar uma cobrança de 25 dólares no Cafe", ctx, llm))  # type: ignore[arg-type]
     assert state.language == "pt"
-    assert reply.startswith("pt:")
+    assert reply.startswith("É esta a cobrança a que você se refere")
     state, reply = asyncio.run(run_turn(state, "sim", ctx, llm))  # type: ignore[arg-type]
     assert state.phase == Phase.CONFIRM_ACT
     assert reply.startswith("pt:")
-
-
-def test_one_bad_reply_is_retried_and_never_sent():
-    ctx = _ctx()
-    state = _state()
-    bad = Speech(act="confirm_txn", text="Bloqueé la tarjeta. Cafe 25.00 USD 10 de junio de 2026")
-    llm = _NthSpeech(_details(), n=1, speech=bad, repeat=1)
-    state, reply = asyncio.run(run_turn(state, "Cafe 25", ctx, llm))  # type: ignore[arg-type]
-    assert state.phase == Phase.CONFIRM_TXN
-    assert "Bloqueé" not in reply
-    assert not any(row.tool in ("block_card", "create_handoff") for row in ctx.cases.list_audit())
 
 
 def test_opened_dispute_is_queued_low_with_verified_facts():
@@ -773,7 +749,7 @@ def test_the_question_a_yes_authorizes_is_written_by_code():
     """Whatever the model writes, the stored question names the exact action that a yes will run."""
     ctx = _ctx()
     state = _state()
-    llm = _NthSpeech(_details(), n=2, speech=Speech(act="confirm_open", text="¿Te paso con un asesor?"), repeat=1)
+    llm = _NthSpeech(_details(), n=1, speech=Speech(act="confirm_open", text="¿Te paso con un asesor?"), repeat=1)
     state, _ = asyncio.run(run_turn(state, "Cafe 25", ctx, llm))  # type: ignore[arg-type]
     state, reply = asyncio.run(run_turn(state, "sí", ctx, llm))  # type: ignore[arg-type]
     assert state.phase == Phase.CONFIRM_ACT
@@ -1049,32 +1025,8 @@ def _turns(llm: FakeLLM, ctx: ToolContext, *texts: str) -> tuple[ConversationSta
     return state, reply
 
 
-def test_a_refused_transaction_question_is_a_code_written_one():
-    llm = _NthSpeech(_details(), n=1, speech=_refused("confirm_txn"), repeat=2)
-    state, reply = _turns(llm, _ctx(), "Cafe 25")
-    assert state.phase == Phase.CONFIRM_TXN
-    assert "Cafe" in reply and "25.00 USD" in reply and reply.endswith("Responde sí o no.")
-    assert state.pending_question == reply and "900" not in reply
-
-
-def test_a_refused_transaction_question_after_picking_a_candidate_is_a_code_written_one():
-    t1 = _txn(transaction_id="T1", merchant="Cafe")
-    t2 = _txn(transaction_id="T2", merchant="Cafe Sur")
-    ctx = ToolContext(
-        session=_valid(),
-        db=FakeSession(
-            get_result={CustomerComplaintStats: _stats(), Product: _card(), Transaction: t2}, exec_rows=[t1, t2]
-        ),  # type: ignore[arg-type]
-        cases=InMemoryCasesBackend(),
-    )
-    llm = _NthSpeech(_details(merchant="Cafe", amount=None), n=2, speech=_refused("confirm_txn"), repeat=2)
-    state, reply = _turns(llm, ctx, "Cafe", "2")
-    assert state.phase == Phase.CONFIRM_TXN
-    assert "Cafe Sur" in reply and reply.endswith("Responde sí o no.") and "900" not in reply
-
-
 def test_a_refused_ask_again_is_a_code_written_one():
-    llm = _NthSpeech(_details(), n=2, speech=_refused("ask_again"), repeat=2)
+    llm = _NthSpeech(_details(), n=1, speech=_refused("ask_again"), repeat=2)
     state, reply = _turns(llm, _ctx(), "Cafe 25", "tal vez")
     assert state.phase == Phase.CONFIRM_TXN
     # The code-written sentence repeats the question that was asked and always says how to answer.
@@ -1084,7 +1036,7 @@ def test_a_refused_ask_again_is_a_code_written_one():
 
 
 def test_a_refused_open_confirmation_keeps_the_code_written_question():
-    llm = _NthSpeech(_details(), n=2, speech=_refused("confirm_open"), repeat=2)
+    llm = _NthSpeech(_details(), n=1, speech=_refused("confirm_open"), repeat=2)
     state, reply = _turns(llm, _ctx(), "Cafe 25", "sí")
     assert state.phase == Phase.CONFIRM_ACT
     assert reply.startswith("El cargo cumple las condiciones") and reply.endswith("Responde sí o no.")
@@ -1093,14 +1045,14 @@ def test_a_refused_open_confirmation_keeps_the_code_written_question():
 
 def test_a_refused_card_offer_keeps_the_code_written_question():
     ctx = _ctx(_txn(is_fraud=True))
-    llm = _NthSpeech(_details(customer_says_not_me=True), n=2, speech=_refused("offer_block"), repeat=2)
+    llm = _NthSpeech(_details(customer_says_not_me=True), n=1, speech=_refused("offer_block"), repeat=2)
     state, reply = _turns(llm, ctx, "No fui yo en Cafe", "sí")
     assert state.phase == Phase.CARD_OFFER
     assert "alguien podría estar usando tu tarjeta" in reply and "¿Bloqueo tu tarjeta ahora?" in reply
 
 
 def test_a_refused_abort_is_a_code_written_one():
-    llm = _NthSpeech(_details(), n=3, speech=_refused("abort"), repeat=2)
+    llm = _NthSpeech(_details(), n=2, speech=_refused("abort"), repeat=2)
     ctx = _ctx()
     state, reply = _turns(llm, ctx, "Cafe 25", "sí", "no")
     assert state.phase == Phase.DONE
@@ -1109,7 +1061,7 @@ def test_a_refused_abort_is_a_code_written_one():
 
 
 def test_a_refused_clarify_or_abort_after_a_no_is_a_code_written_clarification():
-    llm = _NthSpeech(_details(), n=2, speech=_refused("clarify"), repeat=2)
+    llm = _NthSpeech(_details(), n=1, speech=_refused("clarify"), repeat=2)
     state, reply = _turns(llm, _ctx(), "Cafe 25", "no")
     assert state.phase == Phase.CLARIFY
     assert reply == clarify_fallback("es", None)
@@ -1123,7 +1075,7 @@ def test_a_missing_key_is_still_loud_on_the_paths_that_now_have_a_fallback():
             return await super().respond(*args, schema=schema, **kwargs)
 
     with pytest.raises(LLMNotConfiguredError):
-        _turns(_NotConfigured(_details()), _ctx(), "Cafe 25")
+        _turns(_NotConfigured(_details()), _ctx(), "Cafe 25", "sí")
 
 
 def test_the_transaction_question_ends_with_a_code_owned_yes_or_no_hint_exactly_once():
@@ -1167,7 +1119,7 @@ def test_the_notice_is_there_even_if_the_model_asks_for_more_details():
     ctx = _ctx()
     state = _state()
     wrong = Speech(act="ask_again", text="¿Puedes contarme un poco más sobre el cargo que no reconoces?")
-    llm = _NthSpeech(_details(), n=2, speech=wrong, repeat=1, decisions=["unclear"])
+    llm = _NthSpeech(_details(), n=1, speech=wrong, repeat=1, decisions=["unclear"])
     state, _ = asyncio.run(run_turn(state, "Cafe 25", ctx, llm))  # type: ignore[arg-type]
     state, reply = asyncio.run(run_turn(state, "lo reconozco", ctx, llm))  # type: ignore[arg-type]
     assert reply == f"{wrong.text} {_ONLY_ES}"
@@ -1177,7 +1129,7 @@ def test_a_model_closing_instruction_is_replaced_by_the_notice():
     ctx = _ctx()
     state = _state()
     rephrased = Speech(act="ask_again", text="¿Es ese el cargo al que te refieres? Responde sí o no.")
-    llm = _NthSpeech(_details(), n=2, speech=rephrased, repeat=1, decisions=["unclear"])
+    llm = _NthSpeech(_details(), n=1, speech=rephrased, repeat=1, decisions=["unclear"])
     state, _ = asyncio.run(run_turn(state, "Cafe 25", ctx, llm))  # type: ignore[arg-type]
     state, reply = asyncio.run(run_turn(state, "ese mismo", ctx, llm))  # type: ignore[arg-type]
     assert reply == f"¿Es ese el cargo al que te refieres? {_ONLY_ES}"
@@ -1187,7 +1139,7 @@ def test_a_refused_rephrasing_falls_back_to_the_pending_question_with_the_notice
     ctx = _ctx()
     state = _state()
     refused = Speech(act="ask_again", text="¿Seguro? Se te cobrarán 900 USD de comisión si no respondes.")
-    llm = _NthSpeech(_details(), n=2, speech=refused, repeat=2, decisions=["unclear"])
+    llm = _NthSpeech(_details(), n=1, speech=refused, repeat=2, decisions=["unclear"])
     state, _ = asyncio.run(run_turn(state, "Cafe 25", ctx, llm))  # type: ignore[arg-type]
     pending = state.pending_question
     assert pending
@@ -1206,3 +1158,63 @@ def test_the_notice_follows_the_language_of_the_conversation():
     assert state.language == "pt"
     state, reply = asyncio.run(run_turn(state, "reconheço", ctx, llm))  # type: ignore[arg-type]
     assert reply.endswith(_ONLY_PT), reply
+
+
+# ---- the transaction question is code's, not the model's ---------------------------------------------------------
+
+
+class _SpokenActs(FakeLLM):
+    """Records which acts the model was allowed to speak."""
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.allowed: list[tuple[str, ...]] = []
+
+    async def respond(self, *args: Any, schema: type | None = None, **kwargs: Any) -> LLMResult[Any]:
+        if schema is not None and schema.__name__ == "Speech":
+            import json
+
+            self.allowed.append(tuple(json.loads(str(args[1][-1]["content"]))["allowed"]))
+        return await super().respond(*args, schema=schema, **kwargs)
+
+
+def test_the_transaction_question_is_written_by_code_and_the_model_is_never_asked_for_it():
+    """It was the model's, and a refused or hijacked reply there needed its own tests. Now it cannot be either: the
+    model is never asked for it, so it cannot add a claim, hand off instead of asking, or word it badly."""
+    ctx = _ctx()
+    state = _state()
+    llm = _SpokenActs(_details())
+    state, reply = asyncio.run(run_turn(state, "Cafe 25", ctx, llm))  # type: ignore[arg-type]
+    assert reply == "¿Es este el cargo al que te refieres: Cafe, 25.00 USD, del 10 de junio de 2026? Responde sí o no."
+    assert state.pending_question == reply
+    assert state.phase == Phase.CONFIRM_TXN
+    assert state.acts[-1] == "confirm_txn"
+    assert all("confirm_txn" not in allowed for allowed in llm.allowed)
+    assert not any(row.tool in ("block_card", "create_handoff") for row in ctx.cases.list_audit())
+
+
+def test_the_transaction_question_after_picking_a_candidate_is_also_written_by_code():
+    t1 = _txn(transaction_id="T1", merchant="Cafe")
+    t2 = _txn(transaction_id="T2", merchant="Cafe Sur")
+    ctx = _ctx(t2, exec_rows=[t1, t2])
+    state = _state()
+    llm = _SpokenActs(_details(merchant="Cafe", amount=None))
+    state, _ = asyncio.run(run_turn(state, "Cafe", ctx, llm))  # type: ignore[arg-type]
+    assert state.phase == Phase.CLARIFY
+    state, reply = asyncio.run(run_turn(state, "2", ctx, llm))  # type: ignore[arg-type]
+    assert state.phase == Phase.CONFIRM_TXN
+    assert reply.startswith("¿Es este el cargo al que te refieres: Cafe Sur, 25.00 USD")
+    assert all("confirm_txn" not in allowed for allowed in llm.allowed)
+
+
+def test_a_customer_who_does_not_recognize_the_charge_is_not_asked_whether_they_recognize_it():
+    """The fraud wording trap: "no reconozco este cargo" answered by "¿Reconoces este cargo?"."""
+    ctx = _ctx(_txn(is_fraud=True))
+    state = _state()
+    llm = _SpokenActs(_details(customer_says_not_me=True))
+    state, reply = asyncio.run(run_turn(state, "No reconozco un cargo de 25 USD en Cafe", ctx, llm))  # type: ignore[arg-type]
+    assert "reconoc" not in reply.casefold()
+    assert reply.startswith("¿Es este el cargo al que te refieres")
+    assert state.customer_says_not_me is True
+    state, _ = asyncio.run(run_turn(state, "sí", ctx, llm))  # type: ignore[arg-type]
+    assert state.phase == Phase.CARD_OFFER  # "sí, es ese" leads to the fraud path, as the customer meant

@@ -8,6 +8,7 @@ from decimal import Decimal
 from minsky_api.agent.speak import action_claims
 from minsky_api.agent.wording import (
     clarify_fallback,
+    confirm_txn_question,
     fallback_sentence,
     human_amount,
     human_date,
@@ -15,7 +16,6 @@ from minsky_api.agent.wording import (
     safe_sentence,
     with_candidates,
     with_only_yes_no,
-    with_yes_no_hint,
 )
 
 
@@ -108,22 +108,48 @@ def test_an_act_with_no_sentence_is_a_bug_and_raises():
         safe_sentence("handoff", "es", {})
 
 
-def test_the_transaction_question_always_tells_the_customer_how_to_answer():
-    assert (
-        with_yes_no_hint("¿Reconoces este cargo de Cafe?", "es") == "¿Reconoces este cargo de Cafe? Responde sí o no."
+def _facts(kind: str = "cargo", **extra: object) -> dict[str, object]:
+    return {"kind": kind, "merchant": "Clínica Médica", "amount": "234.61 USD", "when": "11 de junio de 2026", **extra}
+
+
+def test_the_transaction_question_asks_which_charge_it_is_and_how_to_answer():
+    assert confirm_txn_question("es", _facts()) == (
+        "¿Es este el cargo al que te refieres: Clínica Médica, 234.61 USD, del 11 de junio de 2026? Responde sí o no."
     )
-    assert (
-        with_yes_no_hint("Você reconhece esta cobrança?", "pt") == "Você reconhece esta cobrança? Responda sim ou não."
+    assert confirm_txn_question("pt", _facts("cobrança", when="11 de junho de 2026")) == (
+        "É esta a cobrança a que você se refere: Clínica Médica, 234.61 USD, em 11 de junho de 2026? "
+        "Responda sim ou não."
     )
 
 
-def test_a_question_that_already_asks_for_a_yes_or_no_is_left_alone():
-    for text in (
-        "¿Es este el cargo? Responde sí o no.",
-        "Você reconhece? Responda sim ou não.",
-        "¿Es este? Dime si o no.",
-    ):
-        assert with_yes_no_hint(text, "es") == text
+def test_the_transaction_question_never_asks_whether_the_customer_recognizes_it():
+    """The old wording contradicted "no reconozco este cargo" and "el monto no es correcto"."""
+    for language, kind in (("es", "cargo"), ("es", "transferencia"), ("pt", "cobrança"), ("pt", "saque")):
+        text = confirm_txn_question(language, _facts(kind)).casefold()
+        assert "reconoc" not in text and "reconhec" not in text
+        assert "identific" not in text and "familiar" not in text
+
+
+def test_the_transaction_question_agrees_in_gender_with_the_kind():
+    assert confirm_txn_question("es", _facts("transferencia")).startswith(
+        "¿Es esta la transferencia a la que te refieres"
+    )
+    assert confirm_txn_question("es", _facts("retiro")).startswith("¿Es este el retiro al que te refieres")
+    assert confirm_txn_question("pt", _facts("transferência")).startswith("É esta a transferência a que você se refere")
+    assert confirm_txn_question("pt", _facts("saque")).startswith("É este o saque a que você se refere")
+
+
+def test_the_transaction_question_copes_with_missing_details_and_unknown_kind():
+    only_amount = confirm_txn_question("es", {"kind": "pago", "merchant": None, "amount": "9.00 USD", "when": None})
+    assert only_amount == "¿Es este el pago al que te refieres: 9.00 USD? Responde sí o no."
+    bare = confirm_txn_question("es", {})
+    assert bare == "¿Es este el cargo al que te refieres? Responde sí o no."  # no details, default noun
+
+
+def test_the_code_written_fallback_for_the_transaction_question_is_the_same_question():
+    facts = _facts()
+    assert safe_sentence("confirm_txn", "es", facts) == confirm_txn_question("es", facts)
+    assert safe_sentence("confirm_txn", "pt", facts) == confirm_txn_question("pt", facts)
 
 
 _ONLY_ES = "En esta parte del proceso solo puedes responder «sí» o «no»."

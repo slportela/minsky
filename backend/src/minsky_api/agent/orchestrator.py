@@ -13,6 +13,7 @@ from minsky_api.agent.state import ConversationState, Phase
 from minsky_api.agent.wording import (
     clarify_fallback,
     confirm_question,
+    confirm_txn_question,
     done_fallback,
     fallback_sentence,
     human_amount,
@@ -23,7 +24,6 @@ from minsky_api.agent.wording import (
     transaction_noun,
     with_candidates,
     with_only_yes_no,
-    with_yes_no_hint,
 )
 from minsky_api.config import get_settings
 from minsky_api.identity.session import SessionState
@@ -81,6 +81,12 @@ def _txn_facts(txn: TransactionView, language: str) -> dict[str, object]:
         "amount": human_amount(txn.amount_usd),
         "when": human_date(txn.transaction_date.date(), language) if txn.transaction_date else None,
     }
+
+
+def _confirm_txn(state: ConversationState, txn: TransactionView) -> str:
+    """Ask whether this is the transaction the customer means. Code writes the question, not the model."""
+    state.acts.append("confirm_txn")
+    return _ask(state, Phase.CONFIRM_TXN, confirm_txn_question(_lang(state), _txn_facts(txn, _lang(state))))
 
 
 _SPEAK_ATTEMPTS = 2  # bounded: one retry when a reply fails the checks, then the error surfaces
@@ -298,8 +304,7 @@ async def _after_candidates(
     state.selected_product_id = txn.product_id
     state.selected_type = txn.transaction_type
     state.candidate_txn_ids = [txn.transaction_id]
-    speech = await _speak_safe(state, llm, ("confirm_txn",), **_txn_facts(txn, _lang(state)))
-    return _ask(state, Phase.CONFIRM_TXN, with_yes_no_hint(_accept(state, speech), _lang(state)))
+    return _confirm_txn(state, txn)
 
 
 async def _apply_policy(ctx: ToolContext, state: ConversationState, llm: LLM) -> str:
@@ -404,8 +409,7 @@ async def _phase_clarify(ctx: ToolContext, state: ConversationState, text: str, 
             state.selected_txn_id = txn.transaction_id
             state.selected_product_id = txn.product_id
             state.selected_type = txn.transaction_type
-            speech = await _speak_safe(state, llm, ("confirm_txn",), **_txn_facts(txn, _lang(state)))
-            return _ask(state, Phase.CONFIRM_TXN, with_yes_no_hint(_accept(state, speech), _lang(state)))
+            return _confirm_txn(state, txn)
     details = await extract_dispute_details(llm, text)
     state.customer_says_not_me = state.customer_says_not_me or details.customer_says_not_me
     if details.out_of_scope:

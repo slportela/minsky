@@ -134,19 +134,6 @@ def confirm_question(act: str, language: str, transaction_type: str | None = Non
     return "¿Bloqueo tu tarjeta ahora? Responde sí o no."
 
 
-def with_yes_no_hint(text: str, language: str) -> str:
-    """The transaction question is the model's. Code makes sure it says how to answer.
-
-    Only a plain "sí" or "no" authorizes anything (agent.consent), and the questions for the two actions already
-    end with "Responde sí o no" from code. A question that already asks for a yes or a no is left alone.
-    """
-    folded = text.casefold()
-    if "sí o no" in folded or "sim ou não" in folded or "si o no" in folded:
-        return text
-    hint = "Responda sim ou não." if _lang(language) == "pt" else "Responde sí o no."
-    return f"{text.rstrip()} {hint}"
-
-
 _ONLY_YES_NO = {
     "es": "En esta parte del proceso solo puedes responder «sí» o «no».",
     "pt": "Nesta parte do processo você só pode responder «sim» ou «não».",
@@ -223,19 +210,40 @@ def safe_sentence(act: str, language: str, facts: dict[str, object]) -> str:
             return reason[:1].upper() + reason[1:] + "."
         return "Com o que você me contou, posso seguir." if pt else "Con lo que me contaste, puedo seguir."
     if act == "confirm_txn":
-        merchant, amount, when = facts.get("merchant"), facts.get("amount"), facts.get("when")
-        if pt:
-            return (
-                f"Você reconhece a transação de {merchant} no valor de {amount}"
-                + (f" em {when}" if when else "")
-                + "? Responda sim ou não."
-            )
-        return (
-            f"¿Reconoces el movimiento de {merchant} por {amount}"
-            + (f" del {when}" if when else "")
-            + "? Responde sí o no."
-        )
+        return confirm_txn_question(language, facts)
     raise ValueError(f"no code-written sentence for act {act!r}")
+
+
+def _feminine(noun: str, language: str) -> bool:
+    """Gender of a transaction noun, read from the same table as its demonstrative ("esta transferencia")."""
+    for known, this in _NOUNS[_lang(language)].values():
+        if known == noun:
+            return this.startswith("esta ")
+    return False
+
+
+def confirm_txn_question(language: str, facts: dict[str, object]) -> str:
+    """The question that says which transaction the conversation is about. Code writes it, whole.
+
+    It used to be the model's, and the model wrote "¿Reconoces este cargo…?". That contradicts a customer who says
+    "no reconozco este cargo" (a "no" sounds right and is read as rejecting the charge) and one who says the amount is
+    wrong. This asks only whether it is the charge the customer means, with the facts the code verified.
+    """
+    pt = _lang(language) == "pt"
+    noun = facts.get("kind")
+    noun = noun if isinstance(noun, str) and noun else transaction_noun(None, language)
+    feminine = _feminine(noun, language)
+    merchant, amount, when = facts.get("merchant"), facts.get("amount"), facts.get("when")
+    parts = [str(merchant) if merchant else "", str(amount) if amount else ""]
+    if when:
+        parts.append(f"em {when}" if pt else f"del {when}")
+    details = ", ".join(part for part in parts if part)
+    suffix = f": {details}" if details else ""
+    if pt:
+        this, article = ("esta", "a") if feminine else ("este", "o")
+        return f"É {this} {article} {noun} a que você se refere{suffix}? Responda sim ou não."
+    this, article, relative = ("esta", "la", "a la que") if feminine else ("este", "el", "al que")
+    return f"¿Es {this} {article} {noun} {relative} te refieres{suffix}? Responde sí o no."
 
 
 def inform_fallback(language: str, rule_id: str | None, existing_dispute_id: str | None) -> str:
