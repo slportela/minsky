@@ -1095,3 +1095,12 @@ def test_a_missing_key_is_still_loud_on_the_paths_that_now_have_a_fallback():
 
     with pytest.raises(LLMNotConfiguredError):
         _turns(_NotConfigured(_details()), _ctx(), "Cafe 25")
+
+
+def test_the_transaction_question_ends_with_a_code_owned_yes_or_no_hint_exactly_once():
+    ctx = _ctx()
+    llm = FakeLLM(_details())
+    state, reply = _turns(llm, ctx, "Cafe 25")
+    assert state.phase == Phase.CONFIRM_TXN
+    assert reply.endswith("Responde sí o no.") and reply.count("sí o no") == 1
+    assert state.pending_question == reply  # the classifier sees the question the customer saw

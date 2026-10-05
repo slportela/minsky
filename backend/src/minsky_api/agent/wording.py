@@ -133,6 +133,19 @@ def confirm_question(act: str, language: str, transaction_type: str | None = Non
     return "¿Bloqueo tu tarjeta ahora? Responde sí o no."
 
 
+def with_yes_no_hint(text: str, language: str) -> str:
+    """The transaction question is the model's. Code makes sure it says how to answer.
+
+    Only a plain "sí" or "no" authorizes anything (agent.consent), and the questions for the two actions already
+    end with "Responde sí o no" from code. A question that already asks for a yes or a no is left alone.
+    """
+    folded = text.casefold()
+    if "sí o no" in folded or "sim ou não" in folded or "si o no" in folded:
+        return text
+    hint = "Responda sim ou não." if _lang(language) == "pt" else "Responde sí o no."
+    return f"{text.rstrip()} {hint}"
+
+
 def with_candidates(text: str, candidates: str) -> str:
     """The model asks which transaction; code lists the options, so the customer always sees them exactly.
 

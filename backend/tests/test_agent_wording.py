@@ -14,6 +14,7 @@ from minsky_api.agent.wording import (
     policy_reason,
     safe_sentence,
     with_candidates,
+    with_yes_no_hint,
 )
 
 
@@ -104,3 +105,21 @@ def test_an_act_with_no_sentence_is_a_bug_and_raises():
 
     with pytest.raises(ValueError, match="no code-written sentence"):
         safe_sentence("handoff", "es", {})
+
+
+def test_the_transaction_question_always_tells_the_customer_how_to_answer():
+    assert (
+        with_yes_no_hint("¿Reconoces este cargo de Cafe?", "es") == "¿Reconoces este cargo de Cafe? Responde sí o no."
+    )
+    assert (
+        with_yes_no_hint("Você reconhece esta cobrança?", "pt") == "Você reconhece esta cobrança? Responda sim ou não."
+    )
+
+
+def test_a_question_that_already_asks_for_a_yes_or_no_is_left_alone():
+    for text in (
+        "¿Es este el cargo? Responde sí o no.",
+        "Você reconhece? Responda sim ou não.",
+        "¿Es este? Dime si o no.",
+    ):
+        assert with_yes_no_hint(text, "es") == text

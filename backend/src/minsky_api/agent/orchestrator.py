@@ -21,6 +21,7 @@ from minsky_api.agent.wording import (
     safe_sentence,
     transaction_noun,
     with_candidates,
+    with_yes_no_hint,
 )
 from minsky_api.config import get_settings
 from minsky_api.identity.session import SessionState
@@ -292,7 +293,7 @@ async def _after_candidates(
     state.selected_type = txn.transaction_type
     state.candidate_txn_ids = [txn.transaction_id]
     speech = await _speak_safe(state, llm, ("confirm_txn",), **_txn_facts(txn, _lang(state)))
-    return _ask(state, Phase.CONFIRM_TXN, _accept(state, speech))
+    return _ask(state, Phase.CONFIRM_TXN, with_yes_no_hint(_accept(state, speech), _lang(state)))
 
 
 async def _apply_policy(ctx: ToolContext, state: ConversationState, llm: LLM) -> str:
@@ -398,7 +399,7 @@ async def _phase_clarify(ctx: ToolContext, state: ConversationState, text: str, 
             state.selected_product_id = txn.product_id
             state.selected_type = txn.transaction_type
             speech = await _speak_safe(state, llm, ("confirm_txn",), **_txn_facts(txn, _lang(state)))
-            return _ask(state, Phase.CONFIRM_TXN, _accept(state, speech))
+            return _ask(state, Phase.CONFIRM_TXN, with_yes_no_hint(_accept(state, speech), _lang(state)))
     details = await extract_dispute_details(llm, text)
     state.customer_says_not_me = state.customer_says_not_me or details.customer_says_not_me
     if details.out_of_scope:
