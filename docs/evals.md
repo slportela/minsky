@@ -194,7 +194,7 @@ Requirements for the runner, from Anthropic's eval audit checklist:
 
 - **Same entry point as production.** The runner calls the real system, not a re-implementation, with the same prompts, tools and model settings.
 - **Isolated trials.** Every (case, trial) starts from a fresh mock-bank state; no state shared between trials.
-- **Infra failures are not agent failures.** Timeouts, API errors after retries and grader crashes go to `errors.jsonl` with a failure class. Truncated replies are marked `status: truncated`. Refusals are their own metric.
+- **Infra failures are not agent failures.** Timeouts, API errors after retries and grader crashes go to `errors.jsonl` with a failure class. A provider fault (connection, timeout, rate limit, 5xx) on a call the case did not fault is infrastructure even when degraded mode answers HTTP 200 with the maintenance message (`ProviderUnavailable`). A case's own `llm_faults` are graded, and so is a reply that came back cut off, filtered, off-schema or from another model: that is the model's behavior. Truncated replies are marked `status: truncated`. Refusals are their own metric.
 - **Full transcripts saved** per trial, plus the grader inputs and outputs (`evals/runs/<run-id>/`).
 - **Pinned and recorded**: model ids (asserted on every response), prompt versions, sampling settings, seeds, case-set version, git SHA.
 - **Bounded retries with jittered backoff**, attempt counts recorded; a hard wall-clock limit per trial.

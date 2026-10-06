@@ -140,3 +140,55 @@ def test_a_case_whose_customer_never_answers_yes_or_no_must_expect_escalate() ->
     case = Case.model_validate(data)
     with pytest.raises(ValueError, match="never answers yes or no must expect escalate"):
         check_label(case, facts_from_case(case))
+
+
+class _TimingOutLLM(_ProviderLLM):
+    """A provider that times out on every call, as gpt-6-luna did once in a live dev run."""
+
+    async def respond(self, *args: object, **kwargs: object) -> object:
+        from openai import APITimeoutError
+
+        from evals.runner import _LLM_FAULT_REQUEST
+
+        raise APITimeoutError(request=_LLM_FAULT_REQUEST)
+
+
+async def test_a_real_provider_outage_is_an_infrastructure_error_not_an_agent_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Degraded mode answers a provider timeout with HTTP 200 and the maintenance message, so the HTTP check never saw
+    the outage. A live run graded dispute-date-only-two-charges-es as an agent failure (expected resolve, observed
+    abstain) when the provider timed out on its second call. A fault the case did not inject belongs in errors.jsonl."""
+    _ProviderLLM.instances = []
+    monkeypatch.setattr("evals.runner.LLM", _TimingOutLLM)
+    record = await run_trial(_case("dispute-eligible-open-es"), extractor="real", budget=_BUDGET)
+    assert record.status == "error", (record.status, record.grade)
+    assert record.error_class == "ProviderUnavailable"
+    assert record.grade is None
+
+
+async def test_an_injected_outage_is_still_graded(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The outage case's own fault is the behavior under test, not infrastructure."""
+    _ProviderLLM.instances = []
+    monkeypatch.setattr("evals.runner.LLM", _ProviderLLM)
+    record = await run_trial(_case("model-outage-maintenance-es"), extractor="real", budget=_BUDGET)
+    assert record.status == "passed", (record.status, record.error_class, record.grade)
+
+
+class _BadReplyLLM(_ProviderLLM):
+    """A provider that answers, but with a reply that does not fit the schema."""
+
+    async def respond(self, *args: object, **kwargs: object) -> object:
+        from minsky_api.llm.client import ModelOutputError
+
+        raise ModelOutputError("the model reply does not fit the requested schema")
+
+
+async def test_a_model_output_error_is_agent_behavior_and_is_graded(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Only provider faults are infrastructure. A cut-off, filtered or off-schema reply is the model's behavior: the
+    agent recovers from some (confirm.py asks again) and degrades on others, and either way the trial is scored."""
+    _ProviderLLM.instances = []
+    monkeypatch.setattr("evals.runner.LLM", _BadReplyLLM)
+    record = await run_trial(_case("dispute-eligible-open-es"), extractor="real", budget=_BUDGET)
+    assert record.status in {"passed", "failed"}, (record.status, record.error_class)
+    assert record.grade is not None
