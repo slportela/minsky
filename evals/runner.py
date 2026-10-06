@@ -24,7 +24,7 @@ from uuid import UUID, uuid4
 
 import httpx2
 from httpx import ASGITransport, AsyncClient
-from openai import APITimeoutError
+from openai import APIConnectionError, APIStatusError, APITimeoutError, RateLimitError
 
 from evals.budget import SpendBudget
 from evals.evidence import ToolEvidence, TrialRecord
@@ -48,6 +48,24 @@ _LLM_FAULT_REQUEST = httpx2.Request("POST", "https://llm.invalid/v1/responses")
 
 class HTTPContractFailure(RuntimeError):
     """The system returned an observable response that violates the case contract."""
+
+
+class InjectedProviderTimeout(APITimeoutError):
+    """A timeout raised by the case's llm_faults. The chat route treats it as any provider timeout."""
+
+
+class ProviderUnavailable(RuntimeError):
+    """The provider failed on a call the case did not fault: infrastructure, not agent behavior."""
+
+
+def _is_provider_fault(error: BaseException) -> bool:
+    """A real outage: connection, timeout, rate limit or 5xx. Not an injected fault, and not a reply that came back
+    cut off, filtered, off-schema or from another model: those are the model's behavior and are graded."""
+    if isinstance(error, InjectedProviderTimeout):
+        return False
+    if isinstance(error, (APIConnectionError, RateLimitError)):
+        return True
+    return isinstance(error, APIStatusError) and error.status_code >= 500
 
 
 class ScriptedLLM:
@@ -185,7 +203,7 @@ class FaultingLLM:
     async def respond(self, instructions: str, messages: list[dict[str, str]], **kwargs: Any) -> Any:
         self.calls += 1
         if any(item.on_call == self.calls for item in self.faults):
-            raise APITimeoutError(request=_LLM_FAULT_REQUEST)
+            raise InjectedProviderTimeout(request=_LLM_FAULT_REQUEST)
         return await self.inner.respond(instructions, messages, **kwargs)
 
 
@@ -208,7 +226,7 @@ class RecordedLLM:
         try:
             result = await self.inner.respond(instructions, messages, **kwargs)
         except BaseException as error:
-            event.update(status="error", error_class=type(error).__name__)
+            event.update(status="error", error_class=type(error).__name__, provider_fault=_is_provider_fault(error))
             raise
         event.update(
             {
@@ -425,6 +443,10 @@ async def run_trial(
                         stored = (
                             app.state.conversations.get(UUID(conversation_id)) if conversation_id is not None else None
                         )
+                        # Degraded mode answers a provider fault with HTTP 200, so the status check above cannot
+                        # see it; only an injected fault is behavior under test.
+                        if any(call.get("provider_fault") for call in record.model_calls):
+                            raise ProviderUnavailable("provider error on a call the case did not fault")
                         grade = grade_trial(
                             case,
                             app.state.cases,
