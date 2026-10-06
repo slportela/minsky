@@ -5,12 +5,26 @@ from decimal import Decimal
 
 import httpx2
 import pytest
-from openai import AsyncOpenAI, ContentFilterFinishReasonError, LengthFinishReasonError
+from openai import (
+    APIStatusError,
+    AsyncOpenAI,
+    AuthenticationError,
+    ContentFilterFinishReasonError,
+    LengthFinishReasonError,
+    Timeout,
+)
 from pydantic import BaseModel, SecretStr, ValidationError
 
 from minsky_api.agent.extract import DisputeDetails
 from minsky_api.config import Settings
-from minsky_api.llm.client import LLM, LLMNotConfiguredError, ModelMismatchError, ModelOutputError, model_matches
+from minsky_api.llm.client import (
+    LLM,
+    LLMNotConfiguredError,
+    ModelMismatchError,
+    ModelOutputError,
+    model_matches,
+    provider_client,
+)
 
 SETTINGS = Settings(llm_api_key=SecretStr("test-key"), llm_model="gpt-6-luna", llm_max_retries=0)
 
@@ -157,3 +171,56 @@ def test_a_missing_or_blank_api_key_is_not_configured(key):
 def test_negative_retries_are_rejected():
     with pytest.raises(ValidationError):
         Settings(llm_max_retries=-1)
+
+
+# Retries are the SDK's own (exponential backoff with jitter); these pin how our settings configure them.
+RETRYING = Settings(llm_api_key=SecretStr("test-key"), llm_model="gpt-6-luna", llm_max_retries=2)
+
+
+def _retrying_llm(settings: Settings, statuses: list[int], monkeypatch: pytest.MonkeyPatch) -> tuple[LLM, list[int]]:
+    """An LLM built the way the app builds it, over a provider that answers `statuses` in order, then 200."""
+    monkeypatch.setattr(AsyncOpenAI, "_calculate_retry_timeout", lambda *args, **kwargs: 0)
+    seen: list[int] = []
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        status = statuses[len(seen)] if len(seen) < len(statuses) else 200
+        seen.append(status)
+        return httpx2.Response(status, json=_response("ok") if status == 200 else {"error": {"message": "x"}})
+
+    http_client = httpx2.AsyncClient(transport=httpx2.MockTransport(handler))
+    return LLM(settings, provider_client(settings, http_client=http_client)), seen
+
+
+def test_a_provider_5xx_is_retried_and_then_succeeds(monkeypatch):
+    llm, seen = _retrying_llm(RETRYING, [503], monkeypatch)
+    result = asyncio.run(llm.respond("be brief", [{"role": "user", "content": "hi"}]))
+    assert result.text == "ok"
+    assert seen == [503, 200]
+
+
+def test_an_auth_error_is_not_retried(monkeypatch):
+    llm, seen = _retrying_llm(RETRYING, [401], monkeypatch)
+    with pytest.raises(AuthenticationError):
+        asyncio.run(llm.respond("be brief", [{"role": "user", "content": "hi"}]))
+    assert seen == [401]
+
+
+def test_zero_retries_makes_exactly_one_request(monkeypatch):
+    """The eval runners rely on this: their spend budget reserves cost per call."""
+    llm, seen = _retrying_llm(SETTINGS, [503], monkeypatch)
+    with pytest.raises(APIStatusError):
+        asyncio.run(llm.respond("be brief", [{"role": "user", "content": "hi"}]))
+    assert seen == [503]
+
+
+def test_the_client_uses_the_configured_connect_and_read_timeouts():
+    settings = Settings(llm_api_key=SecretStr("test-key"), llm_timeout_s=12.0, llm_connect_timeout_s=3.0)
+    client = provider_client(settings)
+    assert client.timeout == Timeout(12.0, connect=3.0)
+    assert client.max_retries == settings.llm_max_retries
+
+
+def test_the_default_timeouts_bound_a_turn_well_below_the_old_30s_per_attempt():
+    defaults = Settings()
+    assert defaults.llm_connect_timeout_s == 5.0
+    assert defaults.llm_timeout_s == 20.0

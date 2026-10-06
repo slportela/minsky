@@ -94,6 +94,7 @@ def main(argv: list[str] | None = None) -> int:
             selected = next((fact for fact in facts if fact.transaction_id and fact.transaction_id in turn), facts[0])
             return await ScriptedLLM(selected).respond(instructions, messages, **kwargs)
 
+    # Retries stay 0: the spend budget reserves cost per call, and SDK retries would spend outside the cap.
     inner = (
         LLM(settings=settings.model_copy(update={"llm_max_retries": 0, "llm_timeout_s": 30}))
         if budget
