@@ -187,3 +187,15 @@ Evidence, including the failed intermediate validation, is recorded in the follo
 The same counter also resets when the customer declines the offer of a person and the search starts again.
 Found in review of 5093f7a: without that reset the next search message was answered with a second offer
 of a person, before any query ran. Covered by a unit test; not re-run live.
+
+## Full dev run after the reset fix (2534ace)
+
+Workflow 76/76; agentic 73/74 graded, two first-turn provider timeouts excluded, one failure on a decimal-amount
+case (the agent also matched the one-cent neighbour and asked which charge; a directed re-run passed 9/9). The two
+runs used different worker counts, so they are not strictly matched conditions. No accuracy difference is shown.
+Report: `evals/reports/2026-10-05-pr51-fix-ab.md`.
+
+The case that should cover the reset, `dispute-offer-declined-then-dispute-es`, never reached it in agentic mode:
+the simulated customer answered the card at once. The simulator can now replay it
+(`known_info.declines_person_offer`), and `dispute-decline-person-then-search-es` fails offline without the fix.
+It has not been run live yet.

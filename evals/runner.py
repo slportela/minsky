@@ -326,6 +326,10 @@ _YES_TOKENS = {"sí", "si", "sim", "yes"}
 _NO_TOKENS = {"no", "não", "nao"}
 
 
+def _is_no(text: str) -> bool:
+    return text.strip().rstrip(".!?").casefold() in _NO_TOKENS
+
+
 def _is_answer(text: str) -> bool:
     return text.strip().rstrip(".!?").casefold() in _YES_TOKENS | _NO_TOKENS
 
@@ -351,6 +355,14 @@ class _ReactiveUser:
         # of the flow instead of an answer; what the script holds is not search detail.
         self._unclear = body if facts.label_source == "unclear_replies" else []
         self._details = [] if facts.label_source == "unclear_replies" else [t for t in body if not _is_answer(t)]
+        # known_info.declines_person_offer: the customer answers in words until a person is offered, says no to that
+        # offer and then gives the charge again. What the script holds before its first "no" is the unclear replies,
+        # what comes after is the search detail. The outcome stays the policy's (the customer ends up confirming).
+        self._decline_offer = case.user_scenario.known_info.get("declines_person_offer") == "true"
+        if self._decline_offer:
+            first_no = next((i for i, t in enumerate(script) if i > 0 and _is_no(t)), len(script))
+            self._unclear = [t for t in script[1:first_no] if not _is_answer(t)]
+            self._details = [t for t in script[first_no + 1 :] if not _is_answer(t)]
         yes = next((t for t in script if t.strip().rstrip(".!?").casefold() in _YES_TOKENS), "sí")
         self._yes = yes
         self._facts = facts
@@ -410,6 +422,9 @@ class _ReactiveUser:
         if phase == Phase.CARD_OFFER:
             return self._yes if self._block_card else "no"
         if phase == Phase.OFFER_ESCALATION:
+            if self._decline_offer:
+                self._decline_offer = False  # once: the next offer, if any, is not declined again
+                return "no"
             # A refusal or a notice is a complete answer; only a case that needs a person asks for one.
             return self._yes if self._expected == Outcome.ESCALATE else None
         return None

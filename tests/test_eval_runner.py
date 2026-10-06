@@ -41,6 +41,7 @@ SCRIPTED = (
     "dispute-unclear-replies-handoff-es",
     "dispute-mixed-unclear-confirmation-es",
     "dispute-offer-declined-then-dispute-es",
+    "dispute-decline-person-then-search-es",
     "dispute-offer-answered-with-the-charge-es",
     "dispute-follow-up-after-case-es",
     "model-outage-maintenance-es",
@@ -241,6 +242,20 @@ def test_the_reactive_customer_asks_for_a_person_only_when_the_case_needs_one() 
     assert _ReactiveUser(needs, facts_from_case(needs)).next(2, _state(Phase.OFFER_ESCALATION), 200) == "sí"
     refuse = _case("dispute-declined-not-charged-es")
     assert _ReactiveUser(refuse, facts_from_case(refuse)).next(2, _state(Phase.OFFER_ESCALATION), 200) is None
+
+
+def test_the_reactive_customer_declines_the_offered_person_once_and_then_searches_again() -> None:
+    case = _case("dispute-decline-person-then-search-es")
+    facts = facts_from_case(case)
+    user = _ReactiveUser(case, facts)
+    assert user.next(0, None, None).startswith("Quiero disputar")  # type: ignore[union-attr]
+    for words in ("lo reconozco", "ese mismo", "claro que sí"):  # the unclear replies, to the card
+        assert user.next(1, _state(Phase.CONFIRM_DISPUTE, selected=facts.transaction_id), 200) == words
+    assert user.next(2, _state(Phase.OFFER_ESCALATION), 200) == "no"  # declines the person
+    again = user.next(3, _state(Phase.SEARCH), 200)
+    assert again is not None and again.startswith("Quiero disputar")  # gives the charge again
+    assert user.next(4, _state(Phase.CONFIRM_DISPUTE, selected=facts.transaction_id), 200) == "sí"
+    assert user.next(5, _state(Phase.OFFER_ESCALATION), 200) is None  # declined once, and no person is needed
 
 
 def test_the_reactive_customer_repeats_a_message_that_got_a_server_error() -> None:
