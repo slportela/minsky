@@ -105,4 +105,4 @@ class ConversationState:
     asked_for_detail: bool = False
     # Replies to the card in a row that were neither yes nor no (a correction goes to the agent, but not for ever:
     # at max_unclear_replies a person is offered, as in the workflow). Reset by a plain yes or no.
-    unclear_detours: int = 0
+    unclear_detours: int = 0  # all ambiguous card replies, including affirmative non-consent

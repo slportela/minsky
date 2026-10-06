@@ -1157,3 +1157,19 @@ async def test_three_such_replies_offer_a_person_as_the_workflow_does():
     assert chat.state.phase == Phase.OFFER_ESCALATION and "asesor" in offer and chat.state.rejected_txn_ids == []
     done = await chat.say("sí")
     assert _handoff(chat).reason == "unclear_confirmation" and _handoff(chat).handoff_id in done
+
+
+@pytest.mark.parametrize("replies", [("tal vez", "sí, ese mismo", "no sé"), ("sí, ese mismo", "tal vez", "sí, claro")])
+async def test_all_ambiguous_card_replies_share_one_limit(replies):
+    agent = ScriptedAgent(
+        [sql(FIND_123)] + [call("propose_transaction", transaction_id="T1", customer_says_not_me=False)] * 3
+    )
+    chat = Chat([txn("T1", "123.10", "Cafe Sur", JUNE_10)], agent)
+    await chat.say("Quiero disputar el monto de 123 dólares")
+    reply = ""
+    for text in replies:
+        reply = await chat.say(text)
+    assert chat.state.phase == Phase.OFFER_ESCALATION and "asesor" in reply
+    assert not chat.audit("open_dispute") and not _handoff_ids(chat)
+    await chat.say("sí")
+    assert _handoff(chat).reason == "unclear_confirmation"

@@ -464,16 +464,15 @@ async def _phase_confirm_dispute(ctx: ToolContext, state: ConversationState, tex
         state.selected_txn_id = state.selected_product_id = state.selected_type = None
         note = f"el cliente dijo que la transacción {rejected} no es la que busca; no la propongas otra vez."
         return await _phase_search(ctx, state, text, llm, note=note)
-    if state.confirmation == "yes":
-        return await _unclear_reply(
-            ctx, state, llm
-        )  # an affirmative with extra words: only a plain yes authorizes, ask for it
-    # Neither yes nor no: the customer is saying something else (a correction, a new detail). The agent takes it,
-    # but not for ever: at the same limit as the workflow's unclear replies a person is offered instead.
+    # One counter covers every non-consenting answer to the card, even when the agent re-proposes it
+    # and _ask resets the per-question unclear_count. Mixing detours and affirmative non-consent
+    # must not extend the conversation beyond the shared limit.
     state.unclear_detours += 1
     if state.unclear_detours >= get_settings().max_unclear_replies:
         state.selected_txn_id = state.selected_product_id = state.selected_type = None
         return _offer_escalation_without_match(state, "unclear")
+    if state.confirmation == "yes":
+        return await _unclear_reply(ctx, state, llm)
     shown = state.selected_txn_id
     state.selected_txn_id = state.selected_product_id = state.selected_type = None
     note = (

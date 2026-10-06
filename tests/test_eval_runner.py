@@ -39,6 +39,7 @@ SCRIPTED = (
     "dispute-already-disputed-es",
     "dispute-natural-reply-then-yes-es",
     "dispute-unclear-replies-handoff-es",
+    "dispute-mixed-unclear-confirmation-es",
     "dispute-offer-declined-then-dispute-es",
     "dispute-offer-answered-with-the-charge-es",
     "dispute-follow-up-after-case-es",
@@ -447,10 +448,10 @@ async def test_an_agent_that_proposes_the_unrelated_charge_does_not_get_it_opene
     assert not any(t.tool == "open_dispute" for t in record.tools)  # nothing is near: the customer says no
 
 
-# Main now supports flexible matching too. The Portuguese misspelling is still outside the
-# scripted extractor's Spanish merchant pattern; keep that diagnostic limitation explicit.
-FLEX_THE_WORKFLOW_CANNOT = ["dispute-flex-merchant-misspelled-es"]
-FLEX_THE_WORKFLOW_CAN = [case for case in FLEX_RESOLVE if case not in FLEX_THE_WORKFLOW_CANNOT]
+# Both flows can now resolve these fixtures with scripted understanding. The merchant fixture
+# explicitly lets a customer repeat the corrected name after a follow-up question.
+FLEX_THE_WORKFLOW_CANNOT: list[str] = []
+FLEX_THE_WORKFLOW_CAN = list(FLEX_RESOLVE)
 
 
 def test_the_two_groups_cover_every_case_that_must_open():
