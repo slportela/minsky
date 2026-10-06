@@ -1,0 +1,176 @@
+{
+  "before_metadata": {
+    "backend_revision_label": null,
+    "backend_source_sha256": "3201d21411933c125bafb046f561ec7f0a502a0d79ff911a970b0d4cded1b052",
+    "git_sha": "d7e71fc18c5c53cc24f9e923b13671dd2c0bdb09",
+    "dirty": false,
+    "mode": "live-extraction",
+    "agent_mode": "workflow",
+    "model": "gpt-6-luna",
+    "budget": {
+      "cap_usd": "1",
+      "reserved_usd": "0",
+      "usage_cost_usd": "0",
+      "input_usd_per_million": "0.10",
+      "output_usd_per_million": "0.50",
+      "pricing_basis": "operator-supplied uncached token rates; not an invoice"
+    },
+    "sdk_max_retries": 0,
+    "trial_timeout_s": 300.0,
+    "legacy_auth_baseline": false,
+    "today": "2026-06-18",
+    "trials_per_case": 3,
+    "cases": {
+      "dispute-flex-approx-amount-wrong-day-es": "c48ca0746264eb2252a1dc1595c9486c2eaae8c8a4f7665486b2cd3b80da5c5d",
+      "dispute-flex-merchant-misspelled-es": "3f2dfde8cc5f452f7274983867e556da2f301bb5e0aaed67852fe037163a70ba",
+      "dispute-flex-near-amount-es": "1b91567ad7cf7b9d4352e1e26435664f0f865a66af6d9a1e5a4b3a14107b4d6d",
+      "dispute-flex-near-amount-pt": "a06614847e669e4dc1624b445b48041c0846e83b2cf36eeaa99a6f5b2a5b9e14",
+      "dispute-flex-no-merchant-withdrawal-es": "ef5145e5d9443891be1f1418d9762594e5796b862c334862ae8cb991771dbf5c",
+      "dispute-flex-nothing-near-es": "4cb39329b4d6023a7040447918c1401d989cead78fbc1a3d84af0eb4316f8b1d",
+      "dispute-flex-two-same-day-es": "c60b0c389ce8da1c5e9906e591b14b8ab2cb2a397ebcbfb8c5b00d090629ab16",
+      "dispute-flex-usd-for-cop-es": "23f20ca7dd129353939d309be5fe51f767d2d025083ae3bf9957cc60f95815a3"
+    },
+    "prompts": {
+      "agent.confirm.j2": "6ce4d3739b17f1e9cf100aae4df992896c72b58b386a1930409147e6f1b770ce",
+      "agent.extract.j2": "f4124f3f3bf25ba3494373e5b34245ed51b4a215fab74d5cc3bdf22732b67399",
+      "agent.search.j2": "2a5879e757b20809011585826dae590e8cf76b33b7bbcdfe17163b55072e3a71",
+      "agent.speak.j2": "984181122309c0683721ae55d3379d8b5c010920a36385fcf3987227c657e20f",
+      "agent.summary.j2": "4ceed793bbcb6feabc14eab0e95ba4faa02c1def946bf3ff4db4ac01f5d5c988"
+    },
+    "unsupported_safety": [
+      "ungrounded_fact",
+      "followed_injected_instruction"
+    ],
+    "database": "isolated SQLite; production PostgreSQL behavior not verified"
+  },
+  "after_metadata": {
+    "backend_revision_label": null,
+    "backend_source_sha256": "3201d21411933c125bafb046f561ec7f0a502a0d79ff911a970b0d4cded1b052",
+    "git_sha": "d7e71fc18c5c53cc24f9e923b13671dd2c0bdb09",
+    "dirty": false,
+    "mode": "live-extraction",
+    "agent_mode": "agentic",
+    "model": "gpt-6-luna",
+    "budget": {
+      "cap_usd": "2",
+      "reserved_usd": "0",
+      "usage_cost_usd": "0",
+      "input_usd_per_million": "0.10",
+      "output_usd_per_million": "0.50",
+      "pricing_basis": "operator-supplied uncached token rates; not an invoice"
+    },
+    "sdk_max_retries": 0,
+    "trial_timeout_s": 300.0,
+    "legacy_auth_baseline": false,
+    "today": "2026-06-18",
+    "trials_per_case": 3,
+    "cases": {
+      "dispute-flex-approx-amount-wrong-day-es": "c48ca0746264eb2252a1dc1595c9486c2eaae8c8a4f7665486b2cd3b80da5c5d",
+      "dispute-flex-merchant-misspelled-es": "3f2dfde8cc5f452f7274983867e556da2f301bb5e0aaed67852fe037163a70ba",
+      "dispute-flex-near-amount-es": "1b91567ad7cf7b9d4352e1e26435664f0f865a66af6d9a1e5a4b3a14107b4d6d",
+      "dispute-flex-near-amount-pt": "a06614847e669e4dc1624b445b48041c0846e83b2cf36eeaa99a6f5b2a5b9e14",
+      "dispute-flex-no-merchant-withdrawal-es": "ef5145e5d9443891be1f1418d9762594e5796b862c334862ae8cb991771dbf5c",
+      "dispute-flex-nothing-near-es": "4cb39329b4d6023a7040447918c1401d989cead78fbc1a3d84af0eb4316f8b1d",
+      "dispute-flex-two-same-day-es": "c60b0c389ce8da1c5e9906e591b14b8ab2cb2a397ebcbfb8c5b00d090629ab16",
+      "dispute-flex-usd-for-cop-es": "23f20ca7dd129353939d309be5fe51f767d2d025083ae3bf9957cc60f95815a3"
+    },
+    "prompts": {
+      "agent.confirm.j2": "6ce4d3739b17f1e9cf100aae4df992896c72b58b386a1930409147e6f1b770ce",
+      "agent.extract.j2": "f4124f3f3bf25ba3494373e5b34245ed51b4a215fab74d5cc3bdf22732b67399",
+      "agent.search.j2": "2a5879e757b20809011585826dae590e8cf76b33b7bbcdfe17163b55072e3a71",
+      "agent.speak.j2": "984181122309c0683721ae55d3379d8b5c010920a36385fcf3987227c657e20f",
+      "agent.summary.j2": "4ceed793bbcb6feabc14eab0e95ba4faa02c1def946bf3ff4db4ac01f5d5c988"
+    },
+    "unsupported_safety": [
+      "ungrounded_fact",
+      "followed_injected_instruction"
+    ],
+    "database": "isolated SQLite; production PostgreSQL behavior not verified"
+  },
+  "before": {
+    "pass_rate": "12.5% (3/24, 95% CI 4.3%-31.0%)",
+    "infrastructure_errors": "0/24",
+    "all_trials_passed": "12.5% (1/8, 95% CI 2.2%-47.1%)",
+    "case_groups_excluded_for_errors": 0,
+    "trial_latency_ms_p50": 4037.895645502431,
+    "trial_latency_ms_p95_nearest_rank": 7835.377291004988,
+    "cases": {
+      "dispute-flex-approx-amount-wrong-day-es": {
+        "passed": 0,
+        "attempted": 3
+      },
+      "dispute-flex-merchant-misspelled-es": {
+        "passed": 0,
+        "attempted": 3
+      },
+      "dispute-flex-near-amount-es": {
+        "passed": 0,
+        "attempted": 3
+      },
+      "dispute-flex-near-amount-pt": {
+        "passed": 0,
+        "attempted": 3
+      },
+      "dispute-flex-no-merchant-withdrawal-es": {
+        "passed": 0,
+        "attempted": 3
+      },
+      "dispute-flex-nothing-near-es": {
+        "passed": 3,
+        "attempted": 3
+      },
+      "dispute-flex-two-same-day-es": {
+        "passed": 0,
+        "attempted": 3
+      },
+      "dispute-flex-usd-for-cop-es": {
+        "passed": 0,
+        "attempted": 3
+      }
+    },
+    "limitation": "draft dev scripts and partial safety; no held-out generalization claim"
+  },
+  "after": {
+    "pass_rate": "95.8% (23/24, 95% CI 79.8%-99.3%)",
+    "infrastructure_errors": "0/24",
+    "all_trials_passed": "87.5% (7/8, 95% CI 52.9%-97.8%)",
+    "case_groups_excluded_for_errors": 0,
+    "trial_latency_ms_p50": 7335.592603998521,
+    "trial_latency_ms_p95_nearest_rank": 12372.441500003333,
+    "cases": {
+      "dispute-flex-approx-amount-wrong-day-es": {
+        "passed": 3,
+        "attempted": 3
+      },
+      "dispute-flex-merchant-misspelled-es": {
+        "passed": 3,
+        "attempted": 3
+      },
+      "dispute-flex-near-amount-es": {
+        "passed": 3,
+        "attempted": 3
+      },
+      "dispute-flex-near-amount-pt": {
+        "passed": 3,
+        "attempted": 3
+      },
+      "dispute-flex-no-merchant-withdrawal-es": {
+        "passed": 2,
+        "attempted": 3
+      },
+      "dispute-flex-nothing-near-es": {
+        "passed": 3,
+        "attempted": 3
+      },
+      "dispute-flex-two-same-day-es": {
+        "passed": 3,
+        "attempted": 3
+      },
+      "dispute-flex-usd-for-cop-es": {
+        "passed": 3,
+        "attempted": 3
+      }
+    },
+    "limitation": "draft dev scripts and partial safety; no held-out generalization claim"
+  }
+}

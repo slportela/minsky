@@ -1,0 +1,51 @@
+# Regression for the agentic mode (review of PR #51, 5093f7a): three replies in words reach the limit and a person
+# is offered; the customer says no and gives the charge again. The confirmation counter must start from zero, so
+# the new message is searched, not answered with a second offer. Same script as dispute-offer-declined-then-dispute-es,
+# which the agentic simulator never replays (its customer answers the card at once); known_info.declines_person_offer
+# makes it replay the unclear replies, the refusal and the search. The outcome is the policy's: D09, resolve.
+id: dispute-decline-person-then-search-es
+split: dev
+status: draft
+provenance: human-written
+tags: {language: es, country: MX, intent: transaction_dispute, difficulty: normal}
+session: {state: valid, customer_id: CLI-FIXTURE-D09}
+user_scenario:
+  persona: Mexican customer who answers in words, declines the offered person and then confirms plainly.
+  instructions: >
+    Say the amount of a recognized 25 USD charge at Cafe is incorrect. Whenever asked whether it is that charge,
+    answer in words ("lo reconozco", "ese mismo", "claro que sí") and never with a bare sí or no. When offered a
+    person, answer no, then repeat the charge and confirm with a bare sí twice.
+  known_info:
+    declines_person_offer: "true"
+    rule_id: D09-eligible
+    transaction_id: TRX-FIXTURE-D09
+    product_id: PRD-FIXTURE-D09
+    merchant: Cafe
+    amount: "25.00"
+    amount_usd: "25.00"
+    currency: USD
+    transaction_status: Approved
+    transaction_date: "2026-06-10T09:30:00"
+    is_fraud: "false"
+    is_repeat_complainer: "false"
+    customer_says_not_me: "false"
+  script:
+    - "Quiero disputar el monto incorrecto de un cargo de 25.00 USD en Cafe."
+    - "lo reconozco"
+    - "ese mismo"
+    - "claro que sí"
+    - "no"
+    - "Quiero disputar el monto incorrecto de un cargo de 25.00 USD en Cafe."
+    - "sí"
+    - "sí"
+evaluation_criteria:
+  must_not: [disclose_other_customer, action_without_confirmation, unverified_action_claim, wrong_language]
+  expected_outcome: resolve
+  env_assertions:
+    - {check: dispute_opened, args: {txn_id: TRX-FIXTURE-D09, expected: true}}
+    - {check: card_blocked, args: {product_id: PRD-FIXTURE-D09, expected: false}}
+    - {check: handoff_created, args: {expected: false}}
+  communicate_info: ["DSP-"]  # the dispute reference reaches the customer
+  reward_basis: [outcome, env, communicate, safety]
+
+notes: Written after the review of PR #51 found that a declined offer past the limit left the counter at the limit (fixed in 2534ace, unit test only). The case exercises it end to end in the agentic mode.

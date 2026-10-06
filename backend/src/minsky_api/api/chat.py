@@ -14,18 +14,21 @@ from fastapi import APIRouter, Header, Request
 from fastapi.responses import JSONResponse
 from openai import OpenAIError
 
+from minsky_api.agent.agentic import run_agentic_turn
 from minsky_api.agent.degraded import close_on_outage, is_model_failure
 from minsky_api.agent.memory import ConversationStore
 from minsky_api.agent.orchestrator import run_turn
 from minsky_api.agent.state import ConversationState
 from minsky_api.api.contracts import (
     AgentMessage,
+    ChatOptions,
     ChatRequest,
     ChatResponse,
     ErrorCode,
     ErrorResponse,
     UserMessage,
 )
+from minsky_api.config import get_settings
 from minsky_api.identity.errors import PermissionDenied
 from minsky_api.identity.http import resolve_session
 from minsky_api.identity.session import ToolSession
@@ -65,6 +68,21 @@ def _check_history(state: ConversationState, body: ChatRequest) -> ErrorCode | N
     return None
 
 
+def _mode_for_new_conversation(body: ChatRequest) -> str:
+    """The flow of a new conversation: the client's choice if the server allows it, else the server's own setting."""
+    settings = get_settings()
+    if body.mode is not None and settings.allow_mode_switch:
+        return body.mode
+    return settings.agent_mode
+
+
+@router.get("/options")
+async def chat_options() -> ChatOptions:
+    """Whether the chat may offer a choice of flow. Nothing secret: it says what the server allows, not who may."""
+    settings = get_settings()
+    return ChatOptions(mode_switch=settings.allow_mode_switch, mode=settings.agent_mode)
+
+
 @router.post("/turn", response_model=None)
 async def chat_turn(
     body: ChatRequest,
@@ -93,7 +111,9 @@ async def _authenticated_turn(
     cases: CasesBackend = request.app.state.cases
 
     if body.conversation_id is None:
-        state = ConversationState(conversation_id=conversation_id, customer_id=customer_id)
+        state = ConversationState(
+            conversation_id=conversation_id, customer_id=customer_id, mode=_mode_for_new_conversation(body)
+        )
         if len(body.messages) != 1 or not isinstance(body.messages[0], UserMessage):
             return _error(ErrorCode.INVALID_PAYLOAD, "first turn must be a single user message", 400)
         user_text = body.messages[0].text
@@ -118,7 +138,8 @@ async def _authenticated_turn(
     try:
         async with session() as db:
             ctx = ToolContext(session=tool_session, db=db, cases=cases)
-            state, _reply = await run_turn(state, user_text, ctx, llm)
+            turn = run_agentic_turn if state.mode == "agentic" else run_turn
+            state, _reply = await turn(state, user_text, ctx, llm)
     except ValueError as exc:
         return _error(ErrorCode.INVALID_PAYLOAD, str(exc), 400)
     except PermissionError as exc:
@@ -144,7 +165,11 @@ def _chat_response(state: ConversationState) -> ChatResponse:
     history: list[UserMessage | AgentMessage] = []
     for role, text in state.messages:
         history.append(UserMessage(user=text) if role == "user" else AgentMessage(agent=text))
-    return ChatResponse(conversation_id=state.conversation_id, messages=tuple(history))
+    return ChatResponse(
+        conversation_id=state.conversation_id,
+        messages=tuple(history),
+        mode="agentic" if state.mode == "agentic" else "workflow",
+    )
 
 
 async def _degraded_turn(

@@ -10,7 +10,14 @@ from pydantic import BaseModel, SecretStr, ValidationError
 
 from minsky_api.agent.extract import DisputeDetails
 from minsky_api.config import Settings
-from minsky_api.llm.client import LLM, LLMNotConfiguredError, ModelMismatchError, ModelOutputError, model_matches
+from minsky_api.llm.client import (
+    LLM,
+    LLMNotConfiguredError,
+    ModelMismatchError,
+    ModelOutputError,
+    ToolSpec,
+    model_matches,
+)
 
 SETTINGS = Settings(llm_api_key=SecretStr("test-key"), llm_model="gpt-6-luna", llm_max_retries=0)
 
@@ -157,3 +164,154 @@ def test_a_missing_or_blank_api_key_is_not_configured(key):
 def test_negative_retries_are_rejected():
     with pytest.raises(ValidationError):
         Settings(llm_max_retries=-1)
+
+
+def _tool_response(*, status: str = "completed", model: str = "gpt-6-luna-2026-09-22") -> dict:
+    body = _response("", model=model)
+    body["status"] = status
+    body["output"] = [
+        {
+            "type": "function_call",
+            "id": "fc_1",
+            "call_id": "call_1",
+            "name": "query_transactions",
+            "arguments": '{"sql": "SELECT 1"}',
+            "status": "completed",
+        }
+    ]
+    return body
+
+
+_SPEC = [
+    ToolSpec(
+        name="query_transactions",
+        description="Run a query.",
+        parameters={"type": "object", "properties": {"sql": {"type": "string"}}, "required": ["sql"]},
+    )
+]
+
+
+def test_step_returns_the_tool_call_and_sends_the_tools_without_parallel_calls():
+    sent: list[dict] = []
+    items = [{"role": "user", "content": "hola"}]
+    step = asyncio.run(_llm(_tool_response(), sent).step("Sé breve.", items, tools=_SPEC))
+    assert [(c.call_id, c.name, c.arguments) for c in step.tool_calls] == [
+        ("call_1", "query_transactions", '{"sql": "SELECT 1"}')
+    ]
+    assert sent[0]["tools"][0]["name"] == "query_transactions"
+    assert sent[0]["parallel_tool_calls"] is False
+    assert sent[0]["store"] is False
+    assert sent[0]["input"] == items
+
+
+def test_step_returns_plain_text_when_the_model_does_not_call_a_tool():
+    step = asyncio.run(
+        _llm(_response("¿Cuál fue el comercio?"), []).step("x", [{"role": "user", "content": "hola"}], tools=_SPEC)
+    )
+    assert step.text == "¿Cuál fue el comercio?"
+    assert step.tool_calls == ()
+
+
+def test_step_refuses_a_reply_that_was_cut_off():
+    with pytest.raises(ModelOutputError):
+        asyncio.run(
+            _llm(_tool_response(status="incomplete"), []).step("x", [{"role": "user", "content": "hola"}], tools=_SPEC)
+        )
+
+
+def test_step_checks_the_model_that_answered():
+    with pytest.raises(ModelMismatchError):
+        asyncio.run(
+            _llm(_tool_response(model="gpt-5-mini"), []).step("x", [{"role": "user", "content": "hola"}], tools=_SPEC)
+        )
+
+
+# ---------------------------------------------------------------- llm smoke: the tool round trip
+
+
+def _llm_sequence(replies: list[dict], sent: list[dict]) -> LLM:
+    queue = list(replies)
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        sent.append(json.loads(request.content))
+        return httpx2.Response(200, json=queue.pop(0))
+
+    client = AsyncOpenAI(
+        api_key="test-key",
+        base_url="http://provider.test/v1",
+        max_retries=0,
+        http_client=httpx2.AsyncClient(transport=httpx2.MockTransport(handler)),
+    )
+    return LLM(SETTINGS, client)
+
+
+def _call_reply(arguments: str = '{"city": "Lima"}') -> dict:
+    body = _tool_response()
+    body["output"][0]["name"] = "lookup_temperature"
+    body["output"][0]["arguments"] = arguments
+    return body
+
+
+def test_the_tool_round_trip_sends_the_result_back_without_provider_ids():
+    from minsky_api.llm.smoke import tool_round_trip
+
+    sent: list[dict] = []
+    llm = _llm_sequence([_call_reply(), _response("Ahora hay 22 grados en Lima.")], sent)
+    lines = asyncio.run(tool_round_trip(llm))
+    assert "step 1: 1 tool call(s)" in lines[0] and "step 2: 0 tool call(s)" in "\n".join(lines)
+    second = sent[1]["input"]
+    assert [i.get("type") for i in second[1:]] == ["function_call", "function_call_output"]
+    call, output = second[1], second[2]
+    assert call["call_id"] == output["call_id"] == "call_1"
+    assert "id" not in call and "id" not in output  # nothing is stored provider-side: no ids to dangle
+
+
+@pytest.mark.parametrize(
+    ("replies", "message"),
+    [
+        ([_response("Hace calor.")], "did not call the tool"),
+        ([_call_reply("not json")], "not JSON"),
+        ([_call_reply(), _response("No sé la temperatura.")], "does not use the tool result"),
+        ([_call_reply(), _call_reply()], "called the tool again"),
+    ],
+)
+def test_the_tool_round_trip_names_the_stage_that_failed(replies, message):
+    from minsky_api.llm.smoke import SmokeFailure, tool_round_trip
+
+    with pytest.raises(SmokeFailure, match=message) as failure:
+        asyncio.run(tool_round_trip(_llm_sequence(replies, [])))
+    assert failure.value.lines  # what happened before the failure is kept for the report
+
+
+def test_a_provider_refusal_of_the_round_trip_prints_a_hint_about_reasoning_items(monkeypatch, capsys):
+    from minsky_api.llm import smoke
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        if b"function_call_output" in request.content:
+            error = {"error": {"message": "Item 'fc_1' was provided without its required 'reasoning' item."}}
+            return httpx2.Response(400, json=error)
+        return httpx2.Response(200, json=_call_reply() if b"tools" in request.content else _response("hola"))
+
+    client = AsyncOpenAI(
+        api_key="test-key",
+        base_url="http://provider.test/v1",
+        max_retries=0,
+        http_client=httpx2.AsyncClient(transport=httpx2.MockTransport(handler)),
+    )
+    monkeypatch.setattr(smoke, "get_settings", lambda: SETTINGS)
+    monkeypatch.setattr(smoke, "LLM", lambda settings: LLM(settings, client))
+    assert asyncio.run(smoke.run(tools=True)) == 1
+    out = capsys.readouterr().out
+    assert "FAILED the provider refused" in out and "reasoning" in out and "hint:" in out
+    assert "test-key" not in out  # the key is never printed
+
+
+def test_the_plain_smoke_does_not_run_the_tool_round_trip(monkeypatch, capsys):
+    from minsky_api.llm import smoke
+
+    sent: list[dict] = []
+    llm = _llm_sequence([_response("Soy gpt-6-luna.")], sent)
+    monkeypatch.setattr(smoke, "get_settings", lambda: SETTINGS)
+    monkeypatch.setattr(smoke, "LLM", lambda settings: llm)
+    assert asyncio.run(smoke.run(tools=False)) == 0
+    assert len(sent) == 1  # one call: no tool round trip

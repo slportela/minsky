@@ -20,6 +20,8 @@ class ToolEvidence(BaseModel):
     user_text: str
     # Model decision recorded before the tool call. None is not a confirmation.
     confirmation: str | None = None
+    # Agentic mode: the customer's yes to the card, which authorizes opening one question later.
+    consent_text: str | None = None
 
 
 class TrialRecord(BaseModel):

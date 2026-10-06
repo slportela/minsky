@@ -37,6 +37,8 @@ services:
       MINSKY_LLM_BASE_URL: ${MINSKY_LLM_BASE_URL:-https://api.openai.com/v1}
       MINSKY_LLM_MODEL: ${MINSKY_LLM_MODEL:-gpt-6-luna}
       MINSKY_LLM_API_KEY: ${MINSKY_LLM_API_KEY:-}
+      MINSKY_AGENT_MODE: ${MINSKY_AGENT_MODE:-workflow}  # workflow | agentic (docs/agentic_dispute_agent.md)
+      MINSKY_ALLOW_MODE_SWITCH: ${MINSKY_ALLOW_MODE_SWITCH:-false}  # true: the chat UI can pick the flow of a new conversation
     depends_on:
       postgres: {condition: service_healthy}
     restart: unless-stopped

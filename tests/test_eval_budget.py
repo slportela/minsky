@@ -126,3 +126,80 @@ def test_browser_lifespan_removes_private_credentials(tmp_path, monkeypatch):
     monkeypatch.setattr(browser_smoke.uvicorn, "run", serve)
     assert browser_smoke.main(["--output", str(output)]) == 0
     get_settings.cache_clear()
+
+
+# ---------------------------------------------------------------- one cap shared by worker processes
+
+import multiprocessing  # noqa: E402
+from concurrent.futures import ProcessPoolExecutor  # noqa: E402
+
+from evals.budget import SharedSpendBudget  # noqa: E402
+
+_CHILD: dict = {}
+
+
+def _child_init(budget: SharedSpendBudget) -> None:
+    _CHILD["budget"] = budget
+
+
+def _child_reserve(attempts: int) -> int:
+    granted = 0
+    for _ in range(attempts):
+        try:
+            _CHILD["budget"].reserve("x", [{"role": "user", "content": "y"}], 10)
+            granted += 1
+        except BudgetExceeded:
+            pass
+    return granted
+
+
+def _shared(cap: str = "1") -> SharedSpendBudget:
+    return SharedSpendBudget(Decimal(cap), Decimal(1), Decimal(1), multiprocessing.get_context("spawn"))
+
+
+def test_shared_budget_refuses_what_does_not_fit_and_leaves_the_allowance_alone():
+    budget = _shared("0.000001")
+    with pytest.raises(BudgetExceeded):
+        budget.reserve("instructions", [{"role": "user", "content": "hello"}], 256)
+    assert budget.reserved_usd == 0
+
+
+@pytest.mark.parametrize("value", ["0", "-1", "NaN", "Infinity"])
+def test_shared_budget_rejects_an_invalid_cap(value):
+    with pytest.raises(ValueError):
+        _shared(value)
+
+
+def test_shared_budget_closes_when_usage_exceeds_its_reservation():
+    budget = _shared()
+    allowance = budget.reserve("x", [{"role": "user", "content": "y"}], 10)
+    with pytest.raises(BudgetExceeded):
+        budget.account(10**9, 10**9, allowance)  # far more than reserved
+    assert budget.reserved_usd == budget.cap_usd  # nothing else gets through, in any worker
+    with pytest.raises(BudgetExceeded):
+        budget.reserve("x", [{"role": "user", "content": "y"}], 10)
+
+
+def test_shared_budget_reports_what_spend_budget_reports():
+    plain = SpendBudget(Decimal(1), Decimal(1), Decimal(1))
+    shared = _shared()
+    assert shared.report().keys() == plain.report().keys()
+    allowance = shared.reserve("x", [{"role": "user", "content": "y"}], 10)
+    shared.account(100, 5, allowance)
+    assert shared.observed_usd == Decimal("0.000105")
+    assert shared.cost(100, 5) == plain.cost(100, 5)
+
+
+def test_the_cap_holds_when_four_processes_reserve_at_once():
+    """Exactly as many reservations as fit under the cap are granted in total, however the workers interleave."""
+    probe = _shared()
+    one = probe.cost(len(b"x") + len(b'[{"role": "user", "content": "y"}]') + 8192, 10)
+    fits = 25
+    budget = SharedSpendBudget(one * fits + one / 2, Decimal(1), Decimal(1), multiprocessing.get_context("spawn"))
+    with ProcessPoolExecutor(
+        max_workers=4, mp_context=multiprocessing.get_context("spawn"), initializer=_child_init, initargs=(budget,)
+    ) as pool:
+        granted = sum(pool.map(_child_reserve, [20, 20, 20, 20]))
+    assert granted == fits
+    assert budget.reserved_usd <= budget.cap_usd
+    assert budget.reserved_usd > one * (fits - 1)  # and the main process sees what the workers reserved

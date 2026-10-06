@@ -8,7 +8,7 @@ stored) need state and live elsewhere.
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import UUID4, AfterValidator, BaseModel, ConfigDict, Field, StrictStr, ValidationError, model_validator
 
@@ -63,11 +63,22 @@ class ChatRequest(_Strict):
 
     conversation_id: UUID4 | None = None
     messages: tuple[Message, ...] = Field(min_length=1)
+    # Which flow a NEW conversation uses. Read only on the first turn, and only when the server allows the switch
+    # (MINSKY_ALLOW_MODE_SWITCH); otherwise ignored. It is not a permission: both flows apply the same policy.
+    mode: Literal["workflow", "agentic"] | None = None
+
+
+class ChatOptions(_Strict):
+    """What the chat client may offer: whether the flow can be chosen, and the server's own default."""
+
+    mode_switch: bool
+    mode: Literal["workflow", "agentic"]
 
 
 class ChatResponse(_Strict):
     conversation_id: UUID4
     messages: tuple[Message, ...] = Field(min_length=1)
+    mode: Literal["workflow", "agentic"]  # the flow this conversation runs, fixed when it started
 
     @model_validator(mode="after")
     def _ends_with_agent(self) -> ChatResponse:

@@ -1,0 +1,100 @@
+{
+  "approved_cap_usd": "7.50",
+  "authorization": "User explicitly approved USD 7.50 for the updated PR #51 A/B in this chat.",
+  "runs": {
+    "pr51-updated-workflow-56e1c86": {
+      "cap_usd": "0.40",
+      "reserved_usd": "0.3998389",
+      "usage_cost_usd": "0.0328348",
+      "input_usd_per_million": "0.10",
+      "output_usd_per_million": "0.50",
+      "pricing_basis": "operator-supplied uncached token rates; not an invoice"
+    },
+    "pr51-updated-workflow-2x-56e1c86": {
+      "cap_usd": "0.60",
+      "reserved_usd": "0.4248816",
+      "usage_cost_usd": "0.0341004",
+      "input_usd_per_million": "0.10",
+      "output_usd_per_million": "0.50",
+      "pricing_basis": "operator-supplied uncached token rates; not an invoice"
+    },
+    "pr51-updated-agentic-2x-56e1c86": {
+      "cap_usd": "4.80",
+      "reserved_usd": "0.5194629",
+      "usage_cost_usd": "0.0468938",
+      "input_usd_per_million": "0.10",
+      "output_usd_per_million": "0.50",
+      "pricing_basis": "operator-supplied uncached token rates; not an invoice"
+    },
+    "pr51-fix-agentic-64c171a": {
+      "cap_usd": "1.30",
+      "reserved_usd": "0.1093504",
+      "usage_cost_usd": "0.010271",
+      "input_usd_per_million": "0.10",
+      "output_usd_per_million": "0.50",
+      "pricing_basis": "operator-supplied uncached token rates; not an invoice"
+    },
+    "pr51-followup-agentic": {
+      "cap_usd": "1.30",
+      "reserved_usd": "0.1358388",
+      "usage_cost_usd": "0.0125655",
+      "input_usd_per_million": "0.10",
+      "output_usd_per_million": "0.50",
+      "pricing_basis": "operator-supplied uncached token rates; not an invoice"
+    },
+    "pr51-followup-workflow": {
+      "cap_usd": "0.15",
+      "reserved_usd": "0.1143291",
+      "usage_cost_usd": "0.0085513",
+      "input_usd_per_million": "0.10",
+      "output_usd_per_million": "0.50",
+      "pricing_basis": "operator-supplied uncached token rates; not an invoice"
+    },
+    "pr51-fix-workflow-2534ace (evals/runs/smoke-f1570488ea31)": {
+      "cap_usd": "0.6",
+      "reserved_usd": "0.4405617",
+      "usage_cost_usd": "0.0356846",
+      "input_usd_per_million": "0.10",
+      "output_usd_per_million": "0.50",
+      "pricing_basis": "operator-supplied uncached token rates; not an invoice"
+    },
+    "pr51-fix-agentic-2534ace (evals/runs/smoke-33263bf38acb)": {
+      "cap_usd": "5.2",
+      "reserved_usd": "0.5341714",
+      "usage_cost_usd": "0.0477588",
+      "input_usd_per_million": "0.10",
+      "output_usd_per_million": "0.50",
+      "pricing_basis": "operator-supplied uncached token rates; not an invoice"
+    },
+    "pr51-fix-directed-agentic-2534ace (evals/runs/smoke-0b422fc282ae)": {
+      "cap_usd": "1",
+      "reserved_usd": "0.0613739",
+      "usage_cost_usd": "0.0054566",
+      "input_usd_per_million": "0.10",
+      "output_usd_per_million": "0.50",
+      "pricing_basis": "operator-supplied uncached token rates; not an invoice"
+    },
+    "pr51-decline-person-agentic-5b4b118 (evals/runs/smoke-36fe88d9cd60)": {
+      "cap_usd": "1",
+      "reserved_usd": "0.0532014",
+      "usage_cost_usd": "0.0050573",
+      "input_usd_per_million": "0.10",
+      "output_usd_per_million": "0.50",
+      "pricing_basis": "operator-supplied uncached token rates; not an invoice"
+    },
+    "pr51-decline-person-workflow-5b4b118 (evals/runs/smoke-1a26673f6c64)": {
+      "cap_usd": "1",
+      "reserved_usd": "0.0410527",
+      "usage_cost_usd": "0.0030918",
+      "input_usd_per_million": "0.10",
+      "output_usd_per_million": "0.50",
+      "pricing_basis": "operator-supplied uncached token rates; not an invoice"
+    }
+  },
+  "limitation": "Usage-priced estimates, not invoices. The first run exhausted its conservative reservation and is excluded from the matched comparison.",
+  "usage_cost_usd": "0.2422659",
+  "reserved_usd": "2.8340628",
+  "sum_run_caps_usd": "17.35",
+  "accounting_note": "Runs execute sequentially; the USD 7.50 batch allowance counts cumulative conservative reservations (including discarded/failed runs), not unused per-run ceiling sums. Cumulative reservations remain below the approved batch allowance.",
+  "authorization_note": "The runs at 2534ace and 5b4b118 were launched under the same USD 7.50 batch allowance; the user did not restate an amount in chat for them. Confirm with the allowance owner."
+}

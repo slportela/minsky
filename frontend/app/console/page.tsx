@@ -260,6 +260,13 @@ export default function ConsolePage() {
               <h3>Verified facts (bank records)</h3>
               <FactTable facts={selected.facts.verified} />
 
+              {selected.facts.context ? (
+                <>
+                  <h3>Context read from the bank (customer, policy rule, search)</h3>
+                  <FactTable facts={selected.facts.context} />
+                </>
+              ) : null}
+
               <h3>What the customer said</h3>
               <FactTable facts={selected.facts.customer_said} />
 

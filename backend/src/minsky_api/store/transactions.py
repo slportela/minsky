@@ -18,6 +18,7 @@ _MIN_LIMIT = 1
 _MAX_LIMIT = 100
 # A customer has at most 150 transactions in the whole history (2026-10 data); matching grades them all in code.
 SEARCH_POOL = 300
+_MAX_HISTORY = 500
 
 
 def _like_pattern(text: str) -> str:
@@ -77,4 +78,21 @@ class TransactionStore(BaseStore):
         rows = await self._list(statement)
         if len(rows) > SEARCH_POOL:
             raise StoreError(f"customer has more than {SEARCH_POOL} transactions: search pool exceeded")
+        return rows
+
+    async def list_history(self, customer_id: str) -> tuple[Transaction, ...]:
+        """All of a customer's transactions, newest first, in every status: the search agent's whole world.
+
+        Older charges and declined or reversed ones are included on purpose: the dispute policy, not the
+        search, decides what can be disputed. More than _MAX_HISTORY rows is refused, not silently cut.
+        """
+        statement = (
+            select(Transaction)
+            .where(col(Transaction.customer_id) == customer_id)
+            .order_by(col(Transaction.transaction_date).desc())
+            .limit(_MAX_HISTORY + 1)
+        )
+        rows = await self._list(statement)
+        if len(rows) > _MAX_HISTORY:
+            raise ValueError(f"customer has more than {_MAX_HISTORY} transactions")
         return rows

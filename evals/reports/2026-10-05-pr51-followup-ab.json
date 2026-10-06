@@ -1,0 +1,148 @@
+{
+  "before_metadata": {
+    "backend_revision_label": null,
+    "backend_source_sha256": "3e6677836cb54626fd35017bfeac4090fa3daf3b97153054b4be4924f3e90ad6",
+    "git_sha": "2cc12aa5b325d4119c21a59b9032215727207873",
+    "dirty": false,
+    "mode": "live-extraction",
+    "agent_mode": "workflow",
+    "model": "gpt-6-luna",
+    "budget": {
+      "cap_usd": "0.15",
+      "reserved_usd": "0",
+      "usage_cost_usd": "0",
+      "input_usd_per_million": "0.10",
+      "output_usd_per_million": "0.50",
+      "pricing_basis": "operator-supplied uncached token rates; not an invoice"
+    },
+    "sdk_max_retries": 0,
+    "trial_timeout_s": 300.0,
+    "legacy_auth_baseline": false,
+    "today": "2026-06-18",
+    "trials_per_case": 3,
+    "workers": 2,
+    "cases": {
+      "dispute-eligible-open-es": "f82aa8968bdd82b1537fc33487a83380d0d47e45c34d1fed374f6f2115dc30f8",
+      "dispute-flex-merchant-misspelled-es": "69a4030c167d2de586f601ea3bcad1cd0400e3a818a0153152e205260caa2bf5",
+      "dispute-mixed-unclear-confirmation-es": "78b9cf96a83b15b44a00192b5bc8a38b9b19d3fbc8081f89fe54c473c1d1aa91",
+      "dispute-natural-reply-then-yes-es": "b8a35f1fb0e3c21c3eb942e802f20333ab96aa00c7764c35a296e2b77f1881f3",
+      "dispute-unclear-replies-handoff-es": "5064e5413a29614ea4216e14110fed90c8fd47c662bd3fdedfb9a79eb180649a"
+    },
+    "prompts": {
+      "agent.confirm.j2": "6ce4d3739b17f1e9cf100aae4df992896c72b58b386a1930409147e6f1b770ce",
+      "agent.extract.j2": "e8ed7b04658be9ca1fb9485ab8e135b040bb2d9a1165fc3536940ff59d1e05ba",
+      "agent.search.j2": "e209db9cfab5ed5cd8a46687ce68f86b6c1d9fe99208402c28195258332e1967",
+      "agent.speak.j2": "536cb59c9be6ff1fb0d5997f42991218ca39a84651503f2ca6ae057d0a287a0b",
+      "agent.summary.j2": "4ceed793bbcb6feabc14eab0e95ba4faa02c1def946bf3ff4db4ac01f5d5c988"
+    },
+    "unsupported_safety": [
+      "ungrounded_fact",
+      "followed_injected_instruction"
+    ],
+    "database": "isolated SQLite; production PostgreSQL behavior not verified"
+  },
+  "after_metadata": {
+    "backend_revision_label": null,
+    "backend_source_sha256": "3e6677836cb54626fd35017bfeac4090fa3daf3b97153054b4be4924f3e90ad6",
+    "git_sha": "2cc12aa5b325d4119c21a59b9032215727207873",
+    "dirty": false,
+    "mode": "live-extraction",
+    "agent_mode": "agentic",
+    "model": "gpt-6-luna",
+    "budget": {
+      "cap_usd": "1.30",
+      "reserved_usd": "0",
+      "usage_cost_usd": "0",
+      "input_usd_per_million": "0.10",
+      "output_usd_per_million": "0.50",
+      "pricing_basis": "operator-supplied uncached token rates; not an invoice"
+    },
+    "sdk_max_retries": 0,
+    "trial_timeout_s": 300.0,
+    "legacy_auth_baseline": false,
+    "today": "2026-06-18",
+    "trials_per_case": 3,
+    "workers": 2,
+    "cases": {
+      "dispute-eligible-open-es": "f82aa8968bdd82b1537fc33487a83380d0d47e45c34d1fed374f6f2115dc30f8",
+      "dispute-flex-merchant-misspelled-es": "69a4030c167d2de586f601ea3bcad1cd0400e3a818a0153152e205260caa2bf5",
+      "dispute-mixed-unclear-confirmation-es": "78b9cf96a83b15b44a00192b5bc8a38b9b19d3fbc8081f89fe54c473c1d1aa91",
+      "dispute-natural-reply-then-yes-es": "b8a35f1fb0e3c21c3eb942e802f20333ab96aa00c7764c35a296e2b77f1881f3",
+      "dispute-unclear-replies-handoff-es": "5064e5413a29614ea4216e14110fed90c8fd47c662bd3fdedfb9a79eb180649a"
+    },
+    "prompts": {
+      "agent.confirm.j2": "6ce4d3739b17f1e9cf100aae4df992896c72b58b386a1930409147e6f1b770ce",
+      "agent.extract.j2": "e8ed7b04658be9ca1fb9485ab8e135b040bb2d9a1165fc3536940ff59d1e05ba",
+      "agent.search.j2": "e209db9cfab5ed5cd8a46687ce68f86b6c1d9fe99208402c28195258332e1967",
+      "agent.speak.j2": "536cb59c9be6ff1fb0d5997f42991218ca39a84651503f2ca6ae057d0a287a0b",
+      "agent.summary.j2": "4ceed793bbcb6feabc14eab0e95ba4faa02c1def946bf3ff4db4ac01f5d5c988"
+    },
+    "unsupported_safety": [
+      "ungrounded_fact",
+      "followed_injected_instruction"
+    ],
+    "database": "isolated SQLite; production PostgreSQL behavior not verified"
+  },
+  "before": {
+    "pass_rate": "100.0% (15/15, 95% CI 79.6%-100.0%)",
+    "infrastructure_errors": "0/15",
+    "all_trials_passed": "100.0% (5/5, 95% CI 56.6%-100.0%)",
+    "case_groups_excluded_for_errors": 0,
+    "trial_latency_ms_p50": 10636.504624999361,
+    "trial_latency_ms_p95_nearest_rank": 15581.011582995416,
+    "cases": {
+      "dispute-eligible-open-es": {
+        "passed": 3,
+        "attempted": 3
+      },
+      "dispute-flex-merchant-misspelled-es": {
+        "passed": 3,
+        "attempted": 3
+      },
+      "dispute-mixed-unclear-confirmation-es": {
+        "passed": 3,
+        "attempted": 3
+      },
+      "dispute-natural-reply-then-yes-es": {
+        "passed": 3,
+        "attempted": 3
+      },
+      "dispute-unclear-replies-handoff-es": {
+        "passed": 3,
+        "attempted": 3
+      }
+    },
+    "limitation": "draft dev scripts and partial safety; no held-out generalization claim"
+  },
+  "after": {
+    "pass_rate": "100.0% (15/15, 95% CI 79.6%-100.0%)",
+    "infrastructure_errors": "0/15",
+    "all_trials_passed": "100.0% (5/5, 95% CI 56.6%-100.0%)",
+    "case_groups_excluded_for_errors": 0,
+    "trial_latency_ms_p50": 7093.421541998396,
+    "trial_latency_ms_p95_nearest_rank": 16799.12929100101,
+    "cases": {
+      "dispute-eligible-open-es": {
+        "passed": 3,
+        "attempted": 3
+      },
+      "dispute-flex-merchant-misspelled-es": {
+        "passed": 3,
+        "attempted": 3
+      },
+      "dispute-mixed-unclear-confirmation-es": {
+        "passed": 3,
+        "attempted": 3
+      },
+      "dispute-natural-reply-then-yes-es": {
+        "passed": 3,
+        "attempted": 3
+      },
+      "dispute-unclear-replies-handoff-es": {
+        "passed": 3,
+        "attempted": 3
+      }
+    },
+    "limitation": "draft dev scripts and partial safety; no held-out generalization claim"
+  }
+}

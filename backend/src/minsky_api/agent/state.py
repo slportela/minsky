@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import StrEnum
+from typing import Any
 from uuid import UUID
 
 from minsky_api.agent.extract import DisputeDetails
@@ -19,6 +20,11 @@ class Phase(StrEnum):
     CARD_OFFER = "card_offer"
     OFFER_HANDOFF = "offer_handoff"
     DONE = "done"
+    # Agentic mode (agent.agentic): the agent searches, then code takes over.
+    SEARCH = "search"
+    CONFIRM_DISPUTE = "confirm_dispute"
+    RECOGNIZE = "recognize"
+    OFFER_ESCALATION = "offer_escalation"
 
 
 @dataclass(frozen=True)
@@ -39,6 +45,9 @@ class Terminal:
 class ConversationState:
     conversation_id: UUID
     customer_id: str
+    # "workflow": extract-then-search orchestrator. "agentic": a tool-using agent finds the transaction.
+    # Fixed when the conversation starts, so a setting change never lands a conversation in the wrong phases.
+    mode: str = "workflow"
     phase: Phase = Phase.UNDERSTAND
     terminal: Terminal | None = None  # set exactly when phase is DONE
     # The customer said yes to "is this the charge you mean?". No handoff is created before that, except one the
@@ -76,3 +85,24 @@ class ConversationState:
     search_details: DisputeDetails = field(default_factory=DisputeDetails)
     # Last user/agent texts for the HTTP contract (server-owned history).
     messages: list[tuple[str, str]] = field(default_factory=list)  # ("user"|"agent", text)
+    # Agentic mode only. The agent's own conversation (role messages, tool calls and results) in Responses
+    # API item form; it is kept apart from `messages`, which is what the customer sees.
+    agent_items: list[dict[str, Any]] = field(default_factory=list)
+    # Ids a query result has shown: the only ones the agent may propose.
+    seen_txn_ids: list[str] = field(default_factory=list)
+    # Transactions the customer said were not the one: never proposed again.
+    rejected_txn_ids: list[str] = field(default_factory=list)
+    search_failures: int = 0
+    queries_run: int = 0
+    # Why the customer is being offered a person (the rule id for a denial, else a reason code).
+    escalation_reason: str | None = None
+    existing_dispute_id: str | None = None
+    denial_text: str | None = None  # what the customer read when the dispute could not go ahead
+    # The customer's own words that said yes to the card (agent.consent). The write happens one question later
+    # (the recognition answer), so graders read the consent here and not from the turn that ran the tool.
+    consent_text: str | None = None
+    # The agent has asked the customer for a detail since the search (re)started: give_up(not_found) needs it.
+    asked_for_detail: bool = False
+    # Replies to the card in a row that were neither yes nor no (a correction goes to the agent, but not for ever:
+    # at max_unclear_replies a person is offered, as in the workflow). Reset by a plain yes or no.
+    unclear_detours: int = 0  # all ambiguous card replies, including affirmative non-consent

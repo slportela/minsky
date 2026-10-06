@@ -39,6 +39,10 @@ _OPEN_QUESTIONS: dict[str, tuple[str, ...]] = {
     ),
     "out_of_scope": ("What does the customer need? The request is outside dispute intake.",),
     "max_turns": ("The conversation hit the turn limit: what is still unresolved?",),
+    "customer_requested_after_denial": (
+        "The customer disagrees with the automatic denial: does the rule apply, or is an exception justified?",
+    ),
+    "search_exhausted": ("Which transaction does the customer mean? The assistant could not find it.",),
 }
 _D09_QUESTIONS = ("Merchant response and evidence for the disputed charge.",)
 
@@ -98,6 +102,8 @@ def _summary(kind: CaseKind, reason: str, rule_id: str | None, facts: dict[str, 
         "unclear_confirmation": "The customer did not answer a yes-or-no question with a plain yes or no",
         "out_of_scope": "Request outside dispute intake",
         "max_turns": "Conversation reached the turn limit",
+        "customer_requested_after_denial": "The customer asked for an agent after the automatic denial of",
+        "search_exhausted": "The assistant could not identify the charge the customer means",
     }.get(reason, f"Handoff ({reason})")
     text = f"{lead}{charge}." if charge else f"{lead}."
     if says_not_me and reason != "possible_fraud":
@@ -139,10 +145,16 @@ async def enqueue_case(
         card_blocked=card_blocked,
         created_at=created_at,
     )
+    # `verified_context` (customer profile, the rule and what the customer was told) is read by code from
+    # the bank and the policy, so it sits with the verified facts, apart from what the customer said.
     facts = {
         "verified": verified,
-        "customer_said": {k: v for k, v in customer_facts.items() if k not in ("transaction_id", "route")},
+        "customer_said": {
+            k: v for k, v in customer_facts.items() if k not in ("transaction_id", "route", "verified_context")
+        },
     }
+    if customer_facts.get("verified_context"):
+        facts["context"] = customer_facts["verified_context"]
     record = CaseRecord(
         case_id=case_id,
         kind=kind.value,

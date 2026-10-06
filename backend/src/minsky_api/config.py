@@ -25,6 +25,13 @@ class Settings(BaseSettings):
     # Orchestrator budgets (docs/solution.md): stop runaway chats and clarify loops.
     max_turns: PositiveInt = 12
     max_clarify_attempts: PositiveInt = 2
+    # "workflow": the extract-then-search orchestrator (default, the evaluated baseline). "agentic": a
+    # tool-using agent finds the transaction (docs/agentic_dispute_agent.md). Chosen per new conversation.
+    agent_mode: Literal["workflow", "agentic"] = "workflow"
+    agent_max_tool_calls: PositiveInt = 5  # queries and proposals per customer message
+    # Let a client choose the mode of a NEW conversation (`mode` on the first turn). Off by default: a customer must not
+    # pick between an evaluated flow and an experimental one. The demo turns it on so the team can compare both.
+    allow_mode_switch: bool = False
     # Replies in a row that are not a plain yes or no to the same question. At this one the conversation goes to a
     # person instead of asking again: with 3 the customer is told twice how to answer first.
     max_unclear_replies: PositiveInt = 3

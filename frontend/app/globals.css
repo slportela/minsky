@@ -228,7 +228,8 @@ label {
   margin-top: 12px;
 }
 
-[role="status"].notice {
+[role="status"].notice,
+[role="note"].notice {
   color: var(--amber);
   background: rgba(255, 181, 71, 0.07);
   border: 1px solid rgba(255, 181, 71, 0.35);
