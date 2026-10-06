@@ -183,3 +183,7 @@ free-text detours and answers to subsequent search questions. An explicit card a
 The reactive customer now continues its scripted ambiguous replies in SEARCH instead of silently stopping.
 The Starbucks fixture explicitly says it does not remember the expected amount if asked; it invents no amount.
 Evidence, including the failed intermediate validation, is recorded in the follow-up report.
+
+The same counter also resets when the customer declines the offer of a person and the search starts again.
+Found in review of 5093f7a: without that reset the next search message was answered with a second offer
+of a person, before any query ran. Covered by a unit test; not re-run live.

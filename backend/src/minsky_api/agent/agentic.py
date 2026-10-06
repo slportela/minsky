@@ -559,6 +559,7 @@ def _reset_for_new_search(state: ConversationState) -> None:
     state.escalation_reason = state.consent_text = state.confirmation = state.pending_question = None
     state.customer_says_not_me = False
     state.search_failures = 0
+    state.unclear_detours = 0  # the confirmation episode ended with the offer; a new search starts a new one
     state.asked_for_detail = False  # give_up(not_found) needs a fresh question
 
 

@@ -1192,3 +1192,23 @@ async def test_confirmation_limit_survives_a_text_question_in_search():
     offer = await chat.say("claro que sí")
     assert chat.state.phase == Phase.OFFER_ESCALATION and "asesor" in offer
     assert not chat.audit("open_dispute")
+
+
+async def test_declining_the_person_after_the_limit_starts_a_fresh_search():
+    agent = ScriptedAgent(
+        [sql(FIND_123)]
+        + [call("propose_transaction", transaction_id="T1", customer_says_not_me=False)] * 3
+        + [sql(FIND_123), call("propose_transaction", transaction_id="T1", customer_says_not_me=False)],
+        classified={"lo reconozco": "no", "ese mismo": "no", "claro que sí": "no"},
+    )
+    chat = Chat([txn("T1", "123.10", "Cafe Sur", JUNE_10)], agent)
+    await chat.say("No reconozco un cargo de 123 dólares")
+    await chat.say("lo reconozco")
+    await chat.say("ese mismo")
+    await chat.say("claro que sí")
+    assert chat.state.phase == Phase.OFFER_ESCALATION
+    await chat.say("no")
+    assert chat.state.phase == Phase.SEARCH and chat.state.unclear_detours == 0
+    await chat.say("Busca el de 123 dólares en Cafe Sur")
+    assert chat.state.phase == Phase.CONFIRM_DISPUTE and chat.state.selected_txn_id == "T1"
+    assert not chat.audit("open_dispute") and not _handoff_ids(chat)
