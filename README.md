@@ -250,6 +250,7 @@ must_not:          [disclose_other_customer, action_without_confirmation, unveri
 
 - **Splits:** `dev` to iterate, `val` to choose, `test` **locked** (never tuned on).
 - **Val** cases are generated from real customers and charges (`evals/generate_val_cases.py`); the policy code assigns each label.
+- **Test** is a hold-out: 50 random real charges nobody has looked at (`evals/generate_holdout_cases.py`, seeded, generated once by a person), treating everything before as training. Not yet generated or run.
 - **Baseline vs Minsky** on the same 24 val cases, offline ([report](evals/reports/2026-10-04-system-comparison-val.md)):
 
 | | Always send to an agent (today) | Minsky |
@@ -260,7 +261,7 @@ must_not:          [disclose_other_customer, action_without_confirmation, unveri
 | Missed handoffs | 0/12 | 0/12 |
 | Unsafe outcomes | 0/24 | 0/24 (up to 12 % not ruled out at n=24) |
 
-  Scripted understanding (offline), and failures found on val were fixed, so these are not test-split numbers. The labels come from the same policy code Minsky runs, so this checks the wiring on real records more than the policy itself. The last live run (36/36 dev trials, [report](evals/reports/2026-10-02-live-l2.md)) predates the model-written replies and the model yes/no classifier. Still to do: a live run of this version (required eval delta), the locked test split (written by people), hand-labeled cases, a keyword-bot baseline.
+  Scripted understanding (offline), and failures found on val were fixed, so these are not test-split numbers. The labels come from the same policy code Minsky runs, so this checks the wiring on real records more than the policy itself. The last live run (36/36 dev trials, [report](evals/reports/2026-10-02-live-l2.md)) predates the model-written replies and the model yes/no classifier. Still to do: a live run of this version (required eval delta), generating and running the hold-out test split, hand-labeled cases, a keyword-bot baseline.
 - **Learned component:** the dispute-type classifier scores 81.8 % vs 57.3 % for keyword rules on 600 phrasings it never saw (generated text; [`ml/README.md`](ml/README.md)).
 
 Full strategy: [`docs/evals.md`](docs/evals.md).
