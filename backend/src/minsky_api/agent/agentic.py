@@ -597,7 +597,15 @@ async def run_agentic_turn(
         elif state.phase in (Phase.UNDERSTAND, Phase.SEARCH):
             if state.phase == Phase.UNDERSTAND:
                 _classify_first_message(state, stripped)
-            reply = await _phase_search(ctx, state, stripped, llm)
+            # The confirmation episode stays bounded when the model asks another question in SEARCH.
+            # Search replies do not authorize anything, even when they are a plain yes.
+            if state.unclear_detours:
+                state.unclear_detours += 1
+            if state.unclear_detours >= get_settings().max_unclear_replies:
+                state.selected_txn_id = state.selected_product_id = state.selected_type = None
+                reply = _offer_escalation_without_match(state, "unclear")
+            else:
+                reply = await _phase_search(ctx, state, stripped, llm)
         elif state.phase == Phase.CONFIRM_DISPUTE:
             reply = await _phase_confirm_dispute(ctx, state, stripped, llm)
         elif state.phase == Phase.RECOGNIZE:

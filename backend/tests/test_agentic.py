@@ -1173,3 +1173,22 @@ async def test_all_ambiguous_card_replies_share_one_limit(replies):
     assert not chat.audit("open_dispute") and not _handoff_ids(chat)
     await chat.say("sí")
     assert _handoff(chat).reason == "unclear_confirmation"
+
+
+async def test_confirmation_limit_survives_a_text_question_in_search():
+    agent = ScriptedAgent(
+        [
+            sql(FIND_123),
+            call("propose_transaction", transaction_id="T1", customer_says_not_me=False),
+            say("¿Me puedes aclarar qué movimiento quieres disputar?"),
+            say(ASK),
+        ]
+    )
+    chat = Chat([txn("T1", "123.10", "Cafe Sur", JUNE_10)], agent)
+    await chat.say("Quiero disputar el monto de 123 dólares")
+    await chat.say("tal vez")
+    assert chat.state.phase == Phase.SEARCH
+    await chat.say("ese mismo")
+    offer = await chat.say("claro que sí")
+    assert chat.state.phase == Phase.OFFER_ESCALATION and "asesor" in offer
+    assert not chat.audit("open_dispute")

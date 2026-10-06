@@ -385,7 +385,10 @@ class _ReactiveUser:
         phase = state.phase
         if phase == Phase.DONE:
             return self._after_close.pop(0) if self._after_close else None
-        if phase in (Phase.CONFIRM_DISPUTE, Phase.CONFIRM_TXN, Phase.RECOGNIZE, Phase.CARD_OFFER) and self._unclear:
+        if (
+            phase in (Phase.SEARCH, Phase.CONFIRM_DISPUTE, Phase.CONFIRM_TXN, Phase.RECOGNIZE, Phase.CARD_OFFER)
+            and self._unclear
+        ):
             return self._unclear.pop(0)
         if phase == Phase.SEARCH:
             return self._details.pop(0) if self._details else None
