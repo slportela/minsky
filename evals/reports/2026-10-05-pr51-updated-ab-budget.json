@@ -25,10 +25,35 @@
       "input_usd_per_million": "0.10",
       "output_usd_per_million": "0.50",
       "pricing_basis": "operator-supplied uncached token rates; not an invoice"
+    },
+    "pr51-fix-agentic-64c171a": {
+      "cap_usd": "1.30",
+      "reserved_usd": "0.1093504",
+      "usage_cost_usd": "0.010271",
+      "input_usd_per_million": "0.10",
+      "output_usd_per_million": "0.50",
+      "pricing_basis": "operator-supplied uncached token rates; not an invoice"
+    },
+    "pr51-followup-agentic": {
+      "cap_usd": "1.30",
+      "reserved_usd": "0.1358388",
+      "usage_cost_usd": "0.0125655",
+      "input_usd_per_million": "0.10",
+      "output_usd_per_million": "0.50",
+      "pricing_basis": "operator-supplied uncached token rates; not an invoice"
+    },
+    "pr51-followup-workflow": {
+      "cap_usd": "0.15",
+      "reserved_usd": "0.1143291",
+      "usage_cost_usd": "0.0085513",
+      "input_usd_per_million": "0.10",
+      "output_usd_per_million": "0.50",
+      "pricing_basis": "operator-supplied uncached token rates; not an invoice"
     }
   },
   "limitation": "Usage-priced estimates, not invoices. The first run exhausted its conservative reservation and is excluded from the matched comparison.",
-  "usage_cost_usd": "0.1138290",
-  "reserved_usd": "1.3441834",
-  "sum_run_caps_usd": "5.80"
+  "usage_cost_usd": "0.1452168",
+  "reserved_usd": "1.7037017",
+  "sum_run_caps_usd": "8.55",
+  "accounting_note": "Runs execute sequentially; the USD 7.50 batch allowance counts cumulative conservative reservations (including discarded/failed runs), not unused per-run ceiling sums. Cumulative reservations remain below the approved batch allowance."
 }

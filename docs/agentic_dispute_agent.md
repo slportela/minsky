@@ -173,3 +173,13 @@ Main's workflow now also supports flexible matching. The earlier exact-search co
 its failures must not be used as the current baseline. Integration tests now expect it to resolve the supported
 flexible cases; the scripted extractor still cannot read the Portuguese merchant phrase in one fixture.
 A matched live comparison after this integration remains pending.
+
+
+## Follow-up after the updated live A/B
+
+ADR 0017 accepts only the opt-in experiment; workflow remains the default. All non-consenting replies
+within a pending confirmation episode share a bounded counter, including affirmative non-consent,
+free-text detours and answers to subsequent search questions. An explicit card answer resets it.
+The reactive customer now continues its scripted ambiguous replies in SEARCH instead of silently stopping.
+The Starbucks fixture explicitly says it does not remember the expected amount if asked; it invents no amount.
+Evidence, including the failed intermediate validation, is recorded in the follow-up report.
