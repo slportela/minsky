@@ -5,8 +5,10 @@ from pathlib import Path
 
 import duckdb
 import pytest
+import yaml
 
-from evals.generate_holdout_cases import OLD, RECENT, build_cases, main
+from evals import generate_holdout_cases
+from evals.generate_holdout_cases import CASES, OLD, RECENT, _used_customers, build_cases, main
 from evals.schema import Case
 from evals.world import check_label, facts_from_case
 from minsky_api.config import get_settings
@@ -104,3 +106,29 @@ def test_it_refuses_to_overwrite_a_released_split(tmp_path: Path) -> None:
     (tmp_path / "holdout-01.yaml").write_text("id: holdout-01\n")
     with pytest.raises(SystemExit, match="not empty"):
         main(["--out", str(tmp_path)])
+
+
+def test_the_customers_of_dev_and_val_cases_are_read_from_the_cases_folder(tmp_path: Path) -> None:
+    """load_cases wants the folder of split folders: a regression here returned no customers at all."""
+    sample = yaml.safe_load(next((CASES / "val").glob("*.yaml")).read_text(encoding="utf-8"))
+    for split, customer in (("dev", "CLI-001"), ("val", "CLI-002"), ("test", "CLI-003")):
+        case = {
+            **sample,
+            "id": f"{split}-sample",
+            "split": split,
+            "session": {"state": "valid", "customer_id": customer},
+        }
+        (tmp_path / split).mkdir()
+        (tmp_path / split / "sample.yaml").write_text(yaml.safe_dump(case), encoding="utf-8")
+    assert _used_customers(tmp_path) == {"CLI-001", "CLI-002"}
+    assert _used_customers() == _used_customers(CASES) != set()
+
+
+def test_a_folder_with_only_a_gitkeep_counts_as_empty(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    out = tmp_path / "test"
+    out.mkdir()
+    (out / ".gitkeep").touch()
+    monkeypatch.setattr(generate_holdout_cases, "GOLD", _gold(tmp_path))
+    monkeypatch.setattr(generate_holdout_cases, "_used_customers", set)
+    assert main(["--out", str(out)]) == 0
+    assert len(list(out.glob("holdout-*.yaml"))) == RECENT + OLD

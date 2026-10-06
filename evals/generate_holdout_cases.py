@@ -32,7 +32,8 @@ from minsky_api.policy.disputes import DisputeFacts, TxnStatus, decide
 SEED = 20261005
 RECENT, OLD = 45, 5
 NOT_ME_SHARE = 0.25
-OUT = ROOT / "evals" / "cases" / "test"
+CASES = ROOT / "evals" / "cases"
+OUT = CASES / "test"
 _SPEC = {(spec.rule, spec.not_me): spec for spec in SPECS}
 
 _JOINS = """
@@ -51,8 +52,9 @@ _ROW = (
 )
 
 
-def _used_customers() -> set[str]:
-    cases = [case for split in ("dev", "val") for case in load_cases(ROOT / "evals" / "cases" / split)]
+def _used_customers(cases_root: Path = CASES) -> set[str]:
+    # load_cases takes the folder that holds the split folders, not a split folder.
+    cases = [case for case in load_cases(cases_root) if case.split in ("dev", "val")]
     return {case.session.customer_id for case in cases if case.session.customer_id}
 
 
@@ -134,11 +136,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--out", type=Path, default=OUT)
     parser.add_argument("--seed", type=int, default=SEED)
     args = parser.parse_args(argv)
-    if args.out.is_dir() and any(args.out.iterdir()):
+    if args.out.is_dir() and any(path.name != ".gitkeep" for path in args.out.iterdir()):
         raise SystemExit(f"{args.out} is not empty: a new test split is a new versioned release")
     if not (GOLD / "transactions.parquet").is_file():
         raise SystemExit("data/lake/gold is missing: run make silver and make gold first")
-    cases = build_cases(seed=args.seed)
+    cases = build_cases(GOLD, args.seed)
     args.out.mkdir(parents=True, exist_ok=True)
     for case in cases:
         (args.out / f"{case['id']}.yaml").write_text(
