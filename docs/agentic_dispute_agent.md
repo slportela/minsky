@@ -198,4 +198,4 @@ Report: `evals/reports/2026-10-05-pr51-fix-ab.md`.
 The case that should cover the reset, `dispute-offer-declined-then-dispute-es`, never reached it in agentic mode:
 the simulated customer answered the card at once. The simulator can now replay it
 (`known_info.declines_person_offer`), and `dispute-decline-person-then-search-es` fails offline without the fix.
-It has not been run live yet.
+It then passed live in both modes (3/3 each, 5b4b118).
