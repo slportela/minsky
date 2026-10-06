@@ -1,5 +1,7 @@
 # Run the demo end to end (local, Docker)
 
+> **Evaluators:** use the README section *For evaluators* (`compose.yaml` + `compose.evaluator.yaml`). This page is the full developer path (pipeline + gold).
+
 From an empty checkout to the three demo paths and the agent console, on one machine. Nothing here deploys anything. Production is `docs/architecture.md`.
 
 ## 1. Configure

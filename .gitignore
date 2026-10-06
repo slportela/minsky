@@ -1,6 +1,11 @@
 .env
 .venv/
-data/
+data/*
+!data/evaluator/
+!data/evaluator/**
+# real organizer rows (make evaluator-pack-gold): local only, never committed
+data/evaluator/*.gold.*
+.env.evaluator.gold
 __pycache__/
 .ipynb_checkpoints/
 pipeline/transform/target/
