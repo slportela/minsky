@@ -2,8 +2,9 @@
 
 Everything before this split counts as training: the dev cases were written and fixed against, and val
 was used to select. These charges come from a seeded random draw over gold that nobody has looked
-at. 45 come from the 120-day dispute window and 5 from older ones, so D05 is covered. The same draw
-simulates the "it wasn't me" claim on about a quarter of approved charges. Labels come from
+at. 45 come from the 120-day dispute window. 5 are older approved charges without the fraud flag and
+without a "not me" claim, so each one is a D05 refusal (decide() checks status and fraud before the window).
+The same draw simulates the "it wasn't me" claim on about a quarter of the recent approved charges. Labels come from
 `policy.disputes.decide` on the real row (AGENTS rule 5), and the runner re-checks them. Customer
 messages use the val templates, in Spanish: the bank has no Portuguese data.
 
@@ -34,15 +35,20 @@ NOT_ME_SHARE = 0.25
 OUT = ROOT / "evals" / "cases" / "test"
 _SPEC = {(spec.rule, spec.not_me): spec for spec in SPECS}
 
-_ROW = """
-    select t.customer_id, t.transaction_id, t.product_id, t.merchant_name, t.amount, t.currency, t.amount_usd,
-           t.transaction_status, t.transaction_date, t.is_fraud, coalesce(s.is_repeat_complainer, false),
-           c.country, p.is_card
+_JOINS = """
     from '{gold}/transactions.parquet' t
     join '{gold}/customers.parquet' c using (customer_id)
     join '{gold}/products.parquet' p on p.product_id = t.product_id
     left join '{gold}/customer_complaint_stats.parquet' s on s.customer_id = t.customer_id
 """
+_ROW = (
+    """
+    select t.customer_id, t.transaction_id, t.product_id, t.merchant_name, t.amount, t.currency, t.amount_usd,
+           t.transaction_status, t.transaction_date, t.is_fraud, coalesce(s.is_repeat_complainer, false),
+           c.country, p.is_card
+"""
+    + _JOINS
+)
 
 
 def _used_customers() -> set[str]:
@@ -52,13 +58,16 @@ def _used_customers() -> set[str]:
 
 def _pool(con: duckdb.DuckDBPyConnection, gold: Path, cutoff: date, *, recent: bool) -> list[tuple[str, str]]:
     # Sorted ids, so the seeded shuffle alone decides the draw (DuckDB's hash() is not stable across versions).
-    window = ">=" if recent else "<"
+    # The same joins as _ROW: every drawn charge can be built into a case.
+    where = (
+        "cast(t.transaction_date as date) >= ?"
+        if recent
+        else "cast(t.transaction_date as date) < ? and t.transaction_status = 'Approved' and not t.is_fraud"
+    )
     return con.execute(
-        f"""
-        select transaction_id, customer_id from '{gold}/transactions.parquet'
-        where merchant_name is not null and cast(transaction_date as date) {window} ?
-        order by transaction_id
-        """,
+        "select t.transaction_id, t.customer_id"
+        + _JOINS.format(gold=gold)
+        + f" where t.merchant_name is not null and {where} order by t.transaction_id",
         [cutoff],
     ).fetchall()
 
@@ -105,7 +114,7 @@ def build_cases(gold: Path = GOLD, seed: int = SEED, used: set[str] | None = Non
     cases = []
     for number, txn in enumerate(ids, start=1):
         row = rows[txn]
-        not_me = row[7] == TxnStatus.APPROVED and rng.random() < NOT_ME_SHARE
+        not_me = number <= RECENT and row[7] == TxnStatus.APPROVED and rng.random() < NOT_ME_SHARE
         cases.append(
             case_from_row(
                 row,

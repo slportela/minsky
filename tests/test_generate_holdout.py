@@ -14,7 +14,7 @@ from minsky_api.config import get_settings
 _STATUSES = ("Approved", "Approved", "Approved", "Declined", "Reversed", "Pending")
 
 
-def _gold(root: Path, customers: int = 90) -> Path:
+def _gold(root: Path, customers: int = 120) -> Path:
     """Two charges per customer, one inside the 120-day window and one outside, with mixed facts."""
     today = datetime.combine(get_settings().today, datetime.min.time())
     txns, people, products, stats = [], [], [], []
@@ -63,6 +63,23 @@ def test_the_draw_is_45_recent_and_5_old_charges_one_per_customer(tmp_path: Path
     assert sum(txn.startswith("TRX-O") for txn in txns) == OLD
     customers = [case["session"]["customer_id"] for case in cases]
     assert len(set(customers)) == len(customers) == RECENT + OLD
+
+
+def test_every_old_charge_is_a_d05_refusal(tmp_path: Path) -> None:
+    """decide() checks status and fraud before the window, so only approved, unflagged old charges are D05."""
+    cases = build_cases(_gold(tmp_path), seed=7, used=set())
+    old = [case for case in cases if case["user_scenario"]["known_info"]["transaction_id"].startswith("TRX-O")]
+    assert [case["user_scenario"]["known_info"]["rule_id"] for case in old] == ["D05-outside-window"] * OLD
+
+
+def test_a_charge_without_its_product_is_never_drawn(tmp_path: Path) -> None:
+    gold = _gold(tmp_path)
+    con = duckdb.connect()
+    con.execute(f"copy (select * from '{gold}/products.parquet' where product_id >= 'PRD-040') "
+                f"to '{gold}/products.parquet' (format parquet)")  # fmt: skip
+    con.close()
+    cases = build_cases(gold, seed=7, used=set())
+    assert all(case["session"]["customer_id"] >= "CLI-040" for case in cases)
 
 
 def test_dev_and_val_customers_are_never_drawn(tmp_path: Path) -> None:
