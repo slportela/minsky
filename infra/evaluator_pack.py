@@ -1,23 +1,32 @@
-"""Build the evaluator local-run slice: bank.* SQL + .env.evaluator.example.
+"""Build the evaluator local-run slice: bank.* SQL + an env file with credentials and a cheat sheet.
 
 Team only:
 
-    make evaluator-pack                              # from data/lake/gold (preferred)
-    uv run python infra/evaluator_pack.py --synthetic  # fixture rows when gold is absent
+    make evaluator-pack        # synthetic fixture rows -> the files that are committed
+    make evaluator-pack-gold   # real gold rows (needs `make gold`) -> git-ignored local files
 
-Writes:
-  data/evaluator/bank_slice.sql.gz
-  .env.evaluator.example
+The committed files are always synthetic: gold rows are organizer data and must not reach git
+(AGENTS.md rule 7), so the gold variant writes next to them under names `.gitignore` excludes:
+
+  committed:  data/evaluator/bank_slice.sql.gz   .env.evaluator.example
+  local only: data/evaluator/bank_slice.gold.sql.gz   .env.evaluator.gold
+              (use with: EVALUATOR_SLICE=./data/evaluator/bank_slice.gold.sql.gz docker compose ...)
+
+The tokens are fixed and public on purpose (a judge has no way to generate them), so they are only
+valid for a stack on localhost: compose.evaluator.yaml pins DOMAIN=localhost and
+MINSKY_ENVIRONMENT=local. Never copy the file to a reachable host.
 """
 
 from __future__ import annotations
 
 import argparse
 import gzip
+import io
 import json
+import math
 import sys
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import UTC, date, datetime, time
 from decimal import Decimal
 from pathlib import Path
 
@@ -29,16 +38,22 @@ import duckdb
 # es/pt opening messages).
 from demo_sessions import SCENARIOS, STAFF, _opening, _pick
 
+from minsky_api.config import get_settings
+from minsky_api.policy.disputes import Decision, DisputeFacts, TxnStatus, decide
+
 ROOT = Path(__file__).resolve().parents[1]
 GOLD = ROOT / "data" / "lake" / "gold"
 OUT_DIR = ROOT / "data" / "evaluator"
-SLICE_PATH = OUT_DIR / "bank_slice.sql.gz"
-ENV_PATH = ROOT / ".env.evaluator.example"
-EXPIRES = "2026-10-17T00:00:00+00:00"
-AS_OF = date(2026, 6, 18)
+# synthetic = committed; gold = real organizer rows, git-ignored (see the module docstring)
+SLICE_PATH = {"synthetic": OUT_DIR / "bank_slice.sql.gz", "gold": OUT_DIR / "bank_slice.gold.sql.gz"}
+ENV_PATH = {"synthetic": ROOT / ".env.evaluator.example", "gold": ROOT / ".env.evaluator.gold"}
+# The demo must keep working until 2026-10-16; the sessions expire the day after. Override with --expires.
+DEFAULT_EXPIRES = "2026-10-17T00:00:00+00:00"
+# Simulated "today": the backend's setting, which the dbt var as_of_date must also equal.
+AS_OF = get_settings().today
 # ops.load_runs needs a loaded_at; pinned to AS_OF (not wall-clock) so the generated SQL stays
 # byte-identical across reruns with no data change.
-LOADED_AT = datetime(2026, 6, 18)
+LOADED_AT = datetime.combine(AS_OF, time())
 RUN_ID = "evaluator-pack"
 
 
@@ -66,10 +81,17 @@ def _sql_str(value: object | None) -> str:
         return "NULL"
     if isinstance(value, bool):
         return "TRUE" if value else "FALSE"
-    if isinstance(value, (int, float, Decimal)):
+    if isinstance(value, float):
+        # `nan` / `inf` unquoted are column references to Postgres: the init script would abort at container start
+        if not math.isfinite(value):
+            raise SystemExit(f"cannot write a non-finite float ({value}) into the slice")
+        return repr(value)
+    if isinstance(value, (int, Decimal)):
         return str(value)
     if isinstance(value, datetime):
-        return f"'{value.replace(tzinfo=None).isoformat(sep=' ', timespec='seconds')}'"
+        if value.tzinfo is not None:
+            raise SystemExit(f"bank.* timestamps are naive local times, got a timezone-aware value: {value}")
+        return f"'{value.isoformat(sep=' ', timespec='seconds')}'"
     if isinstance(value, date):
         return f"'{value.isoformat()}'"
     return "'" + str(value).replace("'", "''") + "'"
@@ -81,17 +103,6 @@ def _token(rule: str) -> str:
 
 def _staff_token(agent_id: str) -> str:
     return f"staff-{agent_id.split('.')[0]}-evaluator"
-
-
-def _check_unique(tokens: list[str], *, what: str) -> None:
-    """Fail loudly (AGENTS.md: no silent fallbacks) instead of letting a collision silently drop a
-    credential from the sessions dict built in _write_env."""
-    seen: dict[str, int] = {}
-    for t in tokens:
-        seen[t] = seen.get(t, 0) + 1
-    dupes = sorted(t for t, n in seen.items() if n > 1)
-    if dupes:
-        raise SystemExit(f"duplicate {what} token(s): {', '.join(dupes)} (fix SCENARIOS/STAFF or the token derivation)")
 
 
 def _parquet(name: str) -> str:
@@ -339,11 +350,7 @@ def _insert(table: str, cols: list[str], ddl: str, data: list[dict[str, object]]
     return "\n".join(lines)
 
 
-def _fetch_gold(con: duckdb.DuckDBPyConnection, sql: str, params: list[object]) -> list[tuple]:
-    return list(con.execute(sql, params).fetchall())
-
-
-def _rows(cols: list[str], tuples: list[tuple]) -> list[dict[str, object]]:
+def _rows(cols: list[str], tuples: list[tuple[object, ...]]) -> list[dict[str, object]]:
     """Zip fetched/built tuples into named rows. strict=True catches an arity drift between a
     SELECT list (or a synthetic tuple) and `cols` immediately, instead of inside _insert."""
     return [dict(zip(cols, row, strict=True)) for row in tuples]
@@ -360,7 +367,7 @@ def _sql_from_gold(rows: list[DemoRow]) -> str:
         if filter_by_customer:
             sql += f" where customer_id in ({placeholders})"
             params.extend(customer_ids)
-        return _rows(cols, _fetch_gold(con, sql, params))
+        return _rows(cols, con.execute(sql, params).fetchall())
 
     customers = fetch("customers", CUSTOMERS_COLS)
     products = fetch("products", PRODUCTS_COLS)
@@ -368,7 +375,27 @@ def _sql_from_gold(rows: list[DemoRow]) -> str:
     stats = fetch("customer_complaint_stats", STATS_COLS)
     scenarios = fetch("dispute_scenarios", SCENARIOS_COLS)
     benchmarks = fetch("resolution_benchmarks", BENCHMARKS_COLS, filter_by_customer=False)
-    return _assemble_sql(customers, products, transactions, stats, benchmarks, scenarios)
+    return _assemble_sql("gold", customers, products, transactions, stats, benchmarks, scenarios)
+
+
+def _decide(r: DemoRow) -> Decision:
+    """The route comes from the backend policy, as in the gold model, and must agree with the rule the row is for:
+    a stale hand-picked amount or date fails here instead of shipping a slice that contradicts the policy."""
+    decision = decide(
+        DisputeFacts(
+            status=TxnStatus(r.status),
+            transaction_date=r.when.date(),
+            amount_usd=float(r.amount_usd),
+            is_fraud=r.is_fraud,
+            existing_dispute_ref=None,
+            repeat_complainer=r.is_repeat,
+            customer_says_not_me=r.not_me,
+        ),
+        AS_OF,
+    )
+    if decision.rule_id != r.rule:
+        raise SystemExit(f"synthetic row for {r.rule} now decides {decision.rule_id}: update _synthetic_rows")
+    return decision
 
 
 def _sql_from_synthetic(rows: list[DemoRow]) -> str:
@@ -435,15 +462,7 @@ def _sql_from_synthetic(rows: list[DemoRow]) -> str:
             for r in rows
         ],
     )
-    route = {
-        "D09-eligible": "open_dispute",
-        "D01-declined-not-charged": "inform",
-        "D02-already-reversed": "inform",
-        "D06-possible-fraud": "escalate_fraud",
-        "D07-above-auto-limit": "escalate_agent",
-        "D08-repeat-complainer": "escalate_agent",
-        "D05-outside-window": "refuse",
-    }
+    decisions = {r.rule: _decide(r) for r in rows}
     scenarios = _rows(
         SCENARIOS_COLS,
         [
@@ -451,8 +470,8 @@ def _sql_from_synthetic(rows: list[DemoRow]) -> str:
                 r.rule,
                 r.not_me,
                 r.transaction_id,
-                route[r.rule],
-                r.rule.startswith("D06"),
+                decisions[r.rule].route.value,
+                decisions[r.rule].offer_card_block,
                 r.customer_id,
                 r.status,
                 r.when,
@@ -472,10 +491,11 @@ def _sql_from_synthetic(rows: list[DemoRow]) -> str:
             ("all", "all", 1000, 400, 12.0, 18.0, 0.15, 0.02),
         ],
     )
-    return _assemble_sql(customers, products, transactions, stats, benchmarks, scenarios)
+    return _assemble_sql("synthetic", customers, products, transactions, stats, benchmarks, scenarios)
 
 
 def _assemble_sql(
+    source: str,
     customers: list[dict[str, object]],
     products: list[dict[str, object]],
     transactions: list[dict[str, object]],
@@ -498,6 +518,7 @@ def _assemble_sql(
     )
     parts = [
         "-- Evaluator bank.* slice (infra/evaluator_pack.py).",
+        f"-- source: {source}",
         "-- Loaded by Postgres from /docker-entrypoint-initdb.d/ on an empty volume.",
         "create schema if not exists bank;",
         "create schema if not exists ops;",
@@ -614,19 +635,18 @@ def _assemble_sql(
     return "\n".join(parts) + "\n"
 
 
-def _write_slice(sql: str) -> None:
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
-    # Pin mtime=0: gzip.open() otherwise stamps the current wall-clock time into the gzip header,
-    # so two runs over byte-identical SQL produce different compressed bytes.
-    with open(SLICE_PATH, "wb") as raw, gzip.GzipFile(fileobj=raw, mode="wb", mtime=0) as fh:
+def render_slice(sql: str) -> bytes:
+    # mtime=0: gzip.open() otherwise stamps the wall-clock time into the header, so two runs over
+    # byte-identical SQL would produce different compressed bytes.
+    buf = io.BytesIO()
+    with gzip.GzipFile(fileobj=buf, mode="wb", mtime=0) as fh:
         fh.write(sql.encode("utf-8"))
+    return buf.getvalue()
 
 
-def _write_env(rows: list[DemoRow], *, source: str) -> None:
-    _check_unique([_token(r.rule) for r in rows], what="session")
-    _check_unique([_staff_token(name) for name in STAFF], what="staff")
-    sessions = {_token(r.rule): {"customer_id": r.customer_id, "expires_at": EXPIRES} for r in rows}
-    staff = {_staff_token(name): {"agent_id": name, "expires_at": EXPIRES} for name in STAFF}
+def render_env(rows: list[DemoRow], *, source: str, expires: str) -> str:
+    sessions = {_token(r.rule): {"customer_id": r.customer_id, "expires_at": expires} for r in rows}
+    staff = {_staff_token(name): {"agent_id": name, "expires_at": expires} for name in STAFF}
     sheet: list[str] = []
     for r in rows:
         es, pt = _opening(r.not_me, r.merchant, float(r.amount), r.currency, r.when)
@@ -640,19 +660,21 @@ def _write_env(rows: list[DemoRow], *, source: str) -> None:
             ]
         )
     staff_sheet = [f"#   {name}: {_staff_token(name)}" for name in STAFF]
-    ENV_PATH.write_text(
-        f"""# Evaluator local run. Copy to .env and set MINSKY_LLM_API_KEY only.
+    return f"""# Evaluator local run. Copy to .env and set MINSKY_LLM_API_KEY only.
 # Then: docker compose -f compose.yaml -f compose.evaluator.yaml up --build
 # Open https://localhost/chat (accept the local Caddy certificate warning).
 # Reset: docker compose -f compose.yaml -f compose.evaluator.yaml down -v
-# Generated by infra/evaluator_pack.py ({source}); sessions expire {EXPIRES}.
+# Generated by infra/evaluator_pack.py ({source}); sessions expire {expires}.
+#
+# The credentials below are PUBLIC and fixed on purpose: they only work on a stack on localhost
+# (compose.evaluator.yaml pins DOMAIN and MINSKY_ENVIRONMENT). Never use this file on a reachable host:
+# there, generate random ones with `make demo-sessions`.
 
 DOMAIN=localhost
 MINSKY_ENVIRONMENT=local
 POSTGRES_USER=minsky
 POSTGRES_PASSWORD=minsky
 POSTGRES_DB=minsky
-POSTGRES_HOST_PORT=5433
 
 MINSKY_LLM_BASE_URL=https://api.openai.com/v1
 MINSKY_LLM_MODEL=gpt-6-luna
@@ -667,31 +689,43 @@ MINSKY_STAFF_SESSIONS={json.dumps(staff, separators=(",", ":"))}
 {chr(10).join(sheet)}
 # Agent console: https://localhost/console
 {chr(10).join(staff_sheet)}
-""",
-        encoding="utf-8",
-    )
+"""
+
+
+def _parse_expires(value: str) -> str:
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError:
+        raise SystemExit(f"--expires must be an ISO-8601 timestamp, got {value!r}") from None
+    if parsed.tzinfo is None:
+        raise SystemExit(f"--expires must carry a timezone (e.g. +00:00), got {value!r}")
+    if parsed <= datetime.now(UTC):
+        raise SystemExit(f"--expires {value} is already in the past: every credential would fail closed")
+    return parsed.isoformat()
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument(
-        "--synthetic",
+        "--gold",
         action="store_true",
-        help="build fixture rows instead of reading data/lake/gold",
+        help="read real rows from data/lake/gold and write the git-ignored local files instead of the committed ones",
     )
+    parser.add_argument("--expires", default=DEFAULT_EXPIRES, help=f"credential expiry (default {DEFAULT_EXPIRES})")
     args = parser.parse_args(argv)
-    if args.synthetic:
-        rows = _synthetic_rows()
-        sql = _sql_from_synthetic(rows)
-        source = "synthetic"
-    else:
+    expires = _parse_expires(args.expires)
+    source = "gold" if args.gold else "synthetic"
+    if args.gold:
         rows = _rows_from_gold()
         sql = _sql_from_gold(rows)
-        source = "gold"
-    _write_slice(sql)
-    _write_env(rows, source=source)
-    print(f"wrote {SLICE_PATH.relative_to(ROOT)} ({SLICE_PATH.stat().st_size} bytes, {source})")
-    print(f"wrote {ENV_PATH.relative_to(ROOT)}")
+    else:
+        rows = _synthetic_rows()
+        sql = _sql_from_synthetic(rows)
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    SLICE_PATH[source].write_bytes(render_slice(sql))
+    ENV_PATH[source].write_text(render_env(rows, source=source, expires=expires), encoding="utf-8")
+    print(f"wrote {SLICE_PATH[source].relative_to(ROOT)} ({SLICE_PATH[source].stat().st_size} bytes, {source})")
+    print(f"wrote {ENV_PATH[source].relative_to(ROOT)}")
     print("customers: " + ", ".join(r.customer_id for r in rows))
     return 0
 

@@ -317,7 +317,10 @@ docker compose -f compose.yaml -f compose.evaluator.yaml up --build
 
 - First `--build` is slow (images compile with uv/npm inside the Dockerfiles).
 - Without an API key, `/api/health` is fine but chat returns 503.
-- Ports 80/443 must be free. Cheat sheet covers D09 (auto dispute), D06 (fraud/block), and `/console`.
+- Ports 80/443 must be free: stop `make up` first (the evaluator stack has its own database volume, but the same ports).
+- The slice loads only into an empty database: after pulling a new version run `down -v` first.
+- The credentials in `.env.evaluator.example` are public and only valid on localhost; never use that file on a reachable host.
+- Cheat sheet covers D09 (auto dispute), D06 (fraud/block), and `/console`.
 
 The deployed demo link (D2) remains the primary evaluation path; this is a local backup.
 

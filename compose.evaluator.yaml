@@ -4,13 +4,27 @@
 #   cp .env.evaluator.example .env   # set MINSKY_LLM_API_KEY
 #   docker compose -f compose.yaml -f compose.evaluator.yaml up --build
 #
-# A distinct project name keeps this stack (and its postgres volume) separate from a `make up`
-# dev stack on the same machine: without it both runs share compose.yaml's `minsky_pgdata` volume,
-# so on a machine with a pre-existing dev volume the init script below never runs and bank.* stays
-# empty. `down -v` (below) only resets this project's own volume, not the dev one.
+# A distinct project name keeps this stack's postgres volume separate from a `make up` dev stack:
+# without it both share compose.yaml's `minsky_pgdata` volume, so on a machine with a pre-existing dev
+# volume the init script below never runs and bank.* stays empty. `down -v` (below) only resets this
+# project's own volume. The two stacks still cannot run together: caddy binds 80/443 in both, so stop
+# `make up` first.
+#
+# The init script runs only on an EMPTY volume: after pulling a new slice, run `down -v` first.
 name: minsky-evaluator
 
 services:
+  caddy:  # the committed credentials are public: they must only ever be reachable on localhost
+    environment:
+      DOMAIN: localhost
+  api:
+    environment:
+      MINSKY_ENVIRONMENT: local
   postgres:
+    # Over TCP: while the init script runs, the entrypoint's temporary server listens only on the unix
+    # socket, so the base `pg_isready` (socket) turns healthy early and releases `api` before bank.* exists.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U $${POSTGRES_USER}"]
     volumes:
-      - ./data/evaluator/bank_slice.sql.gz:/docker-entrypoint-initdb.d/01_bank_slice.sql.gz:ro
+      # EVALUATOR_SLICE: team only, to load the git-ignored slice made by `make evaluator-pack-gold`
+      - ${EVALUATOR_SLICE:-./data/evaluator/bank_slice.sql.gz}:/docker-entrypoint-initdb.d/01_bank_slice.sql.gz:ro
