@@ -170,3 +170,73 @@ async def test_transaction_filters_are_customer_scoped_and_escape_like_wildcards
     params = statement.compile(dialect=postgresql.dialect()).params
     assert "%50\\%\\_off%" in params.values()  # the customer's % and _ are literal, not wildcards
     assert date(2026, 6, 16) in params.values()  # date_to is inclusive: < the next day
+
+
+@pytest.mark.asyncio
+async def test_search_pool_is_one_customers_history_newest_first_and_never_truncated_silently():
+    from minsky_api.store.errors import StoreError
+    from minsky_api.store.transactions import SEARCH_POOL
+
+    txn = Transaction(
+        transaction_id="T1",
+        customer_id="C1",
+        product_id="P1",
+        amount_usd=Decimal("10.00"),
+        amount_usd_source="native_usd",
+        transaction_date=datetime(2026, 1, 1),
+    )
+    session = FakeSession(exec_rows=[txn])
+    assert await TransactionStore(session).search_pool("C1") == (txn,)  # type: ignore[arg-type]
+    sql = _sql(session.exec_statements[0])
+    assert "customer_id" in sql and "DESC" in sql and "LIMIT" in sql
+
+    too_many = FakeSession(exec_rows=[txn] * (SEARCH_POOL + 1))
+    with pytest.raises(StoreError, match="search pool exceeded"):
+        await TransactionStore(too_many).search_pool("C1")  # type: ignore[arg-type]
+
+
+async def test_random_customer_samples_then_checks_for_a_recent_posted_charge_under_the_limit():
+    from decimal import Decimal
+
+    class _Scalar:
+        def __init__(self, value: Any) -> None:
+            self.value = value
+
+        def scalar(self) -> Any:
+            return self.value
+
+    class _Executing(FakeSession):
+        def __init__(self, answers: list[Any]) -> None:
+            super().__init__()
+            self.answers = answers
+            self.calls: list[tuple[Any, dict[str, Any]]] = []
+
+        async def execute(self, statement: Any, params: dict[str, Any]) -> _Scalar:
+            self.calls.append((statement, params))
+            return _Scalar(self.answers.pop(0))
+
+    session = _Executing(["CLI-X"])
+    picked = await CustomerStore(session).random_with_recent_charge(  # type: ignore[arg-type]
+        today=date(2026, 6, 18), window_days=120, max_amount_usd=Decimal("500")
+    )
+    assert picked == "CLI-X"
+    statement, params = session.calls[0]
+    sql = str(statement)
+    assert "tablesample bernoulli" in sql and "random()" in sql and "'Approved'" in sql
+    assert "amount_usd <= :max_amount" in sql and "is_repeat_complainer is not true" in sql
+    assert params == {"since": date(2026, 2, 18), "max_amount": Decimal("500")}
+
+    empty_twice = _Executing([None, None, "CLI-Y"])  # a sample can come up empty: it is tried again
+    assert await CustomerStore(empty_twice).random_with_recent_charge(today=date(2026, 6, 18)) == "CLI-Y"  # type: ignore[arg-type]
+    assert len(empty_twice.calls) == 3
+    never = _Executing([None] * 5)
+    assert await CustomerStore(never).random_with_recent_charge(today=date(2026, 6, 18)) is None  # type: ignore[arg-type]
+
+    failing = FakeSession()
+
+    async def boom(statement: Any, params: dict[str, Any]) -> Any:
+        raise OperationalError("select", {}, Exception("down"))
+
+    failing.execute = boom  # type: ignore[attr-defined]
+    with pytest.raises(StoreError):
+        await CustomerStore(failing).random_with_recent_charge(today=date(2026, 6, 18))  # type: ignore[arg-type]

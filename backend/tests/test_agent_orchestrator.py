@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 from uuid import uuid4
@@ -641,10 +641,15 @@ async def test_search_miss_keeps_filters_when_amount_is_corrected():
     llm = FakeLLM([first, _details(merchant=None, amount=Decimal("25"))])
     try:
         state, reply = await run_turn(state, "Cafe, 50", ctx, llm)  # type: ignore[arg-type]
-        assert state.acts[-1] == "clarify"
+        # Nothing is 50, but the Cafe charge in the range is 25: proposed with the difference said, not selected.
+        assert state.acts[-1] == "confirm_txn"
+        assert state.match_tier == "closest"
+        assert "otro monto" in reply and "25.00 USD" in reply
         assert state.search_details == first
+        state.phase = Phase.CLARIFY  # the customer did not take the proposal and gives the amount again
         state, reply = await run_turn(state, "Era de 25", ctx, llm)  # type: ignore[arg-type]
         assert state.phase == Phase.CONFIRM_TXN
+        assert state.match_tier is None
         assert state.selected_txn_id == "T1"
         assert state.search_details.merchant == "Cafe"
         assert state.search_details.date_from == first.date_from
@@ -654,7 +659,7 @@ async def test_search_miss_keeps_filters_when_amount_is_corrected():
         bank.close()
 
 
-async def test_missing_merchant_does_not_select_another_merchant_on_amount_followup():
+async def test_another_merchant_is_proposed_with_the_difference_and_never_opened_without_a_yes():
     from evals.fixtures import FixtureBank
 
     bank = FixtureBank([_txn(merchant="Other")])
@@ -662,10 +667,12 @@ async def test_missing_merchant_does_not_select_another_merchant_on_amount_follo
     llm = FakeLLM([_details(amount=None), _details(merchant=None, amount=Decimal("25"))])
     try:
         state, _ = await run_turn(_state(), "Un cargo de Cafe", ctx, llm)  # type: ignore[arg-type]
-        state, reply = await run_turn(state, "Era de 25", ctx, llm)  # type: ignore[arg-type]
-        assert state.phase == Phase.CLARIFY
+        assert state.phase == Phase.CLARIFY  # a merchant alone finds nothing: the Other charge does not match it
         assert state.selected_txn_id is None
-        assert state.acts[-1] == "clarify"
+        state, reply = await run_turn(state, "Era de 25", ctx, llm)  # type: ignore[arg-type]
+        # The amount holds and the merchant differs: said out loud, and only a yes moves on.
+        assert state.phase == Phase.CONFIRM_TXN and state.match_tier == "closest"
+        assert "No encontré un cargo de 25 en Cafe" in reply and "otro comercio" in reply and "Other" in reply
         assert all(row.tool != "open_dispute" for row in ctx.cases.list_audit())
     finally:
         bank.close()
@@ -1460,7 +1467,7 @@ def test_a_third_offer_is_never_made_and_the_number_is_a_setting(monkeypatch: py
 
 def test_replies_that_are_not_yes_or_no_to_the_offer_end_without_a_case():
     ctx, state = _offered()
-    llm = FakeLLM(_details())
+    llm = FakeLLM(DisputeDetails())  # nothing about a charge in these replies
     for words in ("mmm", "no sé"):
         state, _ = asyncio.run(run_turn(state, words, ctx, llm))  # type: ignore[arg-type]
         assert state.phase == Phase.OFFER_HANDOFF
@@ -1492,3 +1499,141 @@ def test_a_policy_handoff_needs_the_confirmed_charge_and_has_it():
     assert not state.txn_confirmed and not ctx.cases.list_cases()  # asked which charge; nothing sent yet
     state, _ = asyncio.run(run_turn(state, "sí", ctx, llm))  # type: ignore[arg-type]
     assert state.txn_confirmed and state.phase == Phase.CARD_OFFER
+
+
+def test_answering_the_offer_with_the_charge_declines_the_agent_and_goes_on():
+    """Found by hand on the deployed demo: offered an agent, the customer answered with the charge (what the offer
+    asked for) and was told that only sí or no works."""
+    ctx, state = _offered()
+    llm = FakeLLM(_details(merchant="Cafe", amount=Decimal("25.00")))
+    state, reply = asyncio.run(run_turn(state, "Quiero reclamar un cargo de 25.00 USD en Cafe", ctx, llm))  # type: ignore[arg-type]
+    assert state.phase == Phase.CONFIRM_TXN and "Cafe" in reply
+    assert not state.handoff_accepted and not ctx.cases.list_cases()
+    assert not any(a.tool == "create_handoff" for a in ctx.cases.list_audit())
+    assert state.handoff_offers == 1 and state.unclear_count == 0
+    state, _ = asyncio.run(run_turn(state, "sí", ctx, llm))  # type: ignore[arg-type]
+    assert state.phase == Phase.CONFIRM_ACT and state.txn_confirmed
+
+
+def test_a_charge_that_is_not_found_after_the_offer_asks_for_it_again_and_does_not_hand_off():
+    ctx, state = _offered(_ctx(exec_rows=[]))
+    llm = FakeLLM(_details(merchant="Nope", amount=Decimal("9.99")))
+    state, reply = asyncio.run(run_turn(state, "un cargo de 9.99 en Nope", ctx, llm))  # type: ignore[arg-type]
+    assert state.phase == Phase.CLARIFY and reply == clarify_fallback("es", None)
+    assert not ctx.cases.list_cases()
+
+
+def test_an_unclear_reply_with_no_charge_in_it_is_still_asked_again_after_the_offer():
+    ctx, state = _offered()
+    state, reply = asyncio.run(run_turn(state, "mmm no sé", ctx, FakeLLM(DisputeDetails())))  # type: ignore[arg-type]
+    assert state.phase == Phase.OFFER_HANDOFF and state.unclear_count == 1
+    assert reply.endswith("En esta parte del proceso solo puedes responder «sí» o «no».")
+
+
+# --- Flexible matching: what the customer hears and what still needs a yes ---------------------------------------
+
+
+def _at(txn: Transaction, *, when: datetime | None = None, **fields: Any) -> Transaction:
+    if when is not None:
+        txn.transaction_date = when
+    for name, value in fields.items():
+        setattr(txn, name, value)
+    return txn
+
+
+def test_a_near_amount_is_proposed_with_the_difference_and_opens_only_after_two_yes():
+    row = _txn(amount_usd="123.10", merchant="Super Ahorro")
+    ctx = _ctx(row, exec_rows=[row])
+    llm = FakeLLM(_details(merchant=None, amount=Decimal("123")))
+    state, reply = asyncio.run(run_turn(_state(), "No reconozco un cargo de 123 dólares", ctx, llm))  # type: ignore[arg-type]
+    assert state.phase == Phase.CONFIRM_TXN and state.match_tier == "near"
+    assert state.acts[-1] == "confirm_txn" and state.selected_txn_id == "T1"
+    assert reply.startswith("No encontré un cargo de 123.") and "123.10 USD" in reply and "monto cercano" in reply
+    assert state.pending_question == reply
+    assert all(row.tool != "open_dispute" for row in ctx.cases.list_audit())
+
+    state, reply = asyncio.run(run_turn(state, "sí", ctx, llm))  # type: ignore[arg-type]
+    assert state.phase == Phase.CONFIRM_ACT  # the policy now reads the charge's real facts
+    state, reply = asyncio.run(run_turn(state, "sí", ctx, llm))  # type: ignore[arg-type]
+    dispute = ctx.cases.get_dispute_by_transaction(customer_id="C1", transaction_id="T1")
+    assert dispute is not None and dispute.dispute_id in reply
+
+
+def test_declining_a_near_proposal_opens_nothing():
+    row = _txn(amount_usd="123.10")
+    ctx = _ctx(row, exec_rows=[row])
+    llm = FakeLLM(_details(merchant=None, amount=Decimal("123")))
+    state, _ = asyncio.run(run_turn(_state(), "Un cargo de 123", ctx, llm))  # type: ignore[arg-type]
+    state, _ = asyncio.run(run_turn(state, "no", ctx, llm))  # type: ignore[arg-type]
+    assert state.selected_txn_id is None
+    assert all(entry.tool != "open_dispute" for entry in ctx.cases.list_audit())
+
+
+def test_the_exact_charge_is_proposed_alone_even_when_a_near_one_exists():
+    exact = _txn(transaction_id="T-EXACT", amount_usd="25.37")
+    near = _txn(transaction_id="T-NEAR", amount_usd="25.38")
+    ctx = _ctx(exact, exec_rows=[near, exact])
+    llm = FakeLLM(_details(merchant=None, amount=Decimal("25.37")))
+    state, reply = asyncio.run(run_turn(_state(), "Un cargo de 25.37", ctx, llm))  # type: ignore[arg-type]
+    assert state.selected_txn_id == "T-EXACT" and state.match_tier is None
+    assert "No encontré" not in reply
+
+
+async def test_several_near_charges_are_listed_and_a_number_picks_one():
+    from evals.fixtures import FixtureBank
+
+    bank = FixtureBank([_txn(transaction_id="T1", amount_usd="83.00"), _txn(transaction_id="T2", amount_usd="83.40")])
+    ctx = ToolContext(session=_valid(), db=bank, cases=InMemoryCasesBackend())  # type: ignore[arg-type]
+    llm = FakeLLM(_details(merchant=None, amount=Decimal("83.20"), approximate=True))
+    try:
+        state, reply = await run_turn(_state(), "Como 83.20", ctx, llm)  # type: ignore[arg-type]
+        assert state.phase == Phase.CLARIFY and state.acts[-1] == "clarify"
+        assert sorted(state.candidate_txn_ids) == ["T1", "T2"] and "1. " in reply and "2. " in reply
+        picked = state.candidate_txn_ids[1]
+        state, reply = await run_turn(state, "2", ctx, llm)  # type: ignore[arg-type]
+        assert state.phase == Phase.CONFIRM_TXN and state.selected_txn_id == picked
+    finally:
+        bank.close()
+
+
+def test_yesterday_is_resolved_by_the_system_date_and_a_charge_of_today_is_near():
+    today = get_settings().today
+    row = _at(_txn(), when=datetime(today.year, today.month, today.day, 2, 0))
+    ctx = _ctx(row, exec_rows=[row])
+    llm = FakeLLM(_details(merchant=None, amount=None, days_ago=1))
+    state, reply = asyncio.run(run_turn(_state(), "Es de ayer", ctx, llm))  # type: ignore[arg-type]
+    assert state.match_tier == "near" and "17 de junio de 2026" in reply and "fecha cercana" in reply
+    assert state.search_details.date_from == date(2026, 6, 17) and state.search_details.days_ago is None
+
+
+def test_the_charge_of_the_day_asked_is_exact():
+    row = _at(_txn(), when=datetime(2026, 6, 17, 20, 0))
+    ctx = _ctx(row, exec_rows=[row])
+    llm = FakeLLM(_details(merchant=None, amount=None, days_ago=1))
+    state, reply = asyncio.run(run_turn(_state(), "Es de ayer", ctx, llm))  # type: ignore[arg-type]
+    assert state.selected_txn_id == "T1" and state.match_tier is None
+
+
+def test_a_kind_alone_is_not_a_search():
+    ctx = _ctx(exec_rows=[_txn(), _txn(transaction_id="T2")])
+    llm = FakeLLM(_details(merchant=None, amount=None, transaction_type="Purchase"))
+    state, reply = asyncio.run(run_turn(_state(), "Una compra", ctx, llm))  # type: ignore[arg-type]
+    assert state.phase == Phase.CLARIFY and state.candidate_txn_ids == [] and state.selected_txn_id is None
+
+
+def test_a_local_currency_amount_is_matched_in_that_currency():
+    row = _at(_txn(amount_usd="123.00"), amount=Decimal("500000.00"), currency="COP")
+    ctx = _ctx(row, exec_rows=[row])
+    llm = FakeLLM(_details(merchant=None, amount=Decimal("500000"), currency="COP"))
+    state, reply = asyncio.run(run_turn(_state(), "Un cargo de 500000 pesos colombianos", ctx, llm))  # type: ignore[arg-type]
+    assert state.selected_txn_id == "T1" and state.match_tier is None
+
+
+def test_the_back_office_sees_that_the_charge_was_a_near_match():
+    row = _txn(amount_usd="600.50")
+    ctx = _ctx(row, exec_rows=[row])
+    llm = FakeLLM(_details(merchant=None, amount=Decimal("600")))
+    state, _ = asyncio.run(run_turn(_state(), "Un cargo de 600", ctx, llm))  # type: ignore[arg-type]
+    state, _ = asyncio.run(run_turn(state, "sí", ctx, llm))  # type: ignore[arg-type]  # above the auto limit: handoff
+    handoff = next(iter(ctx.cases.list_cases()))
+    assert handoff.facts["customer_said"]["match_tier"] == "near"

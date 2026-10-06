@@ -299,6 +299,47 @@ Placeholders: `<VM_IP>` static IPv4 of the instance; `<OPERATOR_CIDR>` operator 
     option `"all"` is also rejected (use `"allow-list"`). `Content-Type` and POST `Authorization`
     are forwarded by default.
 
+### Reset the demo's cases
+
+Rehearsals leave disputes, handoffs and card blocks in `cases.*`, and a repeated D09 scenario then answers "already open". `infra/reset_cases_smoke.sh` deletes them on the VM. It needs the same SSH access as any other change to the VM (the temporary Lightsail credentials, or the key of the instance).
+
+```bash
+infra/reset_cases_smoke.sh --host ubuntu@<VM_IP> --key <KEY_FILE>           # report only: rows per table, nothing changes
+infra/reset_cases_smoke.sh --host ubuntu@<VM_IP> --key <KEY_FILE> --apply   # back up, delete, verify
+```
+
+With `--apply` it dumps `cases.*` to `/opt/minsky/backups/cases-<timestamp>.sql` (mode 600), runs `DROP SCHEMA cases CASCADE`, restarts the API container (which recreates the empty schema on startup and forgets its in-memory conversations), and checks that the API is healthy, every `cases` table is empty and the `bank.*` row counts are unchanged. If a check fails it restores the dump and says so. It does not touch `bank.*`, `ops.*` (traces), the config files, the images or the volumes. The backup is the only way back: the VM has no snapshots. The local equivalent is `make demo-reset`.
+
+### Redeploy from main
+
+How a commit of `main` reaches the demo VM, written so that a person or another agent can do it without the history of this project. The tools: `infra/smoke_vm.sh` (credentials, host-key check, deploy, rollback, read-only looks) on top of `infra/redeploy_smoke.sh` (the deploy itself) and `infra/reset_cases_smoke.sh` (report only from here). Nothing about the VM's address, account or domain is stored in the repository: the scripts find them through the AWS API.
+
+**Who may do it.** The owner of the demo decides what is deployed and when. A deploy is an action on a live system: an agent asks for an explicit yes in the chat for that deploy, naming the commit, and does not reuse an earlier yes. Without that yes, run only the read-only commands.
+
+**One-time setup per workstation**
+- `aws` (CLI v2), `ssh`, `python3`, `git`, and the AWS profile `personal` (second account, ADR 0014) with Lightsail permission to read the static IP and the distribution and to call `GetInstanceAccessDetails` on `minsky-smoke`, region `us-east-2` (the CDN lives in `us-east-1`). Other names: `SMOKE_AWS_PROFILE`, `SMOKE_REGION`, `SMOKE_INSTANCE`, `SMOKE_STATIC_IP`, `SMOKE_CDN`.
+- **Pin the VM's host key.** Lightsail does not publish it for this instance, so the script refuses to connect until you give it the fingerprint: `export SMOKE_HOST_FP=SHA256:...` or write it to `~/.config/minsky/smoke_host_fp`. Get it from a machine that already trusts the VM (`ssh-keygen -lF <VM_IP>`, the ED25519 line) or from the owner. **Do not pin what the network shows you without that check**: the script prints the fingerprints it saw on a refusal, only so that you can compare them.
+- A clone with the commit to deploy on `origin/main` (`git fetch origin`).
+
+**Steps**
+1. **See what the VM runs and what is waiting.** `infra/smoke_vm.sh status` prints the running release (a short commit id), the rollback target, the containers, the schemas and API log errors. Then `git log --oneline <release>..origin/main` is what a deploy would add.
+2. **Gate the commit.** `make ci` on that commit. If the agent's behavior changed since the last commit with a live eval (anything in `backend/src/minsky_api/{agent,tools,policy}`, `prompts/`, the model config), rule 3 of `AGENTS.md` applies: a live dev eval on the same code, evidence in `evals/reports/`, the ledger updated. `git diff --stat <evaluated-sha> <sha> -- backend prompts` tells you if the code differs. A frontend-only or docs-only change needs `make ci` (it includes the frontend type check; run `npm --prefix frontend run build` too for the frontend).
+3. **Rehearse.** `infra/smoke_vm.sh deploy <sha> --dry-run` prints the plan and runs nothing. The commit must be reachable from `origin/main`: `deploy` refuses anything else (override the base with `SMOKE_MAIN_REF` only in tests).
+4. **Deploy.** `infra/smoke_vm.sh deploy <sha>`. It asks Lightsail for temporary SSH credentials (valid about a minute, deleted on exit, never printed), checks the host key, uploads the tracked files of the commit, builds both images on the VM (a few minutes; the web build needs the swap), recreates the containers and waits for `/api/health`. If the new version is not healthy it goes back to the previous release by itself and exits non-zero. It ends by running `verify <sha>`.
+5. **Verify.** `infra/smoke_vm.sh verify <sha>` (read-only, exit 1 if anything fails): the running release is the commit, the four containers are up, no tracebacks in the API log, the public health, `/chat` and `/console` answer, and a chat turn without a credential is refused with 401. For a change in the agent, look at it inside the container too: there is no shell command for that on purpose; ask the owner, or use `sql` for what it wrote.
+6. **Record it.** Open a docs PR that updates the `D2` row of `docs/requirements.md`: the new revision, the rollback target, and the evidence (CI, eval run, what was and was not verified). Say what is **not** verified: an authenticated chat turn and a staff login need a credential only the owner has.
+7. **If it goes wrong after the deploy.** `infra/smoke_vm.sh rollback` (then `verify`) returns to the previous release. Only one step back is kept.
+
+**Other commands.** `infra/smoke_vm.sh sql "select ..."` runs one read-only query (the database refuses writes in that session). `infra/smoke_vm.sh cases-report` shows the rows of `cases.*` and changes nothing.
+
+**What a deploy touches and what it does not.** It replaces the `api` and `web` containers and edits `images.env`. It does not touch the `postgres` container or its volume (`bank.*` and the cases stay), `runtime.env` (the model key and the demo credentials), `db.env`, the swapfile or the firewall. In-memory conversations are lost when the `api` container is recreated, so a customer in the middle of a chat starts again. Old releases and their images stay on the disk (about 0.7 GB each; 40 GB free).
+
+**What only a person does.** Deleting cases (`infra/reset_cases_smoke.sh --apply`; the demo keeps its cases on purpose), writing or rotating demo credentials in `runtime.env` (`infra/demo_sessions.py` makes them; the check is `smoke_vm.sh sql` plus the owner), pinning the host fingerprint, approving a deploy, and tearing the VM down (next section).
+
+**Worked example: PR 66, the restyle of the web app (frontend only).** After it is merged to `main`: `git fetch origin && infra/smoke_vm.sh status` (note the running release and the rollback target); `make ci` and `npm --prefix frontend run build` on the merge commit; no eval (no prompt, model, tool, policy or agent change; say so in the D2 row); get the owner's yes for that commit; `infra/smoke_vm.sh deploy <merge-sha> --dry-run` and then without the flag; the `web` image is rebuilt and the `api` one is rebuilt from cache; `verify` must pass; ask the owner to look at `/chat` and `/console` in the browser with a demo credential (the layout, the composer, the console on a narrow screen), since no command checks how it looks; open the D2 docs PR. If the page looks wrong, `infra/smoke_vm.sh rollback`.
+
+**When it fails.** Exit 6: the host key is not the pinned one (do not work around it; tell the owner). `could not get temporary SSH credentials`: the profile lacks the Lightsail permission, or is not logged in. The preflight of `redeploy_smoke.sh` stops with an exit 3 and a message when `runtime.env` lacks a key, the disk has less than 5 GB, or the swap is under 1 GB. A build that runs out of memory means the swapfile is gone (a reboot loses it: it is not in `/etc/fstab`).
+
 ### Teardown
 
 > **NOT EXECUTED; operator-run after the demo window. Suggested after 2026-10-16.**

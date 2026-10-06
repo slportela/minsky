@@ -8,11 +8,11 @@ import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 
 import { ApiError, CaseDetail, CaseList, CaseSummary, claimCase, getCase, listCases, resolveCase } from "../../lib/api";
 
-const PRIORITY_COLOR: Record<CaseSummary["priority"], string> = {
-  Critical: "#c62828",
-  High: "#ef6c00",
-  Medium: "#1565c0",
-  Low: "#2e7d32",
+const PRIORITY_CLASS: Record<CaseSummary["priority"], string> = {
+  Critical: "critical",
+  High: "high",
+  Medium: "medium",
+  Low: "low",
 };
 
 const QUEUE_LABEL: Record<string, string> = { fraud: "Fraud", disputes: "Disputes", general: "General" };
@@ -30,24 +30,20 @@ function dueText(c: CaseSummary): string {
   return minutes < 0 ? `overdue ${span}` : `due in ${span}`;
 }
 
-function Badge({ text, color }: { text: string; color: string }) {
-  return (
-    <span style={{ background: color, color: "white", borderRadius: 4, padding: "2px 6px", fontSize: 12, fontWeight: 600 }}>
-      {text}
-    </span>
-  );
+function Badge({ text, tone }: { text: string; tone: string }) {
+  return <span className={`badge ${tone}`}>{text}</span>;
 }
 
 function FactTable({ facts }: { facts: Record<string, unknown> | undefined }) {
   const entries = Object.entries(facts ?? {}).filter(([, v]) => v !== null && v !== undefined && v !== "");
-  if (entries.length === 0) return <p style={{ color: "#666" }}>None</p>;
+  if (entries.length === 0) return <p className="muted">None</p>;
   return (
-    <table style={{ borderCollapse: "collapse", fontSize: 14 }}>
+    <table className="facts">
       <tbody>
         {entries.map(([key, value]) => (
           <tr key={key}>
-            <td style={{ padding: "2px 12px 2px 0", color: "#555" }}>{key}</td>
-            <td style={{ padding: "2px 0" }}>{typeof value === "object" ? JSON.stringify(value) : String(value)}</td>
+            <td>{key}</td>
+            <td>{typeof value === "object" ? JSON.stringify(value) : String(value)}</td>
           </tr>
         ))}
       </tbody>
@@ -124,54 +120,63 @@ export default function ConsolePage() {
   if (!loggedIn) {
     return (
       <main>
-        <h1>Agent console</h1>
-        <p>Dispute and fraud cases prepared by the assistant. Sign in with your staff credential.</p>
-        <form onSubmit={signIn}>
-          <label>
-            Staff credential{" "}
-            <input value={credential} onChange={(e) => setCredential(e.target.value)} type="password" autoComplete="off" />
-          </label>{" "}
-          <button type="submit">Sign in</button>
-        </form>
-        {error ? <p role="alert">{error}</p> : null}
+        <div className="gate card">
+          <h1>Agent console</h1>
+          <p className="muted">Dispute and fraud cases prepared by the assistant. Sign in with your staff credential.</p>
+          <form onSubmit={signIn}>
+            <label>
+              Staff credential
+              <input value={credential} onChange={(e) => setCredential(e.target.value)} type="password" autoComplete="off" />
+            </label>
+            <button type="submit">Sign in</button>
+          </form>
+          {error ? <p role="alert">{error}</p> : null}
+        </div>
       </main>
     );
   }
 
   const stats = list?.stats;
   return (
-    <main style={{ maxWidth: 1200 }}>
-      <h1>Agent console</h1>
-      <p>
-        Signed in as <strong>{list?.agent_id ?? "…"}</strong>{" "}
-        <button type="button" onClick={() => void refresh()}>
-          Refresh
-        </button>{" "}
-        <button
-          type="button"
-          onClick={() => {
-            setLoggedIn(false);
-            setCredential("");
-            setList(null);
-            setSelected(null);
-          }}
-        >
-          Sign out
-        </button>
-      </p>
+    <main className="console-page">
+      <div className="console-head">
+        <div>
+          <h1>Agent console</h1>
+          <span className="muted">
+            Signed in as <strong>{list?.agent_id ?? "…"}</strong>
+          </span>
+        </div>
+        <div className="row">
+          <button type="button" className="quiet" onClick={() => void refresh()}>
+            Refresh
+          </button>{" "}
+          <button
+            type="button"
+            className="quiet"
+            onClick={() => {
+              setLoggedIn(false);
+              setCredential("");
+              setList(null);
+              setSelected(null);
+            }}
+          >
+            Sign out
+          </button>
+        </div>
+      </div>
 
       {stats ? (
-        <section style={{ display: "flex", gap: 24, flexWrap: "wrap", marginBottom: 16 }} aria-label="queue summary">
-          <div>
-            <div style={{ fontSize: 28, fontWeight: 700 }}>{stats.open_cases}</div>open cases
+        <section className="stats" aria-label="queue summary">
+          <div className="stat">
+            <span className="n">{stats.open_cases}</span>open cases
           </div>
-          <div>
-            <div style={{ fontSize: 28, fontWeight: 700, color: stats.overdue ? "#c62828" : undefined }}>{stats.overdue}</div>
+          <div className="stat">
+            <span className={`n${stats.overdue ? " bad" : ""}`}>{stats.overdue}</span>
             overdue
           </div>
           {(["Critical", "High", "Medium", "Low"] as const).map((p) => (
-            <div key={p}>
-              <div style={{ fontSize: 28, fontWeight: 700, color: PRIORITY_COLOR[p] }}>{stats.by_priority[p] ?? 0}</div>
+            <div key={p} className="stat">
+              <span className={`n ${PRIORITY_CLASS[p]}`}>{stats.by_priority[p] ?? 0}</span>
               {p.toLowerCase()}
             </div>
           ))}
@@ -188,12 +193,12 @@ export default function ConsolePage() {
         </select>
       </label>
 
-      <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1.2fr) minmax(0, 1fr)", gap: 24, marginTop: 16 }}>
-        <section aria-label="cases">
+      <div className="split">
+        <section aria-label="cases" className="card">
           {list && list.cases.length === 0 ? <p>No cases yet. They appear here when the assistant opens or hands one off.</p> : null}
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
+          <table>
             <thead>
-              <tr style={{ textAlign: "left", borderBottom: "1px solid #ccc" }}>
+              <tr>
                 <th>Priority</th>
                 <th>Case</th>
                 <th>Queue</th>
@@ -206,25 +211,22 @@ export default function ConsolePage() {
                 <tr
                   key={c.case_id}
                   onClick={() => void run(() => getCase(credential.trim(), c.case_id))}
-                  style={{
-                    cursor: "pointer",
-                    borderBottom: "1px solid #eee",
-                    background: selected?.case.case_id === c.case_id ? "#eef5ff" : undefined,
-                    opacity: c.status === "resolved" ? 0.55 : 1,
-                  }}
+                  className={`case-row${selected?.case.case_id === c.case_id ? " selected" : ""}${
+                    c.status === "resolved" ? " resolved" : ""
+                  }`}
                 >
-                  <td style={{ padding: "6px 4px" }}>
-                    <Badge text={c.priority} color={PRIORITY_COLOR[c.priority]} />
+                  <td>
+                    <Badge text={c.priority} tone={PRIORITY_CLASS[c.priority]} />
                   </td>
-                  <td style={{ padding: "6px 4px" }}>
-                    <div style={{ fontWeight: 600 }}>
+                  <td>
+                    <div className="case-title">
                       {c.merchant ?? "—"} {c.amount_usd ? `· ${c.amount_usd} USD` : ""}
                     </div>
-                    <div style={{ color: "#555" }}>{c.summary}</div>
+                    <div className="case-sub">{c.summary}</div>
                   </td>
-                  <td style={{ padding: "6px 4px" }}>{QUEUE_LABEL[c.queue] ?? c.queue}</td>
-                  <td style={{ padding: "6px 4px", color: c.overdue ? "#c62828" : undefined }}>{dueText(c)}</td>
-                  <td style={{ padding: "6px 4px" }}>
+                  <td>{QUEUE_LABEL[c.queue] ?? c.queue}</td>
+                  <td className={c.overdue ? "overdue" : undefined}>{dueText(c)}</td>
+                  <td>
                     {c.status}
                     {c.assigned_to ? ` · ${c.assigned_to}` : ""}
                   </td>
@@ -234,14 +236,14 @@ export default function ConsolePage() {
           </table>
         </section>
 
-        <section aria-label="case detail">
+        <section aria-label="case detail" className="card detail">
           {selected ? (
             <div>
-              <h2 style={{ marginTop: 0 }}>
-                {selected.case.case_id} <Badge text={selected.case.priority} color={PRIORITY_COLOR[selected.case.priority]} />
+              <h2>
+                {selected.case.case_id} <Badge text={selected.case.priority} tone={PRIORITY_CLASS[selected.case.priority]} />
               </h2>
               <p>{selected.case.summary}</p>
-              <p style={{ color: "#555" }}>
+              <p className="muted">
                 Why this priority: {selected.triage_reason}. {dueText(selected.case)}.
                 {selected.expected_resolution_days !== null
                   ? ` Similar cases took ${selected.expected_resolution_days} days (bank history, median).`
@@ -269,12 +271,12 @@ export default function ConsolePage() {
                   ))}
                 </ul>
               ) : (
-                <p style={{ color: "#666" }}>None</p>
+                <p className="muted">None</p>
               )}
 
               <details>
                 <summary>Tool audit trail ({selected.audit.length})</summary>
-                <ul style={{ fontSize: 13 }}>
+                <ul>
                   {selected.audit.map((a, i) => (
                     <li key={`${a.at}-${i}`}>
                       {new Date(a.at).toLocaleString()} · {a.tool} · {a.outcome}
@@ -295,10 +297,10 @@ export default function ConsolePage() {
                   </button>
                 </p>
               ) : (
-                <form onSubmit={onResolve} style={{ display: "grid", gap: 8, marginTop: 12 }}>
+                <form onSubmit={onResolve} className="resolve">
                   <label>
                     Resolution note (your decision and what you told the customer)
-                    <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={3} style={{ display: "block", width: "100%" }} />
+                    <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={3} />
                   </label>
                   <button type="submit" disabled={busy || note.trim().length < 3}>
                     Resolve case
@@ -307,7 +309,7 @@ export default function ConsolePage() {
               )}
             </div>
           ) : (
-            <p style={{ color: "#666" }}>Select a case to see the facts, open questions and actions.</p>
+            <p className="muted">Select a case to see the facts, open questions and actions.</p>
           )}
         </section>
       </div>

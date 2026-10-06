@@ -35,8 +35,16 @@ SCRIPTED = (
     "dispute-natural-reply-then-yes-es",
     "dispute-unclear-replies-handoff-es",
     "dispute-offer-declined-then-dispute-es",
+    "dispute-offer-answered-with-the-charge-es",
     "dispute-follow-up-after-case-es",
     "model-outage-maintenance-es",
+    "dispute-near-amount-es",
+    "dispute-near-amount-pt",
+    "dispute-near-amount-and-date-es",
+    "dispute-date-only-two-charges-es",
+    "dispute-merchant-misspelled-es",
+    "dispute-kind-narrows-es",
+    "dispute-local-currency-es",
 )
 
 

@@ -9,6 +9,7 @@ Next.js (React, TypeScript, App Router) with two surfaces in one app:
 
 Rules:
 - The UI renders what the backend returns; it never computes facts, eligibility or decisions.
+- Styling lives in one stylesheet, `app/globals.css` (tokens at the top, same dark look as the pitch deck). No web fonts, no external requests (ADR 0001); pages use class names, not inline styles.
 - All calls go through `lib/api.ts` to same-origin `/api/*`: Caddy (local, demo) or the load balancer (production) routes them to the backend. There is no API URL or secret in the bundle.
 - `/chat` posts to `/api/chat/turn` with `Authorization: Bearer <credential>` (server resolves customer identity; OTP/Cognito come later) and replays the server-owned message history each turn.
 

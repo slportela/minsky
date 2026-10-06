@@ -158,7 +158,7 @@ Every case the system opens or hands off goes to a **back-office queue** with a 
    │
    ├─ 1 identity     session valid? no → HTTP 401, nothing else runs              code
    ├─ 2 understand   message → {merchant: "Cafe", amount: 25.00, not_me: true}    LLM
-   ├─ 3 find         get_transactions: only this customer's rows → 1 match        code
+   ├─ 3 find         find_transactions: only this customer's rows → 1 match       code
    │                    ◀ "Encontré este cargo … ¿Es este?"                ▶ "sí"
    ├─ 4 decide       policy on the verified facts → D06-possible-fraud            code
    │                    ◀ "¿Bloqueo la tarjeta? Solo con un sí explícito"  ▶ "sí"

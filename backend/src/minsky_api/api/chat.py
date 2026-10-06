@@ -73,7 +73,7 @@ async def chat_turn(
 ) -> ChatResponse | JSONResponse:
     """One customer turn, authenticated with a server-provisioned test credential."""
     try:
-        tool_session = resolve_session(authorization)
+        tool_session = resolve_session(authorization, getattr(request.app.state, "demo_sessions", None))
     except PermissionDenied as exc:
         return _error(ErrorCode(exc.reason), "test session credential is missing, invalid, or expired", 401)
     except RuntimeError:

@@ -11,10 +11,13 @@ from decimal import Decimal
 from sqlmodel import col, select
 
 from minsky_api.store.base import BaseStore
+from minsky_api.store.errors import StoreError
 from minsky_api.store.models import Transaction
 
 _MIN_LIMIT = 1
 _MAX_LIMIT = 100
+# A customer has at most 150 transactions in the whole history (2026-10 data); matching grades them all in code.
+SEARCH_POOL = 300
 
 
 def _like_pattern(text: str) -> str:
@@ -58,3 +61,20 @@ class TransactionStore(BaseStore):
             statement = statement.where(col(Transaction.transaction_date) < date_to + timedelta(days=1))
         statement = statement.order_by(col(Transaction.transaction_date).desc()).limit(limit)
         return await self._list(statement)
+
+    async def search_pool(self, customer_id: str) -> tuple[Transaction, ...]:
+        """Every transaction of one customer, newest first, for matching in code (matching.find_matches).
+
+        Fuzzy matching has no SQL form (a near amount, a near merchant), and a customer's whole history is small.
+        If it ever outgrows the pool this fails instead of silently matching a truncated history.
+        """
+        statement = (
+            select(Transaction)
+            .where(col(Transaction.customer_id) == customer_id)
+            .order_by(col(Transaction.transaction_date).desc())
+            .limit(SEARCH_POOL + 1)
+        )
+        rows = await self._list(statement)
+        if len(rows) > SEARCH_POOL:
+            raise StoreError(f"customer has more than {SEARCH_POOL} transactions: search pool exceeded")
+        return rows

@@ -53,6 +53,8 @@ class WorldFacts:
     other_customer_id: str | None
     other_transaction_id: str | None
     existing_dispute: bool = False  # the trial starts with a dispute already open on the transaction (rule D04)
+    transaction_type: str | None = None  # Purchase, Withdrawal, ...: what the customer calls it
+    merchant_category: str | None = None  # Food, Health, ...
 
 
 class MemoryBank(FixtureBank):
@@ -112,6 +114,8 @@ def facts_from_case(case: Case) -> WorldFacts:
         other_customer_id=info.get("other_customer_id") or None,
         other_transaction_id=info.get("other_transaction_id") or None,
         existing_dispute=_flag(info["existing_dispute"]) if "existing_dispute" in info else False,
+        transaction_type=info.get("transaction_type") or None,
+        merchant_category=info.get("merchant_category") or None,
     )
 
 
@@ -205,13 +209,20 @@ def build_bank(case: Case, facts: WorldFacts) -> MemoryBank:
             )
         )
     for extra in json.loads(case.user_scenario.known_info.get("extra_transactions", "[]")):
+        # A decoy differs from the case's transaction only in what it names: id, merchant and amount, and
+        # optionally date, kind, category and currency (with its USD amount) for the flexible-matching cases.
+        base = _transaction(customer_id, facts).model_dump()
         row = Transaction.model_validate(
             {
-                **_transaction(customer_id, facts).model_dump(),
+                **base,
                 "transaction_id": extra["transaction_id"],
-                "merchant_name": extra["merchant"],
+                "merchant_name": extra.get("merchant"),
                 "amount": Decimal(extra["amount"]),
-                "amount_usd": Decimal(extra["amount"]),
+                "amount_usd": Decimal(extra.get("amount_usd", extra["amount"])),
+                "currency": extra.get("currency", base["currency"]),
+                "transaction_date": _when(extra["date"]) if extra.get("date") else base["transaction_date"],
+                "transaction_type": extra.get("type", base["transaction_type"]),
+                "merchant_category": extra.get("category", base["merchant_category"]),
             }
         )
         transactions.append(row)
@@ -245,6 +256,8 @@ def _transaction(customer_id: str, facts: WorldFacts) -> Transaction:
         amount_usd=facts.amount_usd,
         amount_usd_source="native_usd",
         transaction_date=facts.transaction_date,
+        transaction_type=facts.transaction_type,
+        merchant_category=facts.merchant_category,
         merchant_name=facts.merchant,
         transaction_status=facts.transaction_status,
         is_fraud=facts.is_fraud,

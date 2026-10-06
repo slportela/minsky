@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 
 from minsky_api.agent.consent import explicit_no, explicit_yes
-from minsky_api.agent.extract import DisputeDetails, extract_dispute_details
+from minsky_api.agent.extract import DisputeDetails, extract_dispute_details, resolve_relative_dates
 from minsky_api.agent.language import LanguageDetector, default_language_detector
 from minsky_api.agent.speak import Speech, compose_speech
 from minsky_api.agent.state import ConversationState, Phase, Terminal
@@ -19,6 +19,7 @@ from minsky_api.agent.wording import (
     human_amount,
     human_date,
     inform_fallback,
+    near_match_reply,
     policy_reason,
     safe_sentence,
     terminal_reply,
@@ -36,9 +37,9 @@ from minsky_api.tools.bank import (
     block_card,
     create_handoff,
     evaluate_dispute,
+    find_transactions,
     get_dispute,
     get_transaction,
-    get_transactions,
     open_dispute,
 )
 from minsky_api.tools.confirm import classify_reply
@@ -49,9 +50,11 @@ from minsky_api.tools.schemas import (
     ClassifyReplyArgs,
     CreateHandoffArgs,
     EvaluateDisputeArgs,
+    FindTransactionsArgs,
+    FindTransactionsResult,
     GetDisputeArgs,
     GetTransactionArgs,
-    GetTransactionsArgs,
+    MatchedTransactionView,
     OpenDisputeArgs,
     TransactionView,
 )
@@ -186,6 +189,8 @@ def _has_search_filters(details: DisputeDetails) -> bool:
             details.amount is not None,
             details.date_from is not None,
             details.date_to is not None,
+            details.transaction_type,
+            details.category,
         )
     )
 
@@ -275,12 +280,18 @@ def _handoff_facts(state: ConversationState, **extra: object) -> dict[str, objec
         "customer_request": next((text for role, text in state.messages if role == "user"), None),
         "customer_says_not_me": state.customer_says_not_me or None,
         "customer_search_details": details or None,
+        "match_tier": state.match_tier,
         "language": state.language,
         "dispute_type_suggested": _DISPUTE_TYPE.get(state.router_label or ""),
         "router_confidence": state.router_confidence if state.router_label else None,
     }
     facts.update(extra)
     return {key: value for key, value in facts.items() if value is not None}
+
+
+async def _extract(llm: LLM, text: str) -> DisputeDetails:
+    """What the customer said, with relative days ("yesterday") turned into calendar days by the system's today."""
+    return resolve_relative_dates(await extract_dispute_details(llm, text), get_settings().today)
 
 
 async def _get_owned_txn(ctx: ToolContext, transaction_id: str) -> TransactionView | None:
@@ -291,25 +302,35 @@ async def _get_owned_txn(ctx: ToolContext, transaction_id: str) -> TransactionVi
     return got.transaction
 
 
-async def _search(ctx: ToolContext, details: DisputeDetails) -> list[TransactionView]:
+def _exact(txns: list[TransactionView]) -> FindTransactionsResult:
+    """A search that names one transaction (its id) or finds none: nothing is graded."""
+    return FindTransactionsResult(
+        tier="exact" if txns else "none",
+        request=FindTransactionsArgs(),
+        matches=tuple(MatchedTransactionView(transaction=txn) for txn in txns),
+    )
+
+
+async def _search(ctx: ToolContext, details: DisputeDetails) -> FindTransactionsResult:
     if details.transaction_id:
         txn = await _get_owned_txn(ctx, details.transaction_id)
-        return [txn] if txn is not None else []
+        return _exact([txn] if txn is not None else [])
     # Never dump the customer's latest N rows: require at least one narrowing signal.
     if not _has_search_filters(details):
-        return []
-    found = await get_transactions(
+        return _exact([])
+    return await find_transactions(
         ctx,
-        GetTransactionsArgs(
-            limit=10,
-            merchant=details.merchant,
-            min_amount=details.amount,
-            max_amount=details.amount,
+        FindTransactionsArgs(
+            amount=abs(details.amount) if details.amount is not None else None,
+            currency=details.currency,
+            approximate=bool(details.approximate),
             date_from=details.date_from,
             date_to=details.date_to,
+            merchant=details.merchant,
+            transaction_type=details.transaction_type,
+            category=details.category,
         ),
     )
-    return list(found.transactions)
 
 
 def _candidate_list(txns: list[TransactionView], language: str) -> str:
@@ -320,12 +341,42 @@ def _candidate_list(txns: list[TransactionView], language: str) -> str:
     return "\n".join(lines)
 
 
+def _propose_near(state: ConversationState, found: FindTransactionsResult) -> str:
+    """No charge matches exactly, but one or more are close: say what differs and let the customer choose.
+
+    The sentence is written by code from the graded rows (wording.near_match_reply). Nothing is selected here:
+    a single proposal still needs the customer's yes, and the policy later reads the charge's real facts.
+    """
+    state.match_tier = found.tier
+    matches = list(found.matches)
+    if len(matches) > 1:
+        state.clarify_count += 1
+        if state.clarify_count > get_settings().max_clarify_attempts:
+            return _offer_handoff(state, "clarify_exhausted")  # the charge is not confirmed: offer, never send
+        state.phase = Phase.CLARIFY
+        state.candidate_txn_ids = [match.transaction.transaction_id for match in matches]
+        state.pending_question = None
+        state.acts.append("clarify")
+        return near_match_reply(found, _lang(state))
+    txn = matches[0].transaction
+    state.selected_txn_id = txn.transaction_id
+    state.selected_product_id = txn.product_id
+    state.selected_type = txn.transaction_type
+    state.candidate_txn_ids = [txn.transaction_id]
+    state.acts.append("confirm_txn")
+    return _ask(state, Phase.CONFIRM_TXN, near_match_reply(found, _lang(state)))
+
+
 async def _after_candidates(
     ctx: ToolContext,
     state: ConversationState,
-    txns: list[TransactionView],
+    found: FindTransactionsResult,
     llm: LLM,
 ) -> str:
+    if found.tier in ("near", "closest"):
+        return _propose_near(state, found)
+    state.match_tier = None
+    txns = [match.transaction for match in found.matches]
     if len(txns) == 0:
         state.clarify_count += 1
         if state.clarify_count > get_settings().max_clarify_attempts:
@@ -434,12 +485,12 @@ def _classify_first_message(state: ConversationState, text: str) -> None:
 
 async def _phase_understand(ctx: ToolContext, state: ConversationState, text: str, llm: LLM) -> str:
     _classify_first_message(state, text)
-    details = await extract_dispute_details(llm, text)
+    details = await _extract(llm, text)
     state.customer_says_not_me = details.customer_says_not_me
     if details.out_of_scope:
         return _offer_handoff(state, "out_of_scope")
-    txns = await _search(ctx, _merge_details(state, details))
-    return await _after_candidates(ctx, state, txns, llm)
+    found = await _search(ctx, _merge_details(state, details))
+    return await _after_candidates(ctx, state, found, llm)
 
 
 async def _phase_clarify(ctx: ToolContext, state: ConversationState, text: str, llm: LLM) -> str:
@@ -449,20 +500,25 @@ async def _phase_clarify(ctx: ToolContext, state: ConversationState, text: str, 
         if 0 <= index < len(state.candidate_txn_ids):
             txn = await _get_owned_txn(ctx, state.candidate_txn_ids[index])
             if txn is None:
-                return await _after_candidates(ctx, state, [], llm)
+                return await _after_candidates(ctx, state, _exact([]), llm)
             state.selected_txn_id = txn.transaction_id
             state.selected_product_id = txn.product_id
             state.selected_type = txn.transaction_type
             return _confirm_txn(state, txn)
-    details = await extract_dispute_details(llm, text)
+    details = await _extract(llm, text)
+    return await _search_with(ctx, state, details, llm)
+
+
+async def _search_with(ctx: ToolContext, state: ConversationState, details: DisputeDetails, llm: LLM) -> str:
+    """Look for the charge the customer described, and ask what is still missing or which one it is."""
     state.customer_says_not_me = state.customer_says_not_me or details.customer_says_not_me
     if details.out_of_scope:
         return _offer_handoff(state, "out_of_scope")
     if details.transaction_id:
         txn = await _get_owned_txn(ctx, details.transaction_id)
-        return await _after_candidates(ctx, state, [txn] if txn is not None else [], llm)
-    txns = await _search(ctx, _merge_details(state, details))
-    return await _after_candidates(ctx, state, txns, llm)
+        return await _after_candidates(ctx, state, _exact([txn] if txn is not None else []), llm)
+    found = await _search(ctx, _merge_details(state, details))
+    return await _after_candidates(ctx, state, found, llm)
 
 
 async def _remember_decision(ctx: ToolContext, state: ConversationState, text: str, llm: LLM) -> str:
@@ -548,8 +604,19 @@ async def _phase_offer_handoff(ctx: ToolContext, state: ConversationState, text:
         state.selected_product_id = None
         state.candidate_txn_ids = []
         state.search_details = DisputeDetails()
+        state.match_tier = None
         state.acts.append("clarify")
         return handoff_offer_declined(_lang(state))
+    # Neither yes nor no. The offer asked for a concrete charge, so a reply that gives one is the customer
+    # declining the agent and doing what was asked: no handoff, and the search goes on with what they said.
+    details = await _extract(llm, text)
+    if not details.out_of_scope and _has_search_filters(details):
+        state.phase = Phase.CLARIFY
+        state.pending_question = None
+        state.clarify_count = 0
+        state.unclear_count = 0
+        state.search_details = DisputeDetails()
+        return await _search_with(ctx, state, details, llm)
     return await _unclear_reply(ctx, state, llm)
 
 
