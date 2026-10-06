@@ -388,6 +388,13 @@ export default function ChatPage() {
         </p>
       ) : null}
 
+      {options?.mode_switch ? (
+        <p role="note" className="notice" id="beta-note">
+          <strong>Beta abierta para pruebas.</strong> El flujo «Agente» es experimental: puede no entender tu mensaje o
+          pedirte más datos. Los datos son sintéticos y los casos que se abran son de demostración.
+        </p>
+      ) : null}
+
       <section aria-live="polite" style={{ display: "grid", gap: "0.75rem", marginBottom: "1.5rem" }}>
         {messages.length === 0 && !busy ? <p className="empty">Escribe el cargo que quieres disputar.</p> : null}
         {messages.map((message, index) => (
