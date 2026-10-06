@@ -3,9 +3,10 @@
 The OpenAI API, Bedrock's `/openai/v1` endpoint and other compatible providers differ only in base URL,
 model id and key, so switching provider is configuration. The client is async, so model calls never
 block the API's event loop. The model id is pinned in settings and checked on every response (AGENTS:
-the model that answered must be the model requested). Retries are bounded (the SDK's own, with backoff)
-and every call has a timeout. Each result carries the token usage and latency that traces and eval
-reports need.
+the model that answered must be the model requested). Retries are bounded: the SDK's own, with
+exponential backoff and jitter, logged at INFO on the `openai` logger (`main.py` shows them). A short
+connect timeout and a read timeout per attempt bound how long a turn waits before degraded mode answers.
+Each result carries the token usage and latency that traces and eval reports need.
 """
 
 from __future__ import annotations
@@ -15,7 +16,8 @@ import time
 from dataclasses import dataclass
 from typing import Literal
 
-from openai import AsyncOpenAI, ContentFilterFinishReasonError, LengthFinishReasonError
+import httpx2
+from openai import AsyncOpenAI, ContentFilterFinishReasonError, LengthFinishReasonError, Timeout
 from pydantic import BaseModel, ValidationError
 
 from minsky_api.config import Settings, get_settings
@@ -59,21 +61,25 @@ class LLMResult[T: BaseModel]:
     latency_ms: float
 
 
+def provider_client(settings: Settings, *, http_client: httpx2.AsyncClient | None = None) -> AsyncOpenAI:
+    """The provider client with our timeouts and retry count. `http_client` is for tests only."""
+    key = settings.llm_api_key
+    # compose passes MINSKY_LLM_API_KEY="" when it is unset: blank means not configured too
+    if key is None or not key.get_secret_value().strip():
+        raise LLMNotConfiguredError("MINSKY_LLM_API_KEY is not set")
+    return AsyncOpenAI(
+        api_key=key.get_secret_value(),
+        base_url=settings.llm_base_url,
+        timeout=Timeout(settings.llm_timeout_s, connect=settings.llm_connect_timeout_s),
+        max_retries=settings.llm_max_retries,
+        http_client=http_client,
+    )
+
+
 class LLM:
     def __init__(self, settings: Settings | None = None, client: AsyncOpenAI | None = None) -> None:
         self.settings = settings or get_settings()
-        if client is None:
-            key = self.settings.llm_api_key
-            # compose passes MINSKY_LLM_API_KEY="" when it is unset: blank means not configured too
-            if key is None or not key.get_secret_value().strip():
-                raise LLMNotConfiguredError("MINSKY_LLM_API_KEY is not set")
-            client = AsyncOpenAI(
-                api_key=key.get_secret_value(),
-                base_url=self.settings.llm_base_url,
-                timeout=self.settings.llm_timeout_s,
-                max_retries=self.settings.llm_max_retries,
-            )
-        self.client = client
+        self.client = client if client is not None else provider_client(self.settings)
 
     async def respond[T: BaseModel](
         self,

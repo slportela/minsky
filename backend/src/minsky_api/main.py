@@ -1,5 +1,6 @@
 """FastAPI application factory. Run: uvicorn minsky_api.main:app"""
 
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import timedelta
@@ -30,9 +31,25 @@ def _cases_backend(settings: Settings) -> CasesBackend:
     return InMemoryCasesBackend()
 
 
+# Without a handler Python prints only WARNING and above, so the SDK's INFO retry lines
+# ("Retrying request in X seconds (retry N of M)") were dropped. One handler, added once.
+_PROVIDER_RETRY_HANDLER = logging.StreamHandler()
+_PROVIDER_RETRY_HANDLER.setLevel(logging.INFO)
+_PROVIDER_RETRY_HANDLER.setFormatter(logging.Formatter("%(levelname)s %(name)s: %(message)s"))
+
+
+def _log_provider_retries() -> None:
+    provider = logging.getLogger("openai")
+    if provider.level == logging.NOTSET or provider.level > logging.INFO:
+        provider.setLevel(logging.INFO)
+    if _PROVIDER_RETRY_HANDLER not in provider.handlers:
+        provider.addHandler(_PROVIDER_RETRY_HANDLER)
+
+
 def create_app() -> FastAPI:
     settings = get_settings()
     configure_tracing()  # no-op unless OTEL_EXPORTER_OTLP_ENDPOINT is set (ADR 0007)
+    _log_provider_retries()
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:

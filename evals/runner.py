@@ -242,6 +242,7 @@ def _patched(
         assert bank is not None
         yield bank
 
+    # Retries stay 0: the spend budget reserves cost per call, and SDK retries would spend outside the cap.
     settings = get_settings().model_copy(update={"llm_max_retries": 0})
     inner: Any = LLM(settings=settings) if extractor == "real" else ScriptedLLM(facts)
     if case.llm_faults:

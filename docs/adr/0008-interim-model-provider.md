@@ -14,7 +14,7 @@
 ## Decision
 - The backend calls the model through **one interface over the OpenAI-compatible Responses API** (`backend/src/minsky_api/llm/client.py`). Base URL, model id and key are settings (`MINSKY_LLM_BASE_URL`, `MINSKY_LLM_MODEL`, `MINSKY_LLM_API_KEY`).
 - **Interim provider: the OpenAI API with `gpt-6-luna`**, using a dedicated OpenAI project key with a budget limit.
-- The model id is pinned and checked on every response; retries are bounded; calls send `store: false`; token usage and latency are recorded for traces and eval reports.
+- The model id is pinned and checked on every response; retries are bounded (the SDK's own: 2 retries with exponential backoff and jitter, `Retry-After` honored, logged at INFO; a 5 s connect and 20 s read timeout per attempt); calls send `store: false`; token usage and latency are recorded for traces and eval reports.
 - What goes to the model stays minimal: the conversation and the verified facts a step needs, never full customer records. The read models already exclude identity documents, contact details, income and credit score (`docs/read_models.md`).
 
 ## When it ends

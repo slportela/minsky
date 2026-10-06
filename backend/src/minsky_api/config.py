@@ -55,7 +55,11 @@ class Settings(BaseSettings):
     llm_base_url: str = "https://api.openai.com/v1"
     llm_model: str = "gpt-6-luna"
     llm_api_key: SecretStr | None = None
-    llm_timeout_s: PositiveFloat = 30.0
+    # Read timeout per attempt. The live dev run's slowest of 424 calls took 4.8s (evals/runs, 2026-10-05).
+    llm_timeout_s: PositiveFloat = 20.0
+    llm_connect_timeout_s: PositiveFloat = 5.0
+    # Retries are the SDK's own: exponential backoff with jitter, Retry-After honored, on timeouts,
+    # connection errors, 408, 409, 429 and 5xx. Never on auth or other 4xx.
     llm_max_retries: NonNegativeInt = 2
 
     @model_validator(mode="after")
